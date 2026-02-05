@@ -1,0 +1,8 @@
+cmake_minimum_required(VERSION 3.10)
+project(Saffron C)
+set(CMAKE_C_STANDARD 11)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+find_package(SDL2 REQUIRED)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR} ${SDL2_INCLUDE_DIRS})
+add_executable(sr main.c)
+target_link_libraries(sr ${SDL2_LIBRARIES})
