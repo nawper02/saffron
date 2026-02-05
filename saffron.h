@@ -13,6 +13,20 @@
  * Saffron into the video pipeline.
  */
 
+/* SF_TODO
+ * 1. Finish primative drawing functions
+ * 2. Render text (front a font file of some kind)
+ * 3. 3D prep - coordinate systems, transformations 
+ *    - support FLU/FRD/NED cleanly/easily
+ * 4. Render a 3d file format
+ * 5. Create a custom 3d file format, maybe general
+ *    as like a 'scene' file (coordinate system, units, global pos?)
+ * 6. Lighting
+ * 7. Textures
+ * 8. ....
+ */
+
+
 /* SF_HEADER */
 #ifndef SAFFRON_H
 #define SAFFRON_H
@@ -44,12 +58,14 @@ typedef struct {
 void sf_init    (sf_ctx_t *ctx, int w, int h);
 void sf_destroy (sf_ctx_t *ctx);
 void sf_fill    (sf_ctx_t *ctx, sf_packed_color_t c);
+void sf_pixel   (sf_ctx_t *ctx, sf_packed_color_t c, sf_svec2_t p);
 void sf_line    (sf_ctx_t *ctx, sf_packed_color_t c, sf_svec2_t o,  sf_svec2_t f, int thick);
 void sf_rect    (sf_ctx_t *ctx, sf_packed_color_t c, sf_svec2_t tl, sf_svec2_t tr, uint16_t w, uint16_t h);
 void sf_tri     (sf_ctx_t *ctx, sf_packed_color_t c, sf_svec2_t p1, sf_svec2_t p2, sf_svec2_t p3);
+void sf_put_text(sf_ctx_t *ctx, const char *text, sf_svec2_t p, sf_packed_color_t c, int scale);
 
 /* SF_IMPLEMENTATION_HELPERS */
-uint32_t sf_vec_to_index(sf_ctx_t *ctx, sf_svec2_t v);
+uint32_t _sf_vec_to_index   (sf_ctx_t *ctx, sf_svec2_t v);
 
 /* SF_UTILITIES */
 sf_packed_color_t sf_pack_color(sf_unpacked_color_t);
@@ -89,12 +105,13 @@ void sf_fill(sf_ctx_t *ctx, sf_packed_color_t c) {
    for(size_t i = 0; i < ctx->buffer_size; ++i) { ctx->buffer[i] = c; }
 }
 
-void sf_line(sf_ctx_t *ctx, sf_packed_color_t c, sf_svec2_t o, sf_svec2_t f, int thick) {
-
+void sf_pixel(sf_ctx_t *ctx, sf_packed_color_t c, sf_svec2_t p) {
+  if (p.x > ctx->w || p.y > ctx->h) return;
+  ctx->buffer[_sf_vec_to_index(ctx, p)] = c;
 }
 
 /* SF_IMPLEMENTATION_HELPERS */
-uint32_t _sf_vec_2_index(sf_ctx_t *ctx, sf_svec2_t v) {
+uint32_t _sf_vec_to_index(sf_ctx_t *ctx, sf_svec2_t v) {
   return v.y * ctx->w + v.x;
 }
 
