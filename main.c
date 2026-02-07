@@ -27,6 +27,7 @@ int main(int argc, char* argv[])
 
       sf_fill(&sf_ctx, SF_COLOR_BLUE); 
       sf_line(&sf_ctx, SF_COLOR_RED, (sf_svec2_t){0,0}, (sf_svec2_t){200, 50});
+      sf_line(&sf_ctx, SF_COLOR_RED, (sf_svec2_t){0,0}, (sf_svec2_t){50, 200});
 
       SDL_UpdateTexture(texture, NULL, sf_ctx.buffer, sf_ctx.w * sizeof(sf_packed_color_t));
       SDL_RenderClear(renderer);
