@@ -33,6 +33,7 @@
 
 #include <ctype.h>
 #include <stddef.h>
+#include <sys/types.h>
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -41,6 +42,7 @@ extern "C" {
 #include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
+#include <stdio.h>
 
 /* SF_TYPES */
 typedef uint32_t sf_packed_color_t;
@@ -58,14 +60,16 @@ typedef struct {
 void sf_init    (sf_ctx_t *ctx, int w, int h);
 void sf_destroy (sf_ctx_t *ctx);
 void sf_fill    (sf_ctx_t *ctx, sf_packed_color_t c);
-void sf_pixel   (sf_ctx_t *ctx, sf_packed_color_t c, sf_svec2_t p);
-void sf_line    (sf_ctx_t *ctx, sf_packed_color_t c, sf_svec2_t o,  sf_svec2_t f, int thick);
-void sf_rect    (sf_ctx_t *ctx, sf_packed_color_t c, sf_svec2_t tl, sf_svec2_t tr, uint16_t w, uint16_t h);
-void sf_tri     (sf_ctx_t *ctx, sf_packed_color_t c, sf_svec2_t p1, sf_svec2_t p2, sf_svec2_t p3);
+void sf_pixel   (sf_ctx_t *ctx, sf_packed_color_t c, sf_svec2_t v0);
+void sf_line    (sf_ctx_t *ctx, sf_packed_color_t c, sf_svec2_t v0, sf_svec2_t v1);
+void sf_rect    (sf_ctx_t *ctx, sf_packed_color_t c, sf_svec2_t v0, uint16_t w, uint16_t h);
+void sf_tri     (sf_ctx_t *ctx, sf_packed_color_t c, sf_svec2_t v0, sf_svec2_t v1, sf_svec2_t v2);
 void sf_put_text(sf_ctx_t *ctx, const char *text, sf_svec2_t p, sf_packed_color_t c, int scale);
 
 /* SF_IMPLEMENTATION_HELPERS */
-uint32_t _sf_vec_to_index   (sf_ctx_t *ctx, sf_svec2_t v);
+uint32_t _sf_vec_to_index  (sf_ctx_t *ctx, sf_svec2_t v);
+void     _sf_swap_svec2    (sf_svec2_t *v0, sf_svec2_t *v1);
+void     _sf_interpolate   (sf_svec2_t  v0, sf_svec2_t v1, uint16_t *xs);
 
 /* SF_UTILITIES */
 sf_packed_color_t sf_pack_color(sf_unpacked_color_t);
@@ -105,14 +109,60 @@ void sf_fill(sf_ctx_t *ctx, sf_packed_color_t c) {
    for(size_t i = 0; i < ctx->buffer_size; ++i) { ctx->buffer[i] = c; }
 }
 
-void sf_pixel(sf_ctx_t *ctx, sf_packed_color_t c, sf_svec2_t p) {
-  if (p.x > ctx->w || p.y > ctx->h) return;
-  ctx->buffer[_sf_vec_to_index(ctx, p)] = c;
+void sf_pixel(sf_ctx_t *ctx, sf_packed_color_t c, sf_svec2_t v0) {
+  if (v0.x > ctx->w || v0.y > ctx->h) return;
+  ctx->buffer[_sf_vec_to_index(ctx, v0)] = c;
+}
+
+void sf_line(sf_ctx_t *ctx, sf_packed_color_t c, sf_svec2_t v0, sf_svec2_t v1) {
+  if (v1.y - v0.y > v1.x - v0.x) {
+    uint16_t x01[v1.y-v0.y+1];
+    _sf_interpolate(v0, v1, x01);
+    for (uint16_t y = v0.y; y <= v1.y; ++y) {
+      sf_pixel(ctx, c, (sf_svec2_t){x01[y-v0.y],y});
+    }
+  }
+  else {
+    uint16_t x01[v1.y-v0.y+1];
+    _sf_interpolate(v0, v1, x01);
+    for (uint16_t y = v0.y; y <= v1.y; ++y) {
+      sf_pixel(ctx, c, (sf_svec2_t){x01[y-v0.y],y});
+    }
+  }
+}
+
+void sf_tri(sf_ctx_t *ctx, sf_packed_color_t c, sf_svec2_t v0, sf_svec2_t v1, sf_svec2_t v2) {
+  // Sort corners by y
+  if (v1.y < v0.y) _sf_swap_svec2(&v0, &v1);
+  if (v2.y < v0.y) _sf_swap_svec2(&v2, &v0);
+  if (v2.y < v1.y) _sf_swap_svec2(&v2, &v1);
+  // for v0->v1, v1->v2, and v0->v2, find x values for each y value
+  // num entries is equal to num y values, so allocate it and pass it in
+  uint16_t x01[v1.y-v0.y+1];
+  uint16_t x12[v2.y-v1.y+1];
+  uint16_t x02[v2.y-v0.y+1];
+  _sf_interpolate(v0, v1, x01);
+  _sf_interpolate(v1, v2, x12);
+  _sf_interpolate(v0, v2, x02);
 }
 
 /* SF_IMPLEMENTATION_HELPERS */
 uint32_t _sf_vec_to_index(sf_ctx_t *ctx, sf_svec2_t v) {
   return v.y * ctx->w + v.x;
+}
+
+void _sf_swap_svec2(sf_svec2_t *v0, sf_svec2_t *v1) {
+  sf_svec2_t t = *v0; *v0 = *v1; *v1 = t;
+}
+
+void _sf_interpolate(sf_svec2_t v0, sf_svec2_t v1, uint16_t *xs) {
+  if (v0.y == v1.y) {
+    xs[0] = v0.x;
+    return;
+  }
+  for (uint16_t y = v0.y; y <= v1.y; ++y) {
+    xs[y - v0.y] = (y - v0.y) * (v1.x - v0.x) / (v1.y - v0.y) + v0.x;
+  }
 }
 
 /* SF_UTILITIES */
