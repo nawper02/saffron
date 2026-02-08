@@ -133,18 +133,22 @@ void sf_line(sf_ctx_t *ctx, sf_packed_color_t c, sf_svec2_t v0, sf_svec2_t v1) {
 }
 
 void sf_tri(sf_ctx_t *ctx, sf_packed_color_t c, sf_svec2_t v0, sf_svec2_t v1, sf_svec2_t v2) {
-  // Sort corners by y
   if (v1.y < v0.y) _sf_swap_svec2(&v0, &v1);
   if (v2.y < v0.y) _sf_swap_svec2(&v2, &v0);
   if (v2.y < v1.y) _sf_swap_svec2(&v2, &v1);
-  // for v0->v1, v1->v2, and v0->v2, find x values for each y value
-  // num entries is equal to num y values, so allocate it and pass it in
-  uint16_t x01[v1.y-v0.y+1];
-  uint16_t x12[v2.y-v1.y+1];
-  uint16_t x02[v2.y-v0.y+1];
-  _sf_interpolate_x(v0, v1, x01);
-  _sf_interpolate_x(v1, v2, x12);
+  uint16_t h = v2.y - v0.y + 1;
+  uint16_t x02[h], x012[h];
+  _sf_interpolate_x(v0, v1, x012);
+  _sf_interpolate_x(v1, v2, &x012[v1.y - v0.y]);
   _sf_interpolate_x(v0, v2, x02);
+  uint16_t mid_idx = v1.y - v0.y;
+  uint16_t *xl = (x02[mid_idx] < x012[mid_idx]) ? x02  : x012;
+  uint16_t *xr = (x02[mid_idx] < x012[mid_idx]) ? x012 : x02;
+  for (uint16_t y = v0.y; y <= v2.y; ++y) {
+    for (uint16_t x = xl[y - v0.y]; x <= xr[y - v0.y]; ++x) {
+      sf_pixel(ctx, c, (sf_svec2_t){x, y});
+    }
+  }
 }
 
 /* SF_IMPLEMENTATION_HELPERS */
