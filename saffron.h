@@ -14,16 +14,16 @@
  */
 
 /* SF_TODO
- * 1. Finish primative drawing functions
- * 2. Render text (front a font file of some kind)
- * 3. 3D prep - coordinate systems, transformations 
- *    - support FLU/FRD/NED cleanly/easily
- * 4. Render a 3d file format
- * 5. Create a custom 3d file format, maybe general
- *    as like a 'scene' file (coordinate system, units, global pos?)
- * 6. Lighting
- * 7. Textures
- * 8. ....
+ *  Render text (front a font file of some kind)
+ *  3D prep - coordinate systems, transformations 
+ *  - support FLU/FRD/NED cleanly/easily
+ *  Render a 3d file format
+ *  Create a custom 3d file format, maybe general
+ *  as like a 'scene' file (coordinate system, units, global pos?)
+ *  Lighting
+ *  Textures
+ *  ....
+ *  Optimize. Primatives are not at all fast.
  */
 
 
@@ -62,7 +62,7 @@ void sf_destroy (sf_ctx_t *ctx);
 void sf_fill    (sf_ctx_t *ctx, sf_packed_color_t c);
 void sf_pixel   (sf_ctx_t *ctx, sf_packed_color_t c, sf_svec2_t v0);
 void sf_line    (sf_ctx_t *ctx, sf_packed_color_t c, sf_svec2_t v0, sf_svec2_t v1);
-void sf_rect    (sf_ctx_t *ctx, sf_packed_color_t c, sf_svec2_t v0, uint16_t w, uint16_t h);
+void sf_rect    (sf_ctx_t *ctx, sf_packed_color_t c, sf_svec2_t v0, sf_svec2_t v1);
 void sf_tri     (sf_ctx_t *ctx, sf_packed_color_t c, sf_svec2_t v0, sf_svec2_t v1, sf_svec2_t v2);
 void sf_put_text(sf_ctx_t *ctx, const char *text, sf_svec2_t p, sf_packed_color_t c, int scale);
 
@@ -128,6 +128,18 @@ void sf_line(sf_ctx_t *ctx, sf_packed_color_t c, sf_svec2_t v0, sf_svec2_t v1) {
     _sf_interpolate_y(v0, v1, y01);
     for (uint16_t x = v0.x; x <= v1.x; ++x) {
       sf_pixel(ctx, c, (sf_svec2_t){x,y01[x-v0.x]});
+    }
+  }
+}
+
+void sf_rect(sf_ctx_t *ctx, sf_packed_color_t c, sf_svec2_t v0, sf_svec2_t v1) {
+  uint16_t l = (v0.x < v1.x) ? v0.x : v1.x;
+  uint16_t r = (v0.x > v1.x) ? v0.x : v1.x;
+  uint16_t t = (v0.y < v1.y) ? v0.y : v1.y;
+  uint16_t b = (v0.y > v1.y) ? v0.y : v1.y;
+  for (uint16_t y = t; y <= b; ++y) {
+    for (uint16_t x = l; x <= r; ++x) {
+      sf_pixel(ctx, c, (sf_svec2_t){x,y});
     }
   }
 }
