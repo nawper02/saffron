@@ -51,16 +51,19 @@ extern "C" {
 /* SF_TYPES */
 typedef uint32_t sf_packed_color_t;
 typedef struct { uint8_t  r, g, b, a; } sf_unpacked_color_t;
+
 typedef struct { uint16_t x, y;       } sf_svec2_t;
 typedef struct { uint16_t x, y, z;    } sf_svec3_t;
 typedef struct { float    x, y, z;    } sf_fvec3_t;
 typedef struct { int      x, y, z;    } sf_ivec3_t;
+
 typedef struct {
   sf_fvec3_t *v;
   sf_ivec3_t *f;
-  int32_t v_count;
-  int32_t f_count;
+  int32_t v_cnt;
+  int32_t f_cnt;
 } sf_obj_t;
+
 typedef struct {
     size_t size;
     size_t offset;
@@ -76,6 +79,8 @@ typedef struct {
     sf_obj_t *objs;
     int32_t   obj_count;
 } sf_ctx_t;
+
+typedef void (*sf_log_fn)(const char* message, void* userdata);
 
 /* SF_CORE_FUNCTIONS */
 void       sf_init    (sf_ctx_t *ctx, int w, int h);
@@ -153,7 +158,38 @@ void* sf_arena_alloc(sf_arena_t *arena, size_t size) {
 }
 
 sf_obj_t* sf_load_obj(sf_ctx_t *ctx, const char *filename) {
+  if (ctx->obj_count >= SF_MAX_OBJS) return NULL;
 
+  FILE *f = fopen(filename, "r");
+  if (!f) return NULL;
+
+  int32_t v_cnt, f_cnt; char line[256];
+  while (fgets(line, sizeof(line), f)) {
+    if      (line[0] == 'v' && line[1] == ' ') v_cnt++;
+    else if (line[0] == 'f' && line[1] == ' ') f_cnt++;
+  }
+
+  sf_obj_t *obj = &ctx->objs[ctx->obj_count++];
+  obj->f_cnt = f_cnt; obj->v_cnt = v_cnt;
+  obj->v = sf_arena_alloc(&ctx->arena, v_cnt * sizeof(sf_fvec3_t));
+  obj->f = sf_arena_alloc(&ctx->arena, f_cnt * sizeof(sf_ivec3_t));
+
+  rewind(f);
+  int v_idx = 0, f_idx = 0;
+  while (fgets(line, sizeof(line), f)) {
+    if (line[0] == 'v' && line[1] == ' ') {
+      sscanf(line, "v %f %f %f", &obj->v[v_idx].x, &obj->v[v_idx].y, &obj->v[v_idx].z);
+      v_idx++;
+    }
+    else if (line[0] == 'f' && line[1] == ' ') {
+      sscanf(line, "f %d %d %d", &obj->f[f_idx].x, &obj->f[f_idx].y, &obj->f[f_idx].z);
+      obj->f[f_idx].x -= 1; obj->f[f_idx].y -= 1; obj->f[f_idx].z -= 1;
+      f_idx++;
+    }
+  }
+
+  fclose(f);
+  return obj;
 }
 
 /* SF_DRAWING_FUNCTIONS */
