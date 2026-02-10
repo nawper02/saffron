@@ -38,27 +38,53 @@
 extern "C" {
 #endif
 
-/* INCLUDES */
+/* SF_INCLUDES */
 #include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
 #include <stdio.h>
+
+/* SF_DEFINES */
+#define SF_ARENA_SIZE 10485760
+#define SF_MAX_OBJS   10
 
 /* SF_TYPES */
 typedef uint32_t sf_packed_color_t;
 typedef struct { uint8_t  r, g, b, a; } sf_unpacked_color_t;
 typedef struct { uint16_t x, y;       } sf_svec2_t;
 typedef struct { uint16_t x, y, z;    } sf_svec3_t;
+typedef struct { float    x, y, z;    } sf_fvec3_t;
+typedef struct { int      x, y, z;    } sf_ivec3_t;
+typedef struct {
+  sf_fvec3_t *v;
+  sf_ivec3_t *f;
+  int32_t v_count;
+  int32_t f_count;
+} sf_obj_t;
+typedef struct {
+    size_t size;
+    size_t offset;
+    uint8_t *buffer;
+} sf_arena_t;
 typedef struct {
     int w;
     int h;
     int buffer_size;
     sf_packed_color_t *buffer;
+    int arena_size;
+    sf_arena_t arena;
+    sf_obj_t *objs;
+    int32_t   obj_count;
 } sf_ctx_t;
 
-/* SF_FUNCTIONS */
-void sf_init    (sf_ctx_t *ctx, int w, int h);
-void sf_destroy (sf_ctx_t *ctx);
+/* SF_CORE_FUNCTIONS */
+void       sf_init    (sf_ctx_t *ctx, int w, int h);
+void       sf_destroy (sf_ctx_t *ctx);
+sf_arena_t sf_arena_init(size_t size);
+void*      sf_arena_alloc(sf_arena_t *arena, size_t size);
+sf_obj_t*  sf_load_obj(sf_ctx_t *ctx, const char *filename);
+
+/* SF_DRAWING_FUNCTIONS */
 void sf_fill    (sf_ctx_t *ctx, sf_packed_color_t c);
 void sf_pixel   (sf_ctx_t *ctx, sf_packed_color_t c, sf_svec2_t v0);
 void sf_line    (sf_ctx_t *ctx, sf_packed_color_t c, sf_svec2_t v0, sf_svec2_t v1);
@@ -90,28 +116,54 @@ sf_packed_color_t sf_pack_color(sf_unpacked_color_t);
 /* SF_IMPLEMENTATION */
 #ifdef SAFFRON_IMPLEMENTATION
 
-/* SF_FUNCTIONS */
+/* SF_CORE_FUNCTIONS */
 void sf_init(sf_ctx_t* ctx, int w, int h) {
   ctx->w             = w;
   ctx->h             = h;
   ctx->buffer_size   = w * h;
   ctx->buffer        = (sf_packed_color_t*)malloc(w*h*sizeof(sf_packed_color_t));
+  ctx->arena         = sf_arena_init(SF_ARENA_SIZE);
+  ctx->objs          = sf_arena_alloc(&ctx->arena, SF_MAX_OBJS * sizeof(sf_obj_t));
+  ctx->obj_count     = 0;
 }
 
 void sf_destroy(sf_ctx_t *ctx) {
   free(ctx->buffer);
-  ctx->buffer      = NULL;
-  ctx->buffer_size = 0;
-  ctx->w           = 0;
-  ctx->h           = 0;
+  free(ctx->arena.buffer);
+  ctx->arena.offset = 0;
+  ctx->buffer       = NULL;
+  ctx->buffer_size  = 0;
+  ctx->w            = 0;
+  ctx->h            = 0;
 }
+
+sf_arena_t sf_arena_init(size_t size) {
+    sf_arena_t arena;
+    arena.size = size;
+    arena.offset = 0;
+    arena.buffer = malloc(size);
+    return arena;
+}
+
+void* sf_arena_alloc(sf_arena_t *arena, size_t size) {
+    if (arena->offset + size > arena->size) return NULL;
+    void *ptr = &arena->buffer[arena->offset];
+    arena->offset += size;
+    return ptr;
+}
+
+sf_obj_t* sf_load_obj(sf_ctx_t *ctx, const char *filename) {
+
+}
+
+/* SF_DRAWING_FUNCTIONS */
 
 void sf_fill(sf_ctx_t *ctx, sf_packed_color_t c) {
    for(size_t i = 0; i < ctx->buffer_size; ++i) { ctx->buffer[i] = c; }
 }
 
 void sf_pixel(sf_ctx_t *ctx, sf_packed_color_t c, sf_svec2_t v0) {
-  if (v0.x > ctx->w || v0.y > ctx->h) return;
+  if (v0.x >= ctx->w || v0.y >= ctx->h) return;
   ctx->buffer[_sf_vec_to_index(ctx, v0)] = c;
 }
 
