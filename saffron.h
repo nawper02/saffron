@@ -31,24 +31,33 @@
 #ifndef SAFFRON_H
 #define SAFFRON_H
 
-#include <ctype.h>
-#include <stddef.h>
-#include <sys/types.h>
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 /* SF_INCLUDES */
+#include <ctype.h>
+#include <stddef.h>
+#include <sys/types.h>
 #include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
 #include <stdio.h>
+#include <stdarg.h>
 
 /* SF_DEFINES */
 #define SF_ARENA_SIZE 10485760
 #define SF_MAX_OBJS   10
 
 /* SF_TYPES */
+typedef void (*sf_log_fn)(const char* message, void* userdata);
+typedef enum {
+    SF_LOG_DEBUG,
+    SF_LOG_INFO,
+    SF_LOG_WARN,
+    SF_LOG_ERROR
+} sf_log_level_t;
+
 typedef uint32_t sf_packed_color_t;
 typedef struct { uint8_t  r, g, b, a; } sf_unpacked_color_t;
 
@@ -65,37 +74,44 @@ typedef struct {
 } sf_obj_t;
 
 typedef struct {
-    size_t size;
-    size_t offset;
-    uint8_t *buffer;
+  size_t size;
+  size_t offset;
+  uint8_t *buffer;
 } sf_arena_t;
 typedef struct {
-    int w;
-    int h;
-    int buffer_size;
-    sf_packed_color_t *buffer;
-    int arena_size;
-    sf_arena_t arena;
-    sf_obj_t *objs;
-    int32_t   obj_count;
+  int w;
+  int h;
+  int buffer_size;
+  sf_packed_color_t *buffer;
+
+  sf_arena_t arena;
+  int        arena_size;
+
+  sf_obj_t *objs;
+  int32_t   obj_count;
+
+  sf_log_fn      log_cb;
+  void*          log_user;
+  sf_log_level_t log_min;
 } sf_ctx_t;
 
-typedef void (*sf_log_fn)(const char* message, void* userdata);
-
 /* SF_CORE_FUNCTIONS */
-void       sf_init    (sf_ctx_t *ctx, int w, int h);
-void       sf_destroy (sf_ctx_t *ctx);
-sf_arena_t sf_arena_init(size_t size);
-void*      sf_arena_alloc(sf_arena_t *arena, size_t size);
-sf_obj_t*  sf_load_obj(sf_ctx_t *ctx, const char *filename);
+void       sf_init           (sf_ctx_t *ctx, int w, int h);
+void       sf_destroy        (sf_ctx_t *ctx);
+sf_arena_t sf_arena_init     (size_t size);
+void*      sf_arena_alloc    (sf_arena_t *arena, size_t size);
+void       sf_set_logger     (sf_ctx_t *ctx, sf_log_fn log_cb, void* userdata);
+void       sf_logger_console (const char* message, void* userdata);
+void       sf_log            (sf_ctx_t *ctx, sf_log_level_t level, const char* fmt, ...);
+sf_obj_t*  sf_load_obj       (sf_ctx_t *ctx, const char *filename);
 
 /* SF_DRAWING_FUNCTIONS */
-void sf_fill    (sf_ctx_t *ctx, sf_packed_color_t c);
-void sf_pixel   (sf_ctx_t *ctx, sf_packed_color_t c, sf_svec2_t v0);
-void sf_line    (sf_ctx_t *ctx, sf_packed_color_t c, sf_svec2_t v0, sf_svec2_t v1);
-void sf_rect    (sf_ctx_t *ctx, sf_packed_color_t c, sf_svec2_t v0, sf_svec2_t v1);
-void sf_tri     (sf_ctx_t *ctx, sf_packed_color_t c, sf_svec2_t v0, sf_svec2_t v1, sf_svec2_t v2);
-void sf_put_text(sf_ctx_t *ctx, const char *text, sf_svec2_t p, sf_packed_color_t c, int scale);
+void sf_fill     (sf_ctx_t *ctx, sf_packed_color_t c);
+void sf_pixel    (sf_ctx_t *ctx, sf_packed_color_t c, sf_svec2_t v0);
+void sf_line     (sf_ctx_t *ctx, sf_packed_color_t c, sf_svec2_t v0, sf_svec2_t v1);
+void sf_rect     (sf_ctx_t *ctx, sf_packed_color_t c, sf_svec2_t v0, sf_svec2_t v1);
+void sf_tri      (sf_ctx_t *ctx, sf_packed_color_t c, sf_svec2_t v0, sf_svec2_t v1, sf_svec2_t v2);
+void sf_put_text (sf_ctx_t *ctx, const char *text, sf_svec2_t p, sf_packed_color_t c, int scale);
 
 /* SF_IMPLEMENTATION_HELPERS */
 uint32_t _sf_vec_to_index  (sf_ctx_t *ctx, sf_svec2_t v);
@@ -128,8 +144,16 @@ void sf_init(sf_ctx_t* ctx, int w, int h) {
   ctx->buffer_size   = w * h;
   ctx->buffer        = (sf_packed_color_t*)malloc(w*h*sizeof(sf_packed_color_t));
   ctx->arena         = sf_arena_init(SF_ARENA_SIZE);
+  ctx->log_cb        = sf_logger_console;
+  ctx->log_user      = NULL;
+  ctx->log_min       = SF_LOG_INFO;
   ctx->objs          = sf_arena_alloc(&ctx->arena, SF_MAX_OBJS * sizeof(sf_obj_t));
   ctx->obj_count     = 0;
+  sf_log(ctx, SF_LOG_INFO, "sf_init\n"
+                           "          buffer : %dx%d\n"
+                           "          memory : %d\n"
+                           "          mxobjs : %d\n", 
+                           ctx->w, ctx->h, SF_ARENA_SIZE, SF_MAX_OBJS);
 }
 
 void sf_destroy(sf_ctx_t *ctx) {
@@ -140,28 +164,60 @@ void sf_destroy(sf_ctx_t *ctx) {
   ctx->buffer_size  = 0;
   ctx->w            = 0;
   ctx->h            = 0;
+  sf_log(ctx, SF_LOG_INFO, "sf_destroy\n"
+                           "          buffer : %dx%d\n"
+                           "          memory : %d\n"
+                           "          mxobjs : %d\n", 
+                           ctx->w, ctx->h, SF_ARENA_SIZE, SF_MAX_OBJS);
 }
 
 sf_arena_t sf_arena_init(size_t size) {
-    sf_arena_t arena;
-    arena.size = size;
-    arena.offset = 0;
-    arena.buffer = malloc(size);
-    return arena;
+  sf_arena_t arena;
+  arena.size = size;
+  arena.offset = 0;
+  arena.buffer = malloc(size);
+  return arena;
 }
 
 void* sf_arena_alloc(sf_arena_t *arena, size_t size) {
-    if (arena->offset + size > arena->size) return NULL;
-    void *ptr = &arena->buffer[arena->offset];
-    arena->offset += size;
-    return ptr;
+  if (arena->offset + size > arena->size) return NULL;
+  void *ptr = &arena->buffer[arena->offset];
+  arena->offset += size;
+  return ptr;
+}
+
+void sf_set_logger(sf_ctx_t *ctx, sf_log_fn callback, void* userdata) {
+  ctx->log_cb = callback;
+  ctx->log_user = userdata;
+}
+
+void sf_logger_console(const char* message, void* userdata) {
+  fprintf(stdout, "[Saffron] %s", message);
+}
+
+void sf_log(sf_ctx_t *ctx, sf_log_level_t level, const char* fmt, ...) {
+  if (!ctx->log_cb || level < ctx->log_min) return;
+
+  char buffer[512];
+  va_list args;
+  va_start(args, fmt);
+  vsnprintf(buffer, sizeof(buffer), fmt, args);
+  va_end(args);
+
+  ctx->log_cb(buffer, ctx->log_user);
 }
 
 sf_obj_t* sf_load_obj(sf_ctx_t *ctx, const char *filename) {
-  if (ctx->obj_count >= SF_MAX_OBJS) return NULL;
+  if (ctx->obj_count >= SF_MAX_OBJS) {
+    sf_log(ctx, SF_LOG_ERROR, "sf_load_obj failed: max objects (%d) reached\n", SF_MAX_OBJS);
+    return NULL;
+  }
 
   FILE *f = fopen(filename, "r");
-  if (!f) return NULL;
+  if (!f) {
+    sf_log(ctx, SF_LOG_ERROR, "sf_load_obj failed: could not open %s\n", filename);
+    return NULL;
+  }
 
   int32_t v_cnt, f_cnt; char line[256];
   while (fgets(line, sizeof(line), f)) {
@@ -173,6 +229,19 @@ sf_obj_t* sf_load_obj(sf_ctx_t *ctx, const char *filename) {
   obj->f_cnt = f_cnt; obj->v_cnt = v_cnt;
   obj->v = sf_arena_alloc(&ctx->arena, v_cnt * sizeof(sf_fvec3_t));
   obj->f = sf_arena_alloc(&ctx->arena, f_cnt * sizeof(sf_ivec3_t));
+
+  if (!obj->v || !obj->f) {
+    sf_log(ctx, SF_LOG_ERROR, "sf_load_obj failed: out of arena memory for %s\n", filename);
+    fclose(f);
+    return NULL;
+  }
+
+  sf_log(ctx, SF_LOG_INFO, "sf_load_obj\n"
+                             "          file   : %s\n"
+                             "          verts  : %d\n"
+                             "          faces  : %d\n"
+                             "          obj_id : %d\n", 
+                             filename, v_cnt, f_cnt, ctx->obj_count - 1);
 
   rewind(f);
   int v_idx = 0, f_idx = 0;
@@ -195,7 +264,7 @@ sf_obj_t* sf_load_obj(sf_ctx_t *ctx, const char *filename) {
 /* SF_DRAWING_FUNCTIONS */
 
 void sf_fill(sf_ctx_t *ctx, sf_packed_color_t c) {
-   for(size_t i = 0; i < ctx->buffer_size; ++i) { ctx->buffer[i] = c; }
+ for(size_t i = 0; i < ctx->buffer_size; ++i) { ctx->buffer[i] = c; }
 }
 
 void sf_pixel(sf_ctx_t *ctx, sf_packed_color_t c, sf_svec2_t v0) {

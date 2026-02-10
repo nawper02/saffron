@@ -17,6 +17,7 @@ int main(int argc, char* argv[])
                                             width, height);
   sf_ctx_t sf_ctx;
   sf_init(&sf_ctx, width, height);
+  sf_set_logger(&sf_ctx, sf_logger_console, NULL);
   sf_load_obj(&sf_ctx, "../assets/teapot.obj");
 
   int running = 1;
