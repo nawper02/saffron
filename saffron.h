@@ -219,7 +219,7 @@ sf_obj_t* sf_load_obj(sf_ctx_t *ctx, const char *filename) {
     return NULL;
   }
 
-  int32_t v_cnt, f_cnt; char line[256];
+  int32_t v_cnt = 0, f_cnt = 0; char line[256];
   while (fgets(line, sizeof(line), f)) {
     if      (line[0] == 'v' && line[1] == ' ') v_cnt++;
     else if (line[0] == 'f' && line[1] == ' ') f_cnt++;
