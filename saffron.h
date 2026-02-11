@@ -4,10 +4,10 @@
  */
 
 /* SF_TODO
- *  3D Math
- *  Render 3d objects
- *  ....
- *  Optimize. Primatives are not at all fast.
+ *  Direct buffer access in primatives (not sf_pixel calls)
+ *  Find bottlenecks and optimize
+ *  Backface culling
+ *  Normal based lighting
  */
 
 
@@ -32,11 +32,11 @@ extern "C" {
 #include <math.h>
 
 /* SF_DEFINES */
-#define SF_ARENA_SIZE       10485760
-#define SF_MAX_OBJS         10
-#define SF_MAX_ENTITIES     100
-#define SF_LOG_INDENT       "            "
-#define SF_PI               3.14159265359f
+#define SF_ARENA_SIZE          10485760
+#define SF_MAX_OBJS            10
+#define SF_MAX_ENTITIES        100
+#define SF_LOG_INDENT          "            "
+#define SF_PI                  3.14159265359f
 
 #define SF_LOG(ctx, level, fmt, ...)  _sf_log(ctx, level, __func__, fmt, ##__VA_ARGS__)
 #define SF_ALIGN_SIZE(size)           (((size) + 7) & ~7)
@@ -45,11 +45,11 @@ extern "C" {
 #define sf_get_obj(ctx, name)         _sf_get_obj(ctx, name, true)
 #define sf_get_enti(ctx, name)        _sf_get_enti(ctx, name, true)
 
-#define SF_COLOR_RED        ((sf_packed_color_t)0xFFFF0000)
-#define SF_COLOR_GREEN      ((sf_packed_color_t)0xFF00FF00)
-#define SF_COLOR_BLUE       ((sf_packed_color_t)0xFF0000FF)
-#define SF_COLOR_BLACK      ((sf_packed_color_t)0xFF000000)
-#define SF_COLOR_WHITE      ((sf_packed_color_t)0xFFFFFFFF)
+#define SF_CLR_RED              ((sf_pkd_clr_t)0xFFFF0000)
+#define SF_CLR_GREEN            ((sf_pkd_clr_t)0xFF00FF00)
+#define SF_CLR_BLUE             ((sf_pkd_clr_t)0xFF0000FF)
+#define SF_CLR_BLACK            ((sf_pkd_clr_t)0xFF000000)
+#define SF_CLR_WHITE            ((sf_pkd_clr_t)0xFFFFFFFF)
 
 /* SF_TYPES */
 typedef void (*sf_log_fn)(const char* message, void* userdata);
@@ -60,104 +60,102 @@ typedef enum {
   SF_LOG_ERROR
 } sf_log_level_t;
 
-typedef uint32_t sf_packed_color_t;
-typedef struct { uint8_t  r, g, b, a; } sf_unpacked_color_t;
-
+typedef uint32_t sf_pkd_clr_t;
+typedef struct { uint8_t  r, g, b, a; } sf_unpkd_clr_t;
 typedef struct { uint16_t x, y;       } sf_svec2_t;
 typedef struct { uint16_t x, y, z;    } sf_svec3_t;
 typedef struct { float    x, y, z;    } sf_fvec3_t;
 typedef struct { int      x, y, z;    } sf_ivec3_t;
-
-typedef struct { float m[4][4]; } sf_fmat4_t;
+typedef struct { float m[4][4];       } sf_fmat4_t;
 
 typedef struct {
-  sf_fvec3_t  pos;
-  sf_fvec3_t  target;
-  sf_fmat4_t  V;
-  sf_fmat4_t  P;
+  sf_fvec3_t                    pos;
+  sf_fvec3_t                    target;
+  sf_fmat4_t                    V;
+  sf_fmat4_t                    P;
 } sf_camera_t;
 typedef struct {
-  sf_fvec3_t *v;
-  sf_ivec3_t *f;
-  int32_t     v_cnt;
-  int32_t     f_cnt;
-  int32_t     id;
-  const char *name;
+  sf_fvec3_t                   *v;
+  sf_ivec3_t                   *f;
+  int32_t                       v_cnt;
+  int32_t                       f_cnt;
+  int32_t                       id;
+  const char                   *name;
 } sf_obj_t;
 typedef struct {
-  sf_obj_t    obj;
-  sf_fmat4_t  M;
-  int32_t     id;
-  const char *name;
+  sf_obj_t                      obj;
+  sf_fmat4_t                    M;
+  int32_t                       id;
+  const char                   *name;
 } sf_enti_t;
 
 typedef struct {
-  size_t    size;
-  size_t    offset;
-  uint8_t  *buffer;
+  size_t                        size;
+  size_t                        offset;
+  uint8_t                      *buffer;
 } sf_arena_t;
 typedef struct {
-  int                w;
-  int                h;
-  int                buffer_size;
-  sf_packed_color_t *buffer;
-  float             *z_buffer;
+  int                           w;
+  int                           h;
+  int                           buffer_size;
+  sf_pkd_clr_t            *buffer;
+  float                        *z_buffer;
 
-  sf_arena_t         arena;
-  int                arena_size;
+  sf_arena_t                    arena;
+  int                           arena_size;
 
-  sf_obj_t          *objs;
-  int32_t            obj_count;
-  sf_enti_t         *entities;
-  int32_t            enti_count;
+  sf_obj_t                     *objs;
+  int32_t                       obj_count;
+  sf_enti_t                    *entities;
+  int32_t                       enti_count;
 
-  sf_camera_t        camera;
+  sf_camera_t                   camera;
 
-  sf_log_fn          log_cb;
-  void*              log_user;
-  sf_log_level_t     log_min;
+  sf_log_fn                     log_cb;
+  void*                         log_user;
+  sf_log_level_t                log_min;
 } sf_ctx_t;
 
 /* SF_CORE_FUNCTIONS */
-void       sf_init           (sf_ctx_t *ctx, int w, int h);
-void       sf_destroy        (sf_ctx_t *ctx);
-sf_arena_t sf_arena_init     (size_t size);
-void*      sf_arena_alloc    (sf_ctx_t *ctx, sf_arena_t *arena, size_t size);
-void       sf_set_logger     (sf_ctx_t *ctx, sf_log_fn log_cb, void* userdata);
-void       sf_logger_console (const char* message, void* userdata);
-void       sf_log            (sf_ctx_t *ctx, sf_log_level_t level, const char* fmt, ...);
-void       _sf_log           (sf_ctx_t *ctx, sf_log_level_t level, const char* func, const char* fmt, ...);
-sf_obj_t*  sf_load_obj       (sf_ctx_t *ctx, const char *filename, const char *objname);
-sf_obj_t*  _sf_get_obj       (sf_ctx_t *ctx, const char *objname, bool should_log_failure);
-sf_enti_t* sf_add_enti       (sf_ctx_t *ctx, sf_obj_t *obj, const char *entiname);
-sf_enti_t* _sf_get_enti      (sf_ctx_t *ctx, const char *entiname, bool should_log_failure);
-void       sf_render_enti    (sf_ctx_t *ctx, sf_enti_t *enti);
-void       sf_render_ctx     (sf_ctx_t *ctx);
+void        sf_init             (sf_ctx_t *ctx, int w, int h);
+void        sf_destroy          (sf_ctx_t *ctx);
+sf_arena_t  sf_arena_init       (size_t size);
+void*       sf_arena_alloc      (sf_ctx_t *ctx, sf_arena_t *arena, size_t size);
+void        sf_set_logger       (sf_ctx_t *ctx, sf_log_fn log_cb, void* userdata);
+void        sf_logger_console   (const char* message, void* userdata);
+void        sf_log              (sf_ctx_t *ctx, sf_log_level_t level, const char* fmt, ...);
+void        _sf_log             (sf_ctx_t *ctx, sf_log_level_t level, const char* func, const char* fmt, ...);
+sf_obj_t*   sf_load_obj         (sf_ctx_t *ctx, const char *filename, const char *objname);
+sf_obj_t*   _sf_get_obj         (sf_ctx_t *ctx, const char *objname, bool should_log_failure);
+sf_enti_t*  sf_add_enti         (sf_ctx_t *ctx, sf_obj_t *obj, const char *entiname);
+sf_enti_t*  _sf_get_enti        (sf_ctx_t *ctx, const char *entiname, bool should_log_failure);
+void        sf_render_enti      (sf_ctx_t *ctx, sf_enti_t *enti);
+void        sf_render_ctx       (sf_ctx_t *ctx);
 
 /* SF_DRAWING_FUNCTIONS */
-void sf_fill        (sf_ctx_t *ctx, sf_packed_color_t c);
-void sf_pixel       (sf_ctx_t *ctx, sf_packed_color_t c, sf_svec2_t v0);
-void sf_pixel_depth (sf_ctx_t *ctx, sf_packed_color_t c, sf_svec2_t v0, float z);
-void sf_line        (sf_ctx_t *ctx, sf_packed_color_t c, sf_svec2_t v0, sf_svec2_t v1);
-void sf_rect        (sf_ctx_t *ctx, sf_packed_color_t c, sf_svec2_t v0, sf_svec2_t v1);
-void sf_tri         (sf_ctx_t *ctx, sf_packed_color_t c, sf_svec2_t v0, sf_svec2_t v1, sf_svec2_t v2);
-void sf_tri_depth   (sf_ctx_t *ctx, sf_packed_color_t c, sf_fvec3_t v0, sf_fvec3_t v1, sf_fvec3_t v2);
-void sf_put_text    (sf_ctx_t *ctx, const char *text, sf_svec2_t p, sf_packed_color_t c, int scale);
-void sf_clear_depth (sf_ctx_t *ctx);
+void        sf_fill             (sf_ctx_t *ctx, sf_pkd_clr_t c);
+void        sf_pixel            (sf_ctx_t *ctx, sf_pkd_clr_t c, sf_svec2_t v0);
+void        sf_pixel_depth      (sf_ctx_t *ctx, sf_pkd_clr_t c, sf_svec2_t v0, float z);
+void        sf_line             (sf_ctx_t *ctx, sf_pkd_clr_t c, sf_svec2_t v0, sf_svec2_t v1);
+void        sf_rect             (sf_ctx_t *ctx, sf_pkd_clr_t c, sf_svec2_t v0, sf_svec2_t v1);
+void        sf_tri              (sf_ctx_t *ctx, sf_pkd_clr_t c, sf_svec2_t v0, sf_svec2_t v1, sf_svec2_t v2);
+void        sf_tri_depth        (sf_ctx_t *ctx, sf_pkd_clr_t c, sf_fvec3_t v0, sf_fvec3_t v1, sf_fvec3_t v2);
+void        sf_put_text         (sf_ctx_t *ctx, const char *text, sf_svec2_t p, sf_pkd_clr_t c, int scale);
+void        sf_clear_depth      (sf_ctx_t *ctx);
 
 /* SF_LA_FUNCTIONS */
-sf_fmat4_t sf_fmat4_mul_fmat4   (sf_fmat4_t m0, sf_fmat4_t m1);
-sf_fvec3_t sf_fmat4_mul_vec3    (sf_fmat4_t m, sf_fvec3_t v);
-sf_fvec3_t sf_fvec3_sub         (sf_fvec3_t v0, sf_fvec3_t v1);
-sf_fvec3_t sf_fvec3_add         (sf_fvec3_t v0, sf_fvec3_t v1);
-sf_fvec3_t sf_fvec3_norm        (sf_fvec3_t v);
-sf_fvec3_t sf_fvec3_cross       (sf_fvec3_t v0, sf_fvec3_t v1);
-float      sf_fvec3_dot         (sf_fvec3_t v0, sf_fvec3_t v1);
-sf_fmat4_t sf_make_tsl_fmat4    (float x, float y, float z);
-sf_fmat4_t sf_make_rot_fmat4    (sf_fvec3_t angles);
-sf_fmat4_t sf_make_psp_fmat4    (float fov_deg, float aspect, float near, float far);
-sf_fmat4_t sf_make_idn_fmat4    (void);
-sf_fmat4_t sf_make_view_fmat4   (sf_fvec3_t eye, sf_fvec3_t target, sf_fvec3_t up);
+sf_fmat4_t  sf_fmat4_mul_fmat4  (sf_fmat4_t m0, sf_fmat4_t m1);
+sf_fvec3_t  sf_fmat4_mul_vec3   (sf_fmat4_t m, sf_fvec3_t v);
+sf_fvec3_t  sf_fvec3_sub        (sf_fvec3_t v0, sf_fvec3_t v1);
+sf_fvec3_t  sf_fvec3_add        (sf_fvec3_t v0, sf_fvec3_t v1);
+sf_fvec3_t  sf_fvec3_norm       (sf_fvec3_t v);
+sf_fvec3_t  sf_fvec3_cross      (sf_fvec3_t v0, sf_fvec3_t v1);
+float       sf_fvec3_dot        (sf_fvec3_t v0, sf_fvec3_t v1);
+sf_fmat4_t  sf_make_tsl_fmat4   (float x, float y, float z);
+sf_fmat4_t  sf_make_rot_fmat4   (sf_fvec3_t angles);
+sf_fmat4_t  sf_make_psp_fmat4   (float fov_deg, float aspect, float near, float far);
+sf_fmat4_t  sf_make_idn_fmat4   (void);
+sf_fmat4_t  sf_make_view_fmat4  (sf_fvec3_t eye, sf_fvec3_t target, sf_fvec3_t up);
 
 /* SF_IMPLEMENTATION_HELPERS */
 uint32_t    _sf_vec_to_index    (sf_ctx_t *ctx, sf_svec2_t v);
@@ -168,11 +166,11 @@ void        _sf_interpolate_f   (float v0, float v1, uint16_t steps, float *out)
 const char* _sf_log_lvl_to_str  (sf_log_level_t level);
 
 /* SF_UTILITIES */
-sf_packed_color_t sf_pack_color           (sf_unpacked_color_t);
-size_t            sf_get_obj_memory_usage (sf_obj_t *obj);
+sf_pkd_clr_t sf_pack_color (sf_unpkd_clr_t);
+size_t            sf_obj_memusg (sf_obj_t *obj);
 
 /* SF_FONT_DATA */
-static const uint8_t _sf_font_8x8[];
+static const uint8_t            _sf_font_8x8[];
 
 #ifdef __cplusplus
 }
@@ -184,19 +182,19 @@ static const uint8_t _sf_font_8x8[];
 
 /* SF_CORE_FUNCTIONS */
 void sf_init(sf_ctx_t *ctx, int w, int h) {
-  ctx->w             = w;
-  ctx->h             = h;
-  ctx->buffer_size   = w * h;
-  ctx->buffer        = (sf_packed_color_t*) malloc(w*h*sizeof(sf_packed_color_t));
-  ctx->z_buffer      = (float*)             malloc(w*h*sizeof(float));
-  ctx->arena         = sf_arena_init(SF_ARENA_SIZE);
-  ctx->log_cb        = sf_logger_console;
-  ctx->log_user      = NULL;
-  ctx->log_min       = SF_LOG_INFO;
-  ctx->objs          = sf_arena_alloc(ctx, &ctx->arena, SF_MAX_OBJS     * sizeof(sf_obj_t));
-  ctx->entities      = sf_arena_alloc(ctx, &ctx->arena, SF_MAX_ENTITIES * sizeof(sf_enti_t));
-  ctx->obj_count     = 0;
-  ctx->enti_count    = 0;
+  ctx->w                        = w;
+  ctx->h                        = h;
+  ctx->buffer_size              = w * h;
+  ctx->buffer                   = (sf_pkd_clr_t*) malloc(w*h*sizeof(sf_pkd_clr_t));
+  ctx->z_buffer                 = (float*)             malloc(w*h*sizeof(float));
+  ctx->arena                    = sf_arena_init(SF_ARENA_SIZE);
+  ctx->log_cb                   = sf_logger_console;
+  ctx->log_user                 = NULL;
+  ctx->log_min                  = SF_LOG_INFO;
+  ctx->objs                     = sf_arena_alloc(ctx, &ctx->arena, SF_MAX_OBJS     * sizeof(sf_obj_t));
+  ctx->entities                 = sf_arena_alloc(ctx, &ctx->arena, SF_MAX_ENTITIES * sizeof(sf_enti_t));
+  ctx->obj_count                = 0;
+  ctx->enti_count               = 0;
   SF_LOG(ctx, SF_LOG_INFO,
               SF_LOG_INDENT "buffer : %dx%d\n"
               SF_LOG_INDENT "memory : %d\n"
@@ -209,13 +207,13 @@ void sf_destroy(sf_ctx_t *ctx) {
   free(ctx->buffer);
   free(ctx->z_buffer);
   free(ctx->arena.buffer);
-  ctx->arena.offset = 0;
-  ctx->buffer       = NULL;
-  ctx->buffer_size  = 0;
-  ctx->w            = 0;
-  ctx->h            = 0;
-  ctx->enti_count   = 0;
-  ctx->obj_count    = 0;
+  ctx->arena.offset             = 0;
+  ctx->buffer                   = NULL;
+  ctx->buffer_size              = 0;
+  ctx->w                        = 0;
+  ctx->h                        = 0;
+  ctx->enti_count               = 0;
+  ctx->obj_count                = 0;
   SF_LOG(ctx, SF_LOG_INFO,
               SF_LOG_INDENT "buffer : %dx%d\n"
               SF_LOG_INDENT "memory : %d\n"
@@ -330,7 +328,7 @@ sf_obj_t* sf_load_obj(sf_ctx_t *ctx, const char *filename, const char *objname) 
               SF_LOG_INDENT "mem    : %.2f\n"
               SF_LOG_INDENT "obj_id : %d\n",
               filename, objname, obj->id, v_cnt, f_cnt, 
-              sf_get_obj_memory_usage(obj), 
+              sf_obj_memusg(obj), 
               ((float)ctx->arena.offset / (float)ctx->arena.size) * 100.0f,
               ctx->obj_count - 1);
 
@@ -432,7 +430,7 @@ void sf_render_enti(sf_ctx_t *ctx, sf_enti_t *enti) {
       p[j].y = (1.0f - (proj.y + 1.0f) * 0.5f) * (float)ctx->h;
       p[j].z = proj.z;
     }
-    sf_tri_depth(ctx, SF_COLOR_RED, p[0], p[1], p[2]);
+    sf_tri_depth(ctx, SF_CLR_RED, p[0], p[1], p[2]);
   }
 }
 
@@ -468,13 +466,13 @@ void sf_render_enti(sf_ctx_t *ctx, sf_enti_t *enti) {
 //    float intensity = sf_fvec3_dot(normal, sf_fvec3_norm(light_dir));
 //    if (intensity < 0.1f) intensity = 0.1f;
 //    
-//    sf_unpacked_color_t color = { (uint8_t)(255 * intensity), (uint8_t)(200 * intensity), 0, 255 };
+//    sf_unpkd_clr_t color = { (uint8_t)(255 * intensity), (uint8_t)(200 * intensity), 0, 255 };
 //    sf_tri(ctx, sf_pack_color(color), screen_coords[0], screen_coords[1], screen_coords[2]);
 //  }
 //}
 
 void sf_render_ctx(sf_ctx_t *ctx) {
-  sf_fill(ctx, SF_COLOR_BLACK);
+  sf_fill(ctx, SF_CLR_BLACK);
   sf_clear_depth(ctx); 
   for (int i = 0; i < ctx->enti_count; i++) {
     sf_render_enti(ctx, &ctx->entities[i]);
@@ -482,16 +480,16 @@ void sf_render_ctx(sf_ctx_t *ctx) {
 }
 
 /* SF_DRAWING_FUNCTIONS */
-void sf_fill(sf_ctx_t *ctx, sf_packed_color_t c) {
+void sf_fill(sf_ctx_t *ctx, sf_pkd_clr_t c) {
  for(size_t i = 0; i < ctx->buffer_size; ++i) { ctx->buffer[i] = c; }
 }
 
-void sf_pixel(sf_ctx_t *ctx, sf_packed_color_t c, sf_svec2_t v0) {
+void sf_pixel(sf_ctx_t *ctx, sf_pkd_clr_t c, sf_svec2_t v0) {
   if (v0.x >= ctx->w || v0.y >= ctx->h) return;
   ctx->buffer[_sf_vec_to_index(ctx, v0)] = c;
 }
 
-void sf_pixel_depth(sf_ctx_t *ctx, sf_packed_color_t c, sf_svec2_t v, float z) {
+void sf_pixel_depth(sf_ctx_t *ctx, sf_pkd_clr_t c, sf_svec2_t v, float z) {
   if (v.x >= ctx->w || v.y >= ctx->h) return;
   uint32_t idx = _sf_vec_to_index(ctx, v);
   if (z < ctx->z_buffer[idx]) {
@@ -500,7 +498,7 @@ void sf_pixel_depth(sf_ctx_t *ctx, sf_packed_color_t c, sf_svec2_t v, float z) {
   }
 }
 
-void sf_line(sf_ctx_t *ctx, sf_packed_color_t c, sf_svec2_t v0, sf_svec2_t v1) {
+void sf_line(sf_ctx_t *ctx, sf_pkd_clr_t c, sf_svec2_t v0, sf_svec2_t v1) {
   if (v1.y - v0.y > v1.x - v0.x) {
     uint16_t x01[v1.y-v0.y+1];
     _sf_interpolate_x(v0, v1, x01);
@@ -517,7 +515,7 @@ void sf_line(sf_ctx_t *ctx, sf_packed_color_t c, sf_svec2_t v0, sf_svec2_t v1) {
   }
 }
 
-void sf_rect(sf_ctx_t *ctx, sf_packed_color_t c, sf_svec2_t v0, sf_svec2_t v1) {
+void sf_rect(sf_ctx_t *ctx, sf_pkd_clr_t c, sf_svec2_t v0, sf_svec2_t v1) {
   uint16_t l = (v0.x < v1.x) ? v0.x : v1.x;
   uint16_t r = (v0.x > v1.x) ? v0.x : v1.x;
   uint16_t t = (v0.y < v1.y) ? v0.y : v1.y;
@@ -529,7 +527,7 @@ void sf_rect(sf_ctx_t *ctx, sf_packed_color_t c, sf_svec2_t v0, sf_svec2_t v1) {
   }
 }
 
-void sf_tri(sf_ctx_t *ctx, sf_packed_color_t c, sf_svec2_t v0, sf_svec2_t v1, sf_svec2_t v2) {
+void sf_tri(sf_ctx_t *ctx, sf_pkd_clr_t c, sf_svec2_t v0, sf_svec2_t v1, sf_svec2_t v2) {
   if (v1.y < v0.y) _sf_swap_svec2(&v0, &v1);
   if (v2.y < v0.y) _sf_swap_svec2(&v2, &v0);
   if (v2.y < v1.y) _sf_swap_svec2(&v2, &v1);
@@ -548,7 +546,7 @@ void sf_tri(sf_ctx_t *ctx, sf_packed_color_t c, sf_svec2_t v0, sf_svec2_t v1, sf
   }
 }
 
-void sf_tri_depth(sf_ctx_t *ctx, sf_packed_color_t c, sf_fvec3_t v0, sf_fvec3_t v1, sf_fvec3_t v2) {
+void sf_tri_depth(sf_ctx_t *ctx, sf_pkd_clr_t c, sf_fvec3_t v0, sf_fvec3_t v1, sf_fvec3_t v2) {
   if (v1.y < v0.y) { sf_fvec3_t t = v0; v0 = v1; v1 = t; }
   if (v2.y < v0.y) { sf_fvec3_t t = v0; v0 = v2; v2 = t; }
   if (v2.y < v1.y) { sf_fvec3_t t = v1; v1 = v2; v2 = t; }
@@ -597,7 +595,7 @@ void sf_tri_depth(sf_ctx_t *ctx, sf_packed_color_t c, sf_fvec3_t v0, sf_fvec3_t 
   }
 }
 
-void sf_put_text(sf_ctx_t *ctx, const char *text, sf_svec2_t p, sf_packed_color_t c, int scale) {
+void sf_put_text(sf_ctx_t *ctx, const char *text, sf_svec2_t p, sf_pkd_clr_t c, int scale) {
   if (scale < 1) scale = 1;
   int start_x = p.x;
   int stride = 8 * scale;
@@ -822,14 +820,14 @@ const char* _sf_log_lvl_to_str(sf_log_level_t level) {
 }
 
 /* SF_UTILITIES */
-sf_packed_color_t sf_pack_color(sf_unpacked_color_t c) {
+sf_pkd_clr_t sf_pack_color(sf_unpkd_clr_t c) {
   return ((uint32_t)c.a << 24) | 
          ((uint32_t)c.r << 16) | 
          ((uint32_t)c.g << 8 ) |
           (uint32_t)c.b;
 }
 
-size_t sf_get_obj_memory_usage(sf_obj_t *obj) {
+size_t sf_obj_memusg(sf_obj_t *obj) {
   if (!obj) return 0;
   size_t v_size = obj->v_cnt * sizeof(sf_fvec3_t);
   size_t f_size = obj->f_cnt * sizeof(sf_ivec3_t);

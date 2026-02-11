@@ -39,22 +39,22 @@ int main(int argc, char* argv[])
 
       sf_render_ctx(&sf_ctx);
 
-      sf_put_text(&sf_ctx, "SAFFRON 3D TEST", (sf_svec2_t){10, 10}, SF_COLOR_WHITE, 1);
+      sf_put_text(&sf_ctx, "SAFFRON 3D TEST", (sf_svec2_t){10, 10}, SF_CLR_WHITE, 1);
 
-      //sf_fill(&sf_ctx, SF_COLOR_BLUE);
+      //sf_fill(&sf_ctx, SF_CLR_BLUE);
       //for (int i = 0; i < 80; ++i) {
-      //  sf_line(&sf_ctx, SF_COLOR_RED, (sf_svec2_t){10*i+(width/2),0}, (sf_svec2_t){10*i, height});
+      //  sf_line(&sf_ctx, SF_CLR_RED, (sf_svec2_t){10*i+(width/2),0}, (sf_svec2_t){10*i, height});
       //}
-      //sf_tri(&sf_ctx, SF_COLOR_GREEN, (sf_svec2_t){0,50}, (sf_svec2_t){50, 400}, (sf_svec2_t){200,100});
-      //sf_tri(&sf_ctx, SF_COLOR_WHITE, (sf_svec2_t){100,200}, (sf_svec2_t){300, 10}, (sf_svec2_t){400,600});
-      //sf_rect(&sf_ctx, SF_COLOR_RED, (sf_svec2_t){0,20}, (sf_svec2_t){20,0});
-      //sf_rect(&sf_ctx, SF_COLOR_RED, (sf_svec2_t){20,20}, (sf_svec2_t){50,50});
-      //sf_rect(&sf_ctx, SF_COLOR_WHITE, (sf_svec2_t){50,50}, (sf_svec2_t){30,30});
+      //sf_tri(&sf_ctx, SF_CLR_GREEN, (sf_svec2_t){0,50}, (sf_svec2_t){50, 400}, (sf_svec2_t){200,100});
+      //sf_tri(&sf_ctx, SF_CLR_WHITE, (sf_svec2_t){100,200}, (sf_svec2_t){300, 10}, (sf_svec2_t){400,600});
+      //sf_rect(&sf_ctx, SF_CLR_RED, (sf_svec2_t){0,20}, (sf_svec2_t){20,0});
+      //sf_rect(&sf_ctx, SF_CLR_RED, (sf_svec2_t){20,20}, (sf_svec2_t){50,50});
+      //sf_rect(&sf_ctx, SF_CLR_WHITE, (sf_svec2_t){50,50}, (sf_svec2_t){30,30});
       //for (int i = 0; i < 10; ++i) {
-      //  sf_put_text(&sf_ctx, "SAFFRON", (sf_svec2_t){20,105+(40*i)}, SF_COLOR_RED, i);
+      //  sf_put_text(&sf_ctx, "SAFFRON", (sf_svec2_t){20,105+(40*i)}, SF_CLR_RED, i);
       //}
 
-      SDL_UpdateTexture(texture, NULL, sf_ctx.buffer, sf_ctx.w * sizeof(sf_packed_color_t));
+      SDL_UpdateTexture(texture, NULL, sf_ctx.buffer, sf_ctx.w * sizeof(sf_pkd_clr_t));
       SDL_RenderClear(renderer);
       SDL_RenderCopy(renderer, texture, NULL, NULL);
       SDL_RenderPresent(renderer);
