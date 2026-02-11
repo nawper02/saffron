@@ -29,21 +29,27 @@ extern "C" {
 #include <stdio.h>
 #include <stdarg.h>
 #include <stdbool.h>
+#include <math.h>
 
 /* SF_DEFINES */
-#define SF_ARENA_SIZE   10485760
-#define SF_MAX_OBJS     10
-#define SF_MAX_ENTITIES 100
-#define SF_LOG_INDENT "            "
-#define SF_LOG(ctx, level, fmt, ...) _sf_log(ctx, level, __func__, fmt, ##__VA_ARGS__)
-#define SF_ALIGN_SIZE(size) (((size) + 7) & ~7)
-#define sf_get_obj(ctx, name)        _sf_get_obj(ctx, name, true)
-#define sf_get_enti(ctx, name)       _sf_get_enti(ctx, name, true)
-#define SF_COLOR_RED   ((sf_packed_color_t)0xFFFF0000)
-#define SF_COLOR_GREEN ((sf_packed_color_t)0xFF00FF00)
-#define SF_COLOR_BLUE  ((sf_packed_color_t)0xFF0000FF)
-#define SF_COLOR_BLACK ((sf_packed_color_t)0xFF000000)
-#define SF_COLOR_WHITE ((sf_packed_color_t)0xFFFFFFFF)
+#define SF_ARENA_SIZE       10485760
+#define SF_MAX_OBJS         10
+#define SF_MAX_ENTITIES     100
+#define SF_LOG_INDENT       "            "
+#define SF_PI               3.14159265359f
+
+#define SF_LOG(ctx, level, fmt, ...)  _sf_log(ctx, level, __func__, fmt, ##__VA_ARGS__)
+#define SF_ALIGN_SIZE(size)           (((size) + 7) & ~7)
+#define SF_DEG2RAD(d)                 ((d) * (SF_PI / 180.0f))
+#define SF_RAD2DEG(r)                 ((r) * (180.0f / SF_PI))
+#define sf_get_obj(ctx, name)         _sf_get_obj(ctx, name, true)
+#define sf_get_enti(ctx, name)        _sf_get_enti(ctx, name, true)
+
+#define SF_COLOR_RED        ((sf_packed_color_t)0xFFFF0000)
+#define SF_COLOR_GREEN      ((sf_packed_color_t)0xFF00FF00)
+#define SF_COLOR_BLUE       ((sf_packed_color_t)0xFF0000FF)
+#define SF_COLOR_BLACK      ((sf_packed_color_t)0xFF000000)
+#define SF_COLOR_WHITE      ((sf_packed_color_t)0xFFFFFFFF)
 
 /* SF_TYPES */
 typedef void (*sf_log_fn)(const char* message, void* userdata);
@@ -95,6 +101,7 @@ typedef struct {
   int                h;
   int                buffer_size;
   sf_packed_color_t *buffer;
+  float             *z_buffer;
 
   sf_arena_t         arena;
   int                arena_size;
@@ -124,22 +131,32 @@ sf_obj_t*  sf_load_obj       (sf_ctx_t *ctx, const char *filename, const char *o
 sf_obj_t*  _sf_get_obj       (sf_ctx_t *ctx, const char *objname, bool should_log_failure);
 sf_enti_t* sf_add_enti       (sf_ctx_t *ctx, sf_obj_t *obj, const char *entiname);
 sf_enti_t* _sf_get_enti      (sf_ctx_t *ctx, const char *entiname, bool should_log_failure);
+void       sf_render_enti    (sf_ctx_t *ctx, sf_enti_t *enti);
+void       sf_render_ctx     (sf_ctx_t *ctx);
 
 /* SF_DRAWING_FUNCTIONS */
-void sf_fill     (sf_ctx_t *ctx, sf_packed_color_t c);
-void sf_pixel    (sf_ctx_t *ctx, sf_packed_color_t c, sf_svec2_t v0);
-void sf_line     (sf_ctx_t *ctx, sf_packed_color_t c, sf_svec2_t v0, sf_svec2_t v1);
-void sf_rect     (sf_ctx_t *ctx, sf_packed_color_t c, sf_svec2_t v0, sf_svec2_t v1);
-void sf_tri      (sf_ctx_t *ctx, sf_packed_color_t c, sf_svec2_t v0, sf_svec2_t v1, sf_svec2_t v2);
-void sf_put_text (sf_ctx_t *ctx, const char *text, sf_svec2_t p, sf_packed_color_t c, int scale);
+void sf_fill        (sf_ctx_t *ctx, sf_packed_color_t c);
+void sf_pixel       (sf_ctx_t *ctx, sf_packed_color_t c, sf_svec2_t v0);
+void sf_pixel_depth (sf_ctx_t *ctx, sf_packed_color_t c, sf_svec2_t v0, float z);
+void sf_line        (sf_ctx_t *ctx, sf_packed_color_t c, sf_svec2_t v0, sf_svec2_t v1);
+void sf_rect        (sf_ctx_t *ctx, sf_packed_color_t c, sf_svec2_t v0, sf_svec2_t v1);
+void sf_tri         (sf_ctx_t *ctx, sf_packed_color_t c, sf_svec2_t v0, sf_svec2_t v1, sf_svec2_t v2);
+void sf_put_text    (sf_ctx_t *ctx, const char *text, sf_svec2_t p, sf_packed_color_t c, int scale);
+void sf_clear_depth (sf_ctx_t *ctx);
 
 /* SF_LA_FUNCTIONS */
-sf_fmat4_t sf_fmat4_mul_fmat4 (sf_fmat4_t m0, sf_fmat4_t m1);
-sf_fvec3_t sf_fmat4_mul_vec3  (sf_fmat4_t m, sf_fvec3_t v);
-sf_fmat4_t sf_make_tsl_fmat4  ();
-sf_fmat4_t sf_make_rot_fmat4  ();
-sf_fmat4_t sf_make_psp_fmat4  ();
-sf_fmat4_t sf_make_idn_fmat4  (void);
+sf_fmat4_t sf_fmat4_mul_fmat4   (sf_fmat4_t m0, sf_fmat4_t m1);
+sf_fvec3_t sf_fmat4_mul_vec3    (sf_fmat4_t m, sf_fvec3_t v);
+sf_fvec3_t sf_fvec3_sub         (sf_fvec3_t v0, sf_fvec3_t v1);
+sf_fvec3_t sf_fvec3_add         (sf_fvec3_t v0, sf_fvec3_t v1);
+sf_fvec3_t sf_fvec3_norm        (sf_fvec3_t v);
+sf_fvec3_t sf_fvec3_cross       (sf_fvec3_t v0, sf_fvec3_t v1);
+float      sf_fvec3_dot         (sf_fvec3_t v0, sf_fvec3_t v1);
+sf_fmat4_t sf_make_tsl_fmat4    (float x, float y, float z);
+sf_fmat4_t sf_make_rot_fmat4    (sf_fvec3_t angles);
+sf_fmat4_t sf_make_psp_fmat4    (float fov_deg, float aspect, float near, float far);
+sf_fmat4_t sf_make_idn_fmat4    (void);
+sf_fmat4_t sf_make_view_fmat4   (sf_fvec3_t eye, sf_fvec3_t target, sf_fvec3_t up);
 
 /* SF_IMPLEMENTATION_HELPERS */
 uint32_t    _sf_vec_to_index    (sf_ctx_t *ctx, sf_svec2_t v);
@@ -168,7 +185,8 @@ void sf_init(sf_ctx_t *ctx, int w, int h) {
   ctx->w             = w;
   ctx->h             = h;
   ctx->buffer_size   = w * h;
-  ctx->buffer        = (sf_packed_color_t*)malloc(w*h*sizeof(sf_packed_color_t));
+  ctx->buffer        = (sf_packed_color_t*) malloc(w*h*sizeof(sf_packed_color_t));
+  ctx->z_buffer      = (float*)             malloc(w*h*sizeof(float));
   ctx->arena         = sf_arena_init(SF_ARENA_SIZE);
   ctx->log_cb        = sf_logger_console;
   ctx->log_user      = NULL;
@@ -187,12 +205,15 @@ void sf_init(sf_ctx_t *ctx, int w, int h) {
 
 void sf_destroy(sf_ctx_t *ctx) {
   free(ctx->buffer);
+  free(ctx->z_buffer);
   free(ctx->arena.buffer);
   ctx->arena.offset = 0;
   ctx->buffer       = NULL;
   ctx->buffer_size  = 0;
   ctx->w            = 0;
   ctx->h            = 0;
+  ctx->enti_count   = 0;
+  ctx->obj_count    = 0;
   SF_LOG(ctx, SF_LOG_INFO,
               SF_LOG_INDENT "buffer : %dx%d\n"
               SF_LOG_INDENT "memory : %d\n"
@@ -396,8 +417,52 @@ sf_enti_t* _sf_get_enti(sf_ctx_t *ctx, const char *entiname, bool should_log_fai
   return NULL;
 }
 
-/* SF_DRAWING_FUNCTIONS */
+void sf_render_enti(sf_ctx_t *ctx, sf_enti_t *enti) {
+  sf_fmat4_t MVP = sf_fmat4_mul_fmat4(enti->M, sf_fmat4_mul_fmat4(ctx->camera.V, ctx->camera.P));
 
+  sf_fvec3_t light_dir = {0.0f, 0.0f, -1.0f};
+
+  for (int i = 0; i < enti->obj.f_cnt; i++) {
+    sf_ivec3_t face = enti->obj.f[i];
+    sf_fvec3_t world_v[3];
+    sf_svec2_t screen_coords[3];
+    float depths[3];
+
+    world_v[0] = enti->obj.v[face.x];
+    world_v[1] = enti->obj.v[face.y];
+    world_v[2] = enti->obj.v[face.z];
+
+    sf_fvec3_t a = sf_fvec3_sub(world_v[1], world_v[0]);
+    sf_fvec3_t b = sf_fvec3_sub(world_v[2], world_v[0]);
+    sf_fvec3_t normal = sf_fvec3_norm(sf_fvec3_cross(a, b));
+    
+    sf_fvec3_t view_ray = sf_fvec3_sub(world_v[0], ctx->camera.pos);
+    if (sf_fvec3_dot(normal, view_ray) >= 0) continue;
+
+    for (int j = 0; j < 3; j++) {
+      sf_fvec3_t proj_v = sf_fmat4_mul_vec3(MVP, world_v[j]);
+      screen_coords[j].x = (uint16_t)((proj_v.x + 1.0f) * 0.5f * ctx->w);
+      screen_coords[j].y = (uint16_t)((1.0f - (proj_v.y + 1.0f) * 0.5f) * ctx->h);
+      depths[j] = proj_v.z;
+    }
+
+    float intensity = sf_fvec3_dot(normal, sf_fvec3_norm(light_dir));
+    if (intensity < 0.1f) intensity = 0.1f;
+    
+    sf_unpacked_color_t color = { (uint8_t)(255 * intensity), (uint8_t)(200 * intensity), 0, 255 };
+    sf_tri(ctx, sf_pack_color(color), screen_coords[0], screen_coords[1], screen_coords[2]);
+  }
+}
+
+void sf_render_ctx(sf_ctx_t *ctx) {
+  sf_fill(ctx, SF_COLOR_BLACK);
+  sf_clear_depth(ctx); 
+  for (int i = 0; i < ctx->enti_count; i++) {
+    sf_render_enti(ctx, &ctx->entities[i]);
+  }
+}
+
+/* SF_DRAWING_FUNCTIONS */
 void sf_fill(sf_ctx_t *ctx, sf_packed_color_t c) {
  for(size_t i = 0; i < ctx->buffer_size; ++i) { ctx->buffer[i] = c; }
 }
@@ -405,6 +470,15 @@ void sf_fill(sf_ctx_t *ctx, sf_packed_color_t c) {
 void sf_pixel(sf_ctx_t *ctx, sf_packed_color_t c, sf_svec2_t v0) {
   if (v0.x >= ctx->w || v0.y >= ctx->h) return;
   ctx->buffer[_sf_vec_to_index(ctx, v0)] = c;
+}
+
+void sf_pixel_depth(sf_ctx_t *ctx, sf_packed_color_t c, sf_svec2_t v, float z) {
+  if (v.x >= ctx->w || v.y >= ctx->h) return;
+  uint32_t idx = _sf_vec_to_index(ctx, v);
+  if (z < ctx->z_buffer[idx]) {
+    ctx->z_buffer[idx] = z;
+    ctx->buffer[idx] = c;
+  }
 }
 
 void sf_line(sf_ctx_t *ctx, sf_packed_color_t c, sf_svec2_t v0, sf_svec2_t v1) {
@@ -489,6 +563,12 @@ void sf_put_text(sf_ctx_t *ctx, const char *text, sf_svec2_t p, sf_packed_color_
   }
 }
 
+void sf_clear_depth(sf_ctx_t *ctx) {
+  for (int i = 0; i < ctx->buffer_size; ++i) {
+    ctx->z_buffer[i] = 1000000.0f;
+  }
+}
+
 /* SF_LA_FUNCTIONS */
 sf_fmat4_t sf_fmat4_mul_fmat4(sf_fmat4_t m0, sf_fmat4_t m1) {
   sf_fmat4_t result = {0};
@@ -515,6 +595,80 @@ sf_fvec3_t sf_fmat4_mul_vec3(sf_fmat4_t m, sf_fvec3_t v) {
     return result;
 }
 
+sf_fvec3_t sf_fvec3_sub(sf_fvec3_t v0, sf_fvec3_t v1) {
+    return (sf_fvec3_t){ v0.x - v1.x, v0.y - v1.y, v0.z - v1.z };
+}
+
+sf_fvec3_t sf_fvec3_add(sf_fvec3_t v0, sf_fvec3_t v1) {
+    return (sf_fvec3_t){ v0.x + v1.x, v0.y + v1.y, v0.z + v1.z };
+}
+
+sf_fvec3_t sf_fvec3_norm(sf_fvec3_t v) {
+    float len = sqrtf(v.x*v.x + v.y*v.y + v.z*v.z);
+    if (len == 0.0f) return (sf_fvec3_t){0,0,0};
+    return (sf_fvec3_t){ v.x/len, v.y/len, v.z/len };
+}
+
+sf_fvec3_t sf_fvec3_cross(sf_fvec3_t v0, sf_fvec3_t v1) {
+    return (sf_fvec3_t){
+        v0.y * v1.z - v0.z * v1.y,
+        v0.z * v1.x - v0.x * v1.z,
+        v0.x * v1.y - v0.y * v1.x
+    };
+}
+
+float sf_fvec3_dot(sf_fvec3_t v0, sf_fvec3_t v1) {
+    return v0.x * v1.x + v0.y * v1.y + v0.z * v1.z;
+}
+
+sf_fmat4_t sf_make_tsl_fmat4(float x, float y, float z) {
+    sf_fmat4_t m = sf_make_idn_fmat4();
+    m.m[3][0] = x;
+    m.m[3][1] = y;
+    m.m[3][2] = z;
+    return m;
+}
+
+sf_fmat4_t sf_make_rot_fmat4(sf_fvec3_t angles) {
+    float cx = cosf(angles.x);
+    float sx = sinf(angles.x);
+    float cy = cosf(angles.y);
+    float sy = sinf(angles.y);
+    float cz = cosf(angles.z);
+    float sz = sinf(angles.z);
+
+    sf_fmat4_t m = sf_make_idn_fmat4();
+
+    m.m[0][0] = cy * cz;
+    m.m[0][1] = cy * sz;
+    m.m[0][2] = -sy;
+
+    m.m[1][0] = sx * sy * cz - cx * sz;
+    m.m[1][1] = sx * sy * sz + cx * cz;
+    m.m[1][2] = sx * cy;
+
+    m.m[2][0] = cx * sy * cz + sx * sz;
+    m.m[2][1] = cx * sy * sz - sx * cz;
+    m.m[2][2] = cx * cy;
+
+    return m;
+}
+
+sf_fmat4_t sf_make_psp_fmat4(float fov_deg, float aspect, float near, float far) {
+    sf_fmat4_t m = {0};
+    float fov_rad = fov_deg * (3.14159f / 180.0f);
+    float tan_half_fov = tanf(fov_rad / 2.0f);
+    float z_range = near - far;
+
+    m.m[0][0] = 1.0f / (tan_half_fov * aspect);
+    m.m[1][1] = 1.0f / tan_half_fov;
+    m.m[2][2] = (-near - far) / z_range;
+    m.m[2][3] = 1.0f; 
+    m.m[3][2] = (2.0f * far * near) / z_range;
+
+    return m;
+}
+
 sf_fmat4_t sf_make_idn_fmat4() {
   sf_fmat4_t result;
   for (int i = 0; i < 4; i++) {
@@ -524,6 +678,32 @@ sf_fmat4_t sf_make_idn_fmat4() {
     }
   }
   return result;
+}
+
+sf_fmat4_t sf_make_view_fmat4(sf_fvec3_t eye, sf_fvec3_t target, sf_fvec3_t up) {
+  sf_fvec3_t f = sf_fvec3_norm(sf_fvec3_sub(target, eye));
+  sf_fvec3_t r = sf_fvec3_norm(sf_fvec3_cross(f, up));
+  sf_fvec3_t u = sf_fvec3_cross(r, f);
+
+  sf_fmat4_t m = sf_make_idn_fmat4();
+
+  m.m[0][0] = r.x;
+  m.m[1][0] = r.y;
+  m.m[2][0] = r.z;
+
+  m.m[0][1] = u.x;
+  m.m[1][1] = u.y;
+  m.m[2][1] = u.z;
+
+  m.m[0][2] = f.x;
+  m.m[1][2] = f.y;
+  m.m[2][2] = f.z;
+
+  m.m[3][0] = -sf_fvec3_dot(r, eye);
+  m.m[3][1] = -sf_fvec3_dot(u, eye);
+  m.m[3][2] = -sf_fvec3_dot(f, eye);
+
+  return m;
 }
 
 /* SF_IMPLEMENTATION_HELPERS */

@@ -17,11 +17,14 @@ int main(int argc, char* argv[])
                                             width, height);
   sf_ctx_t sf_ctx;
   sf_init(&sf_ctx, width, height);
+  sf_ctx.camera.pos    = (sf_fvec3_t){0.0f, 0.0f, -5.0f};
+  sf_ctx.camera.target = (sf_fvec3_t){0.0f, 0.0f, 0.0f};
+  sf_ctx.camera.P      = sf_make_psp_fmat4(60.0f, (float)width/height, 0.1f, 100.0f);
+  sf_ctx.camera.V      = sf_make_view_fmat4(sf_ctx.camera.pos, sf_ctx.camera.target, (sf_fvec3_t){0,1,0});
   sf_set_logger(&sf_ctx, sf_logger_console, NULL);
-  sf_load_obj(&sf_ctx, "../assets/teapot.obj", "teapot");
-  sf_load_obj(&sf_ctx, "../assets/teapot.obj", NULL);
-  sf_add_enti(&sf_ctx, sf_get_obj(&sf_ctx, "teapot"), "teapot");
-  sf_add_enti(&sf_ctx, sf_get_obj(&sf_ctx, "teapot"), NULL);
+  sf_load_obj(&sf_ctx, "../assets/cube.obj", "teapot");
+  sf_enti_t* teapot = sf_add_enti(&sf_ctx, sf_get_obj(&sf_ctx, "teapot"), "teapot");
+  float rotation = 0.0f;
 
   int running = 1;
   SDL_Event event;
@@ -30,18 +33,26 @@ int main(int argc, char* argv[])
           if (event.type == SDL_QUIT) running = 0;
       }
 
-      sf_fill(&sf_ctx, SF_COLOR_BLUE);
-      for (int i = 0; i < 80; ++i) {
-        sf_line(&sf_ctx, SF_COLOR_RED, (sf_svec2_t){10*i+(width/2),0}, (sf_svec2_t){10*i, height});
-      }
-      sf_tri(&sf_ctx, SF_COLOR_GREEN, (sf_svec2_t){0,50}, (sf_svec2_t){50, 400}, (sf_svec2_t){200,100});
-      sf_tri(&sf_ctx, SF_COLOR_WHITE, (sf_svec2_t){100,200}, (sf_svec2_t){300, 10}, (sf_svec2_t){400,600});
-      sf_rect(&sf_ctx, SF_COLOR_RED, (sf_svec2_t){0,20}, (sf_svec2_t){20,0});
-      sf_rect(&sf_ctx, SF_COLOR_RED, (sf_svec2_t){20,20}, (sf_svec2_t){50,50});
-      sf_rect(&sf_ctx, SF_COLOR_WHITE, (sf_svec2_t){50,50}, (sf_svec2_t){30,30});
-      for (int i = 0; i < 10; ++i) {
-        sf_put_text(&sf_ctx, "SAFFRON", (sf_svec2_t){20,105+(40*i)}, SF_COLOR_RED, i);
-      }
+      rotation += 0.01f;
+      sf_fvec3_t angles = { rotation, rotation * 0.5f, 0.0f };
+      teapot->M = sf_fmat4_mul_fmat4(sf_make_tsl_fmat4(0, 0, 0), sf_make_rot_fmat4(angles));
+
+      sf_render_ctx(&sf_ctx);
+
+      sf_put_text(&sf_ctx, "SAFFRON 3D TEST", (sf_svec2_t){10, 10}, SF_COLOR_WHITE, 1);
+
+      //sf_fill(&sf_ctx, SF_COLOR_BLUE);
+      //for (int i = 0; i < 80; ++i) {
+      //  sf_line(&sf_ctx, SF_COLOR_RED, (sf_svec2_t){10*i+(width/2),0}, (sf_svec2_t){10*i, height});
+      //}
+      //sf_tri(&sf_ctx, SF_COLOR_GREEN, (sf_svec2_t){0,50}, (sf_svec2_t){50, 400}, (sf_svec2_t){200,100});
+      //sf_tri(&sf_ctx, SF_COLOR_WHITE, (sf_svec2_t){100,200}, (sf_svec2_t){300, 10}, (sf_svec2_t){400,600});
+      //sf_rect(&sf_ctx, SF_COLOR_RED, (sf_svec2_t){0,20}, (sf_svec2_t){20,0});
+      //sf_rect(&sf_ctx, SF_COLOR_RED, (sf_svec2_t){20,20}, (sf_svec2_t){50,50});
+      //sf_rect(&sf_ctx, SF_COLOR_WHITE, (sf_svec2_t){50,50}, (sf_svec2_t){30,30});
+      //for (int i = 0; i < 10; ++i) {
+      //  sf_put_text(&sf_ctx, "SAFFRON", (sf_svec2_t){20,105+(40*i)}, SF_COLOR_RED, i);
+      //}
 
       SDL_UpdateTexture(texture, NULL, sf_ctx.buffer, sf_ctx.w * sizeof(sf_packed_color_t));
       SDL_RenderClear(renderer);
