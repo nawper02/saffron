@@ -18,7 +18,10 @@ int main(int argc, char* argv[])
   sf_ctx_t sf_ctx;
   sf_init(&sf_ctx, width, height);
   sf_set_logger(&sf_ctx, sf_logger_console, NULL);
-  sf_load_obj(&sf_ctx, "../assets/teapot.obj");
+  sf_load_obj(&sf_ctx, "../assets/teapot.obj", "teapot");
+  sf_load_obj(&sf_ctx, "../assets/teapot.obj", NULL);
+  sf_add_enti(&sf_ctx, sf_get_obj(&sf_ctx, "teapot"), "teapot");
+  sf_add_enti(&sf_ctx, sf_get_obj(&sf_ctx, "teapot"), NULL);
 
   int running = 1;
   SDL_Event event;

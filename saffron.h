@@ -4,7 +4,6 @@
  */
 
 /* SF_TODO
- *  Render text
  *  3D Math
  *  Render 3d objects
  *  ....
@@ -29,12 +28,17 @@ extern "C" {
 #include <string.h>
 #include <stdio.h>
 #include <stdarg.h>
+#include <stdbool.h>
 
 /* SF_DEFINES */
-#define SF_ARENA_SIZE 10485760
-#define SF_MAX_OBJS   10
-#define SF_LOG(ctx, level, fmt, ...) _sf_log(ctx, level, __func__, fmt, ##__VA_ARGS__)
+#define SF_ARENA_SIZE   10485760
+#define SF_MAX_OBJS     10
+#define SF_MAX_ENTITIES 100
 #define SF_LOG_INDENT "            "
+#define SF_LOG(ctx, level, fmt, ...) _sf_log(ctx, level, __func__, fmt, ##__VA_ARGS__)
+#define SF_ALIGN_SIZE(size) (((size) + 7) & ~7)
+#define sf_get_obj(ctx, name)        _sf_get_obj(ctx, name, true)
+#define sf_get_enti(ctx, name)       _sf_get_enti(ctx, name, true)
 #define SF_COLOR_RED   ((sf_packed_color_t)0xFFFF0000)
 #define SF_COLOR_GREEN ((sf_packed_color_t)0xFF00FF00)
 #define SF_COLOR_BLUE  ((sf_packed_color_t)0xFF0000FF)
@@ -58,33 +62,53 @@ typedef struct { uint16_t x, y, z;    } sf_svec3_t;
 typedef struct { float    x, y, z;    } sf_fvec3_t;
 typedef struct { int      x, y, z;    } sf_ivec3_t;
 
+typedef struct { float m[4][4]; } sf_fmat4_t;
+
+typedef struct {
+  sf_fvec3_t  pos;
+  sf_fvec3_t  target;
+  sf_fmat4_t  V;
+  sf_fmat4_t  P;
+} sf_camera_t;
 typedef struct {
   sf_fvec3_t *v;
   sf_ivec3_t *f;
-  int32_t v_cnt;
-  int32_t f_cnt;
+  int32_t     v_cnt;
+  int32_t     f_cnt;
+  int32_t     id;
+  const char *name;
 } sf_obj_t;
+typedef struct {
+  sf_obj_t    obj;
+  sf_fmat4_t  M;
+  int32_t     id;
+  const char *name;
+} sf_enti_t;
 
 typedef struct {
-  size_t size;
-  size_t offset;
-  uint8_t *buffer;
+  size_t    size;
+  size_t    offset;
+  uint8_t  *buffer;
 } sf_arena_t;
 typedef struct {
-  int w;
-  int h;
-  int buffer_size;
+  int                w;
+  int                h;
+  int                buffer_size;
   sf_packed_color_t *buffer;
 
-  sf_arena_t arena;
-  int        arena_size;
+  sf_arena_t         arena;
+  int                arena_size;
 
-  sf_obj_t *objs;
-  int32_t   obj_count;
+  sf_obj_t          *objs;
+  int32_t            obj_count;
+  sf_enti_t         *entities;
+  int32_t            enti_count;
 
-  sf_log_fn      log_cb;
-  void*          log_user;
-  sf_log_level_t log_min;
+  sf_camera_t        camera;
+
+  sf_log_fn          log_cb;
+  void*              log_user;
+  sf_log_level_t     log_min;
 } sf_ctx_t;
 
 /* SF_CORE_FUNCTIONS */
@@ -96,7 +120,10 @@ void       sf_set_logger     (sf_ctx_t *ctx, sf_log_fn log_cb, void* userdata);
 void       sf_logger_console (const char* message, void* userdata);
 void       sf_log            (sf_ctx_t *ctx, sf_log_level_t level, const char* fmt, ...);
 void       _sf_log           (sf_ctx_t *ctx, sf_log_level_t level, const char* func, const char* fmt, ...);
-sf_obj_t*  sf_load_obj       (sf_ctx_t *ctx, const char *filename);
+sf_obj_t*  sf_load_obj       (sf_ctx_t *ctx, const char *filename, const char *objname);
+sf_obj_t*  _sf_get_obj       (sf_ctx_t *ctx, const char *objname, bool should_log_failure);
+sf_enti_t* sf_add_enti       (sf_ctx_t *ctx, sf_obj_t *obj, const char *entiname);
+sf_enti_t* _sf_get_enti      (sf_ctx_t *ctx, const char *entiname, bool should_log_failure);
 
 /* SF_DRAWING_FUNCTIONS */
 void sf_fill     (sf_ctx_t *ctx, sf_packed_color_t c);
@@ -105,6 +132,14 @@ void sf_line     (sf_ctx_t *ctx, sf_packed_color_t c, sf_svec2_t v0, sf_svec2_t 
 void sf_rect     (sf_ctx_t *ctx, sf_packed_color_t c, sf_svec2_t v0, sf_svec2_t v1);
 void sf_tri      (sf_ctx_t *ctx, sf_packed_color_t c, sf_svec2_t v0, sf_svec2_t v1, sf_svec2_t v2);
 void sf_put_text (sf_ctx_t *ctx, const char *text, sf_svec2_t p, sf_packed_color_t c, int scale);
+
+/* SF_LA_FUNCTIONS */
+sf_fmat4_t sf_fmat4_mul_fmat4 (sf_fmat4_t m0, sf_fmat4_t m1);
+sf_fvec3_t sf_fmat4_mul_vec3  (sf_fmat4_t m, sf_fvec3_t v);
+sf_fmat4_t sf_make_tsl_fmat4  ();
+sf_fmat4_t sf_make_rot_fmat4  ();
+sf_fmat4_t sf_make_psp_fmat4  ();
+sf_fmat4_t sf_make_idn_fmat4  (void);
 
 /* SF_IMPLEMENTATION_HELPERS */
 uint32_t    _sf_vec_to_index    (sf_ctx_t *ctx, sf_svec2_t v);
@@ -137,14 +172,17 @@ void sf_init(sf_ctx_t *ctx, int w, int h) {
   ctx->arena         = sf_arena_init(SF_ARENA_SIZE);
   ctx->log_cb        = sf_logger_console;
   ctx->log_user      = NULL;
-  ctx->log_min       = SF_LOG_DEBUG;
-  ctx->objs          = sf_arena_alloc(ctx, &ctx->arena, SF_MAX_OBJS * sizeof(sf_obj_t));
+  ctx->log_min       = SF_LOG_INFO;
+  ctx->objs          = sf_arena_alloc(ctx, &ctx->arena, SF_MAX_OBJS     * sizeof(sf_obj_t));
+  ctx->entities      = sf_arena_alloc(ctx, &ctx->arena, SF_MAX_ENTITIES * sizeof(sf_enti_t));
   ctx->obj_count     = 0;
+  ctx->enti_count    = 0;
   SF_LOG(ctx, SF_LOG_INFO,
               SF_LOG_INDENT "buffer : %dx%d\n"
               SF_LOG_INDENT "memory : %d\n"
-              SF_LOG_INDENT "mxobjs : %d\n", 
-              ctx->w, ctx->h, SF_ARENA_SIZE, SF_MAX_OBJS);
+              SF_LOG_INDENT "mxobjs : %d\n" 
+              SF_LOG_INDENT "mxents : %d\n", 
+              ctx->w, ctx->h, SF_ARENA_SIZE, SF_MAX_OBJS, SF_MAX_ENTITIES);
 }
 
 void sf_destroy(sf_ctx_t *ctx) {
@@ -171,9 +209,13 @@ sf_arena_t sf_arena_init(size_t size) {
 }
 
 void* sf_arena_alloc(sf_ctx_t *ctx, sf_arena_t *arena, size_t size) {
-  if (arena->offset + size > arena->size) return NULL;
-  void *ptr = &arena->buffer[arena->offset];
-  arena->offset += size;
+  size_t aligned_offset = SF_ALIGN_SIZE(arena->offset);
+  if (aligned_offset + size > arena->size) {
+    SF_LOG(ctx, SF_LOG_ERROR, SF_LOG_INDENT "failed to allocate, arena out of memory\n");
+    return NULL;
+  }
+  void *ptr = &arena->buffer[aligned_offset];
+  arena->offset = aligned_offset + size;
   SF_LOG(ctx, SF_LOG_DEBUG,
               SF_LOG_INDENT "size : %zu\n"
               SF_LOG_INDENT "used : %zu\n"
@@ -209,15 +251,26 @@ void _sf_log(sf_ctx_t *ctx, sf_log_level_t level, const char* func, const char* 
   ctx->log_cb(final_buffer, ctx->log_user);
 }
 
-sf_obj_t* sf_load_obj(sf_ctx_t *ctx, const char *filename) {
+sf_obj_t* sf_load_obj(sf_ctx_t *ctx, const char *filename, const char *objname) {
+  char auto_name[32];
+  if (objname == NULL) {
+    snprintf(auto_name, sizeof(auto_name), "obj_%d", ctx->obj_count);
+    objname = auto_name;
+  }
+
+  if (NULL != _sf_get_obj(ctx, objname, false)) {
+    SF_LOG(ctx, SF_LOG_ERROR, SF_LOG_INDENT "failed to add obj, name in use\n");
+    return NULL;
+  }
+
   if (ctx->obj_count >= SF_MAX_OBJS) {
-    SF_LOG(ctx, SF_LOG_ERROR, "max objects (%d) reached\n", SF_MAX_OBJS);
+    SF_LOG(ctx, SF_LOG_ERROR, SF_LOG_INDENT "max objects (%d) reached\n", SF_MAX_OBJS);
     return NULL;
   }
 
   FILE *f = fopen(filename, "r");
   if (!f) {
-    SF_LOG(ctx, SF_LOG_ERROR, "could not open %s\n", filename);
+    SF_LOG(ctx, SF_LOG_ERROR, SF_LOG_INDENT "could not open %s\n", filename);
     return NULL;
   }
 
@@ -231,21 +284,29 @@ sf_obj_t* sf_load_obj(sf_ctx_t *ctx, const char *filename) {
   obj->f_cnt = f_cnt; obj->v_cnt = v_cnt;
   obj->v = sf_arena_alloc(ctx, &ctx->arena, v_cnt * sizeof(sf_fvec3_t));
   obj->f = sf_arena_alloc(ctx, &ctx->arena, f_cnt * sizeof(sf_ivec3_t));
+  size_t name_len = strlen(objname) + 1;
+  obj->name = (const char*)sf_arena_alloc(ctx, &ctx->arena, name_len);
+  if (obj->name) {
+    memcpy((void*)obj->name, objname, name_len);
+  }
+  obj->id = ctx->obj_count - 1;
 
-  if (!obj->v || !obj->f) {
-    SF_LOG(ctx, SF_LOG_ERROR, "out of arena memory for %s\n", filename);
+  if (!obj->v || !obj->f || !obj->name) {
+    SF_LOG(ctx, SF_LOG_ERROR, SF_LOG_INDENT "out of arena memory for %s\n", filename);
     fclose(f);
     return NULL;
   }
 
   SF_LOG(ctx, SF_LOG_INFO,
               SF_LOG_INDENT "file   : %s\n"
+              SF_LOG_INDENT "name   : %s\n"
+              SF_LOG_INDENT "id     : %d\n"
               SF_LOG_INDENT "verts  : %d\n"
               SF_LOG_INDENT "faces  : %d\n"
               SF_LOG_INDENT "size   : %d\n"
               SF_LOG_INDENT "mem    : %.2f\n"
               SF_LOG_INDENT "obj_id : %d\n",
-              filename, v_cnt, f_cnt, 
+              filename, objname, obj->id, v_cnt, f_cnt, 
               sf_get_obj_memory_usage(obj), 
               ((float)ctx->arena.offset / (float)ctx->arena.size) * 100.0f,
               ctx->obj_count - 1);
@@ -266,6 +327,73 @@ sf_obj_t* sf_load_obj(sf_ctx_t *ctx, const char *filename) {
 
   fclose(f);
   return obj;
+}
+
+sf_obj_t* _sf_get_obj(sf_ctx_t *ctx, const char *objname, bool should_log_failure) {
+  for (int32_t i = 0; i < ctx->obj_count; ++i) {
+    if (ctx->objs[i].name && strcmp(ctx->objs[i].name, objname) == 0) {
+      return &ctx->objs[i];
+    }
+  }
+ 
+  if (should_log_failure) {
+    SF_LOG(ctx, SF_LOG_WARN, SF_LOG_INDENT "object '%s' not found\n", objname);
+  }
+  return NULL;
+}
+
+sf_enti_t* sf_add_enti(sf_ctx_t *ctx, sf_obj_t *obj, const char *entiname) {
+  char auto_name[32];
+  if (NULL == entiname) {
+    snprintf(auto_name, sizeof(auto_name), "enti_%d", ctx->enti_count);
+    entiname = auto_name;
+  }
+
+  if (obj == NULL) {
+    SF_LOG(ctx, SF_LOG_ERROR, SF_LOG_INDENT "cannot add entity: obj is NULL\n");
+    return NULL;
+  }
+  if (NULL != _sf_get_enti(ctx, entiname, false)) {
+    SF_LOG(ctx, SF_LOG_ERROR, SF_LOG_INDENT "failed to add entity, entity name in use\n");
+    return NULL;
+  }
+  if (ctx->enti_count >= SF_MAX_ENTITIES) {
+    SF_LOG(ctx, SF_LOG_ERROR, SF_LOG_INDENT "failed to add entity, max entities reached\n");
+    return NULL;
+  }
+
+  sf_enti_t *enti = &ctx->entities[ctx->enti_count++];
+  enti->obj   = *obj;
+  enti->M     = sf_make_idn_fmat4();
+  enti->id    = ctx->enti_count - 1;
+
+  size_t name_len = strlen(entiname) + 1;
+  enti->name = (const char*)sf_arena_alloc(ctx, &ctx->arena, name_len);
+  if (enti->name) {
+    memcpy((void*)enti->name, entiname, name_len);
+  }
+
+  SF_LOG(ctx, SF_LOG_INFO,
+            SF_LOG_INDENT "enti   : %s (id %d)\n"
+            SF_LOG_INDENT "obj    : %s (id %d)\n"
+            SF_LOG_INDENT "used   : %d/%d\n",
+            enti->name, enti->id, enti->obj.name, enti->obj.id, ctx->enti_count, SF_MAX_ENTITIES);
+
+  return enti;
+}
+
+sf_enti_t* _sf_get_enti(sf_ctx_t *ctx, const char *entiname, bool should_log_failure) {
+  for (int32_t i = 0; i < ctx->enti_count; ++i) {
+    if (ctx->entities[i].name && strcmp(ctx->entities[i].name, entiname) == 0) {
+      return &ctx->entities[i];
+    }
+  }
+
+  if (should_log_failure) {
+    SF_LOG(ctx, SF_LOG_WARN, SF_LOG_INDENT "entity '%s' not found\n", entiname);
+  }
+
+  return NULL;
 }
 
 /* SF_DRAWING_FUNCTIONS */
@@ -359,6 +487,43 @@ void sf_put_text(sf_ctx_t *ctx, const char *text, sf_svec2_t p, sf_packed_color_
     }
     p.x += stride;
   }
+}
+
+/* SF_LA_FUNCTIONS */
+sf_fmat4_t sf_fmat4_mul_fmat4(sf_fmat4_t m0, sf_fmat4_t m1) {
+  sf_fmat4_t result = {0};
+  for (int i = 0; i < 4; i++) {
+    for (int j = 0; j < 4; j++) {
+      for (int k = 0; k < 4; k++) {
+        result.m[i][j] += m0.m[i][k] * m1.m[k][j];
+      }
+    }
+  }
+  return result;
+}
+
+sf_fvec3_t sf_fmat4_mul_vec3(sf_fmat4_t m, sf_fvec3_t v) {
+    sf_fvec3_t result;
+    float w;
+    result.x = v.x * m.m[0][0] + v.y * m.m[1][0] + v.z * m.m[2][0] + m.m[3][0];
+    result.y = v.x * m.m[0][1] + v.y * m.m[1][1] + v.z * m.m[2][1] + m.m[3][1];
+    result.z = v.x * m.m[0][2] + v.y * m.m[1][2] + v.z * m.m[2][2] + m.m[3][2];
+    w        = v.x * m.m[0][3] + v.y * m.m[1][3] + v.z * m.m[2][3] + m.m[3][3];
+    if (w != 0.0f) {
+        result.x /= w; result.y /= w; result.z /= w;
+    }
+    return result;
+}
+
+sf_fmat4_t sf_make_idn_fmat4() {
+  sf_fmat4_t result;
+  for (int i = 0; i < 4; i++) {
+    for (int j = 0; j < 4; j++) {
+      if (i == j) result.m[i][j] = 1;
+      else        result.m[i][j] = 0;
+    }
+  }
+  return result;
 }
 
 /* SF_IMPLEMENTATION_HELPERS */
