@@ -141,6 +141,7 @@ void sf_pixel_depth (sf_ctx_t *ctx, sf_packed_color_t c, sf_svec2_t v0, float z)
 void sf_line        (sf_ctx_t *ctx, sf_packed_color_t c, sf_svec2_t v0, sf_svec2_t v1);
 void sf_rect        (sf_ctx_t *ctx, sf_packed_color_t c, sf_svec2_t v0, sf_svec2_t v1);
 void sf_tri         (sf_ctx_t *ctx, sf_packed_color_t c, sf_svec2_t v0, sf_svec2_t v1, sf_svec2_t v2);
+void sf_tri_depth   (sf_ctx_t *ctx, sf_packed_color_t c, sf_fvec3_t v0, sf_fvec3_t v1, sf_fvec3_t v2);
 void sf_put_text    (sf_ctx_t *ctx, const char *text, sf_svec2_t p, sf_packed_color_t c, int scale);
 void sf_clear_depth (sf_ctx_t *ctx);
 
@@ -163,6 +164,7 @@ uint32_t    _sf_vec_to_index    (sf_ctx_t *ctx, sf_svec2_t v);
 void        _sf_swap_svec2      (sf_svec2_t *v0, sf_svec2_t *v1);
 void        _sf_interpolate_x   (sf_svec2_t  v0, sf_svec2_t v1, uint16_t *xs);
 void        _sf_interpolate_y   (sf_svec2_t  v0, sf_svec2_t v1, uint16_t *ys);
+void        _sf_interpolate_f   (float v0, float v1, uint16_t steps, float *out);
 const char* _sf_log_lvl_to_str  (sf_log_level_t level);
 
 /* SF_UTILITIES */
@@ -420,39 +422,56 @@ sf_enti_t* _sf_get_enti(sf_ctx_t *ctx, const char *entiname, bool should_log_fai
 void sf_render_enti(sf_ctx_t *ctx, sf_enti_t *enti) {
   sf_fmat4_t MVP = sf_fmat4_mul_fmat4(enti->M, sf_fmat4_mul_fmat4(ctx->camera.V, ctx->camera.P));
 
-  sf_fvec3_t light_dir = {0.0f, 0.0f, -1.0f};
-
   for (int i = 0; i < enti->obj.f_cnt; i++) {
-    sf_ivec3_t face = enti->obj.f[i];
-    sf_fvec3_t world_v[3];
-    sf_svec2_t screen_coords[3];
-    float depths[3];
-
-    world_v[0] = enti->obj.v[face.x];
-    world_v[1] = enti->obj.v[face.y];
-    world_v[2] = enti->obj.v[face.z];
-
-    sf_fvec3_t a = sf_fvec3_sub(world_v[1], world_v[0]);
-    sf_fvec3_t b = sf_fvec3_sub(world_v[2], world_v[0]);
-    sf_fvec3_t normal = sf_fvec3_norm(sf_fvec3_cross(a, b));
-    
-    sf_fvec3_t view_ray = sf_fvec3_sub(world_v[0], ctx->camera.pos);
-    if (sf_fvec3_dot(normal, view_ray) >= 0) continue;
-
+    sf_fvec3_t p[3];
+    sf_ivec3_t f = enti->obj.f[i];
     for (int j = 0; j < 3; j++) {
-      sf_fvec3_t proj_v = sf_fmat4_mul_vec3(MVP, world_v[j]);
-      screen_coords[j].x = (uint16_t)((proj_v.x + 1.0f) * 0.5f * ctx->w);
-      screen_coords[j].y = (uint16_t)((1.0f - (proj_v.y + 1.0f) * 0.5f) * ctx->h);
-      depths[j] = proj_v.z;
+      int idx = (j == 0) ? f.x : (j == 1) ? f.y : f.z;
+      sf_fvec3_t proj = sf_fmat4_mul_vec3(MVP, enti->obj.v[idx]);
+      p[j].x = (proj.x + 1.0f) * 0.5f * (float)ctx->w;
+      p[j].y = (1.0f - (proj.y + 1.0f) * 0.5f) * (float)ctx->h;
+      p[j].z = proj.z;
     }
-
-    float intensity = sf_fvec3_dot(normal, sf_fvec3_norm(light_dir));
-    if (intensity < 0.1f) intensity = 0.1f;
-    
-    sf_unpacked_color_t color = { (uint8_t)(255 * intensity), (uint8_t)(200 * intensity), 0, 255 };
-    sf_tri(ctx, sf_pack_color(color), screen_coords[0], screen_coords[1], screen_coords[2]);
+    sf_tri_depth(ctx, SF_COLOR_RED, p[0], p[1], p[2]);
   }
 }
+
+//void sf_render_enti(sf_ctx_t *ctx, sf_enti_t *enti) {
+//  sf_fmat4_t MVP = sf_fmat4_mul_fmat4(enti->M, sf_fmat4_mul_fmat4(ctx->camera.V, ctx->camera.P));
+//
+//  sf_fvec3_t light_dir = {0.0f, 0.0f, -1.0f};
+//
+//  for (int i = 0; i < enti->obj.f_cnt; i++) {
+//    sf_ivec3_t face = enti->obj.f[i];
+//    sf_fvec3_t world_v[3];
+//    sf_svec2_t screen_coords[3];
+//    float depths[3];
+//
+//    world_v[0] = enti->obj.v[face.x];
+//    world_v[1] = enti->obj.v[face.y];
+//    world_v[2] = enti->obj.v[face.z];
+//
+//    sf_fvec3_t a = sf_fvec3_sub(world_v[1], world_v[0]);
+//    sf_fvec3_t b = sf_fvec3_sub(world_v[2], world_v[0]);
+//    sf_fvec3_t normal = sf_fvec3_norm(sf_fvec3_cross(a, b));
+//    
+//    sf_fvec3_t view_ray = sf_fvec3_sub(world_v[0], ctx->camera.pos);
+//    if (sf_fvec3_dot(normal, view_ray) >= 0) continue;
+//
+//    for (int j = 0; j < 3; j++) {
+//      sf_fvec3_t proj_v = sf_fmat4_mul_vec3(MVP, world_v[j]);
+//      screen_coords[j].x = (uint16_t)((proj_v.x + 1.0f) * 0.5f * ctx->w);
+//      screen_coords[j].y = (uint16_t)((1.0f - (proj_v.y + 1.0f) * 0.5f) * ctx->h);
+//      depths[j] = proj_v.z;
+//    }
+//
+//    float intensity = sf_fvec3_dot(normal, sf_fvec3_norm(light_dir));
+//    if (intensity < 0.1f) intensity = 0.1f;
+//    
+//    sf_unpacked_color_t color = { (uint8_t)(255 * intensity), (uint8_t)(200 * intensity), 0, 255 };
+//    sf_tri(ctx, sf_pack_color(color), screen_coords[0], screen_coords[1], screen_coords[2]);
+//  }
+//}
 
 void sf_render_ctx(sf_ctx_t *ctx) {
   sf_fill(ctx, SF_COLOR_BLACK);
@@ -525,6 +544,55 @@ void sf_tri(sf_ctx_t *ctx, sf_packed_color_t c, sf_svec2_t v0, sf_svec2_t v1, sf
   for (uint16_t y = v0.y; y <= v2.y; ++y) {
     for (uint16_t x = xl[y - v0.y]; x <= xr[y - v0.y]; ++x) {
       sf_pixel(ctx, c, (sf_svec2_t){x, y});
+    }
+  }
+}
+
+void sf_tri_depth(sf_ctx_t *ctx, sf_packed_color_t c, sf_fvec3_t v0, sf_fvec3_t v1, sf_fvec3_t v2) {
+  if (v1.y < v0.y) { sf_fvec3_t t = v0; v0 = v1; v1 = t; }
+  if (v2.y < v0.y) { sf_fvec3_t t = v0; v0 = v2; v2 = t; }
+  if (v2.y < v1.y) { sf_fvec3_t t = v1; v1 = v2; v2 = t; }
+
+  int h = (int)v2.y - (int)v0.y + 1;
+  if (h <= 1 || h > 1024) return;
+
+  uint16_t x02[1024], x012[1024];
+  float z02[1024], z012[1024];
+
+  _sf_interpolate_x((sf_svec2_t){(uint16_t)v0.x, (uint16_t)v0.y}, (sf_svec2_t){(uint16_t)v2.x, (uint16_t)v2.y}, x02);
+  _sf_interpolate_f(v0.z, v2.z, h - 1, z02);
+
+  uint16_t h01 = (uint16_t)v1.y - (uint16_t)v0.y;
+  uint16_t h12 = (uint16_t)v2.y - (uint16_t)v1.y;
+
+  _sf_interpolate_x((sf_svec2_t){(uint16_t)v0.x, (uint16_t)v0.y}, (sf_svec2_t){(uint16_t)v1.x, (uint16_t)v1.y}, x012);
+  _sf_interpolate_f(v0.z, v1.z, h01, z012);
+  _sf_interpolate_x((sf_svec2_t){(uint16_t)v1.x, (uint16_t)v1.y}, (sf_svec2_t){(uint16_t)v2.x, (uint16_t)v2.y}, &x012[h01]);
+  _sf_interpolate_f(v1.z, v2.z, h12, &z012[h01]);
+
+  uint16_t *xl = x02, *xr = x012;
+  float *zl = z02, *zr = z012;
+
+  if (h01 < h && x012[h01] < x02[h01]) {
+    xl = x012; xr = x02;
+    zl = z012; zr = z02;
+  }
+
+  for (int y = (int)v0.y; y <= (int)v2.y; ++y) {
+    int idx = y - (int)v0.y;
+    if (y < 0 || y >= ctx->h) continue;
+
+    int x_start = xl[idx];
+    int x_end = xr[idx];
+    float z_start = zl[idx];
+    float z_end = zr[idx];
+
+    float width = (float)(x_end - x_start);
+    for (int x = x_start; x <= x_end; ++x) {
+      if (x < 0 || x >= ctx->w) continue;
+      float t = (width == 0) ? 0.0f : (float)(x - x_start) / width;
+      float z = z_start + (z_end - z_start) * t;
+      sf_pixel_depth(ctx, c, (sf_svec2_t){(uint16_t)x, (uint16_t)y}, z);
     }
   }
 }
@@ -732,6 +800,14 @@ void _sf_interpolate_y(sf_svec2_t v0, sf_svec2_t v1, uint16_t *ys) {
   }
   for (uint16_t x = v0.x; x <= v1.x; ++x) {
     ys[x - v0.x] = (x - v0.x) * (v1.y - v0.y) / (v1.x - v0.x) + v0.y;
+  }
+}
+
+void _sf_interpolate_f(float v0, float v1, uint16_t steps, float *out) {
+  if (steps == 0) return;
+  float step = (v1 - v0) / steps;
+  for (uint16_t i = 0; i <= steps; ++i) {
+    out[i] = v0 + (step * i);
   }
 }
 

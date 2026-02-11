@@ -33,7 +33,7 @@ int main(int argc, char* argv[])
           if (event.type == SDL_QUIT) running = 0;
       }
 
-      rotation += 0.01f;
+      rotation += 0.001f;
       sf_fvec3_t angles = { rotation, rotation * 0.5f, 0.0f };
       teapot->M = sf_fmat4_mul_fmat4(sf_make_tsl_fmat4(0, 0, 0), sf_make_rot_fmat4(angles));
 
