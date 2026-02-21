@@ -3,14 +3,6 @@
  * Eventually it may become a game/simulation engine.
  */
 
-/* SF_TODO
- *  Direct buffer access in primatives (not sf_pixel calls)
- *  Find bottlenecks and optimize
- *  Backface culling
- *  Normal based lighting
- */
-
-
 /* SF_HEADER */
 #ifndef SAFFRON_H
 #define SAFFRON_H
@@ -149,8 +141,7 @@ void        sf_pixel            (sf_ctx_t *ctx, sf_pkd_clr_t c, sf_ivec2_t v0);
 void        sf_pixel_depth      (sf_ctx_t *ctx, sf_pkd_clr_t c, sf_ivec2_t v0, float z);
 void        sf_line             (sf_ctx_t *ctx, sf_pkd_clr_t c, sf_ivec2_t v0, sf_ivec2_t v1);
 void        sf_rect             (sf_ctx_t *ctx, sf_pkd_clr_t c, sf_ivec2_t v0, sf_ivec2_t v1);
-void        sf_tri              (sf_ctx_t *ctx, sf_pkd_clr_t c, sf_ivec2_t v0, sf_ivec2_t v1, sf_ivec2_t v2);
-void        sf_tri_depth        (sf_ctx_t *ctx, sf_pkd_clr_t c, sf_fvec3_t v0, sf_fvec3_t v1, sf_fvec3_t v2);
+void        sf_tri              (sf_ctx_t *ctx, sf_pkd_clr_t c, sf_fvec3_t v0, sf_fvec3_t v1, sf_fvec3_t v2, bool use_depth);
 void        sf_put_text         (sf_ctx_t *ctx, const char *text, sf_ivec2_t p, sf_pkd_clr_t c, int scale);
 void        sf_clear_depth      (sf_ctx_t *ctx);
 
@@ -174,6 +165,8 @@ void        _sf_swap_svec2      (sf_ivec2_t *v0, sf_ivec2_t *v1);
 void        _sf_interpolate_x   (sf_ivec2_t  v0, sf_ivec2_t v1, int *xs);
 void        _sf_interpolate_y   (sf_ivec2_t  v0, sf_ivec2_t v1, int *ys);
 void        _sf_interpolate_f   (float v0, float v1, int steps, float *out);
+sf_fvec3_t  _sf_intersect_near  (sf_fvec3_t v0, sf_fvec3_t v1, float near);
+sf_fvec3_t  _sf_project_vertex  (sf_ctx_t *ctx, sf_fvec3_t v, sf_fmat4_t P);
 const char* _sf_log_lvl_to_str  (sf_log_level_t level);
 
 /* SF_UTILITIES */
@@ -435,58 +428,36 @@ sf_enti_t* _sf_get_enti(sf_ctx_t *ctx, const char *entiname, bool should_log_fai
 }
 
 void sf_render_enti(sf_ctx_t *ctx, sf_enti_t *enti) {
-  sf_fmat4_t MVP = sf_fmat4_mul_fmat4(enti->M, sf_fmat4_mul_fmat4(ctx->camera.V, ctx->camera.P));
-
+  sf_fmat4_t MV = sf_fmat4_mul_fmat4(enti->M, ctx->camera.V);
+  sf_fmat4_t P = ctx->camera.P;
+  float near = 0.1f;
   for (int i = 0; i < enti->obj.f_cnt; i++) {
-    sf_fvec3_t p[3];
     sf_ivec3_t f = enti->obj.f[i];
+    sf_fvec3_t v[3] = {
+      sf_fmat4_mul_vec3(MV, enti->obj.v[f.x]),
+      sf_fmat4_mul_vec3(MV, enti->obj.v[f.y]),
+      sf_fmat4_mul_vec3(MV, enti->obj.v[f.z])
+    };
+    sf_fvec3_t in[3], out[3];
+    int inc = 0, outc = 0;
     for (int j = 0; j < 3; j++) {
-      int idx = (j == 0) ? f.x : (j == 1) ? f.y : f.z;
-      sf_fvec3_t proj = sf_fmat4_mul_vec3(MVP, enti->obj.v[idx]);
-      p[j].x = (proj.x + 1.0f) * 0.5f * (float)ctx->w;
-      p[j].y = (1.0f - (proj.y + 1.0f) * 0.5f) * (float)ctx->h;
-      p[j].z = proj.z;
+      if (v[j].z >= near) in[inc++] = v[j];
+      else out[outc++] = v[j];
     }
-    sf_tri_depth(ctx, SF_CLR_RED, p[0], p[1], p[2]);
+    if (inc == 3) {
+      sf_tri(ctx, SF_CLR_RED, _sf_project_vertex(ctx, v[0], P), _sf_project_vertex(ctx, v[1], P), _sf_project_vertex(ctx, v[2], P), true);
+    } else if (inc == 1) {
+      sf_fvec3_t v1 = _sf_intersect_near(in[0], out[0], near);
+      sf_fvec3_t v2 = _sf_intersect_near(in[0], out[1], near);
+      sf_tri(ctx, SF_CLR_RED, _sf_project_vertex(ctx, in[0], P), _sf_project_vertex(ctx, v1, P), _sf_project_vertex(ctx, v2, P), true);
+    } else if (inc == 2) {
+      sf_fvec3_t v1 = _sf_intersect_near(in[0], out[0], near);
+      sf_fvec3_t v2 = _sf_intersect_near(in[1], out[0], near);
+      sf_tri(ctx, SF_CLR_RED, _sf_project_vertex(ctx, in[0], P), _sf_project_vertex(ctx, in[1], P), _sf_project_vertex(ctx, v1, P), true);
+      sf_tri(ctx, SF_CLR_RED, _sf_project_vertex(ctx, in[1], P), _sf_project_vertex(ctx, v1, P), _sf_project_vertex(ctx, v2, P), true);
+    }
   }
 }
-
-//void sf_render_enti(sf_ctx_t *ctx, sf_enti_t *enti) {
-//  sf_fmat4_t MVP = sf_fmat4_mul_fmat4(enti->M, sf_fmat4_mul_fmat4(ctx->camera.V, ctx->camera.P));
-//
-//  sf_fvec3_t light_dir = {0.0f, 0.0f, -1.0f};
-//
-//  for (int i = 0; i < enti->obj.f_cnt; i++) {
-//    sf_ivec3_t face = enti->obj.f[i];
-//    sf_fvec3_t world_v[3];
-//    sf_ivec2_t screen_coords[3];
-//    float depths[3];
-//
-//    world_v[0] = enti->obj.v[face.x];
-//    world_v[1] = enti->obj.v[face.y];
-//    world_v[2] = enti->obj.v[face.z];
-//
-//    sf_fvec3_t a = sf_fvec3_sub(world_v[1], world_v[0]);
-//    sf_fvec3_t b = sf_fvec3_sub(world_v[2], world_v[0]);
-//    sf_fvec3_t normal = sf_fvec3_norm(sf_fvec3_cross(a, b));
-//    
-//    sf_fvec3_t view_ray = sf_fvec3_sub(world_v[0], ctx->camera.pos);
-//    if (sf_fvec3_dot(normal, view_ray) >= 0) continue;
-//
-//    for (int j = 0; j < 3; j++) {
-//      sf_fvec3_t proj_v = sf_fmat4_mul_vec3(MVP, world_v[j]);
-//      screen_coords[j].x = (int)((proj_v.x + 1.0f) * 0.5f * ctx->w);
-//      screen_coords[j].y = (int)((1.0f - (proj_v.y + 1.0f) * 0.5f) * ctx->h);
-//      depths[j] = proj_v.z;
-//    }
-//
-//    float intensity = sf_fvec3_dot(normal, sf_fvec3_norm(light_dir));
-//    if (intensity < 0.1f) intensity = 0.1f;
-//    
-//    sf_unpkd_clr_t color = { (uint8_t)(255 * intensity), (uint8_t)(200 * intensity), 0, 255 };
-//    sf_tri(ctx, sf_pack_color(color), screen_coords[0], screen_coords[1], screen_coords[2]);
-//  }
-//}
 
 void sf_render_ctx(sf_ctx_t *ctx) {
   sf_fill(ctx, SF_CLR_BLACK);
@@ -563,70 +534,52 @@ void sf_rect(sf_ctx_t *ctx, sf_pkd_clr_t c, sf_ivec2_t v0, sf_ivec2_t v1) {
   }
 }
 
-void sf_tri(sf_ctx_t *ctx, sf_pkd_clr_t c, sf_ivec2_t v0, sf_ivec2_t v1, sf_ivec2_t v2) {
-  if (v1.y < v0.y) _sf_swap_svec2(&v0, &v1);
-  if (v2.y < v0.y) _sf_swap_svec2(&v2, &v0);
-  if (v2.y < v1.y) _sf_swap_svec2(&v2, &v1);
-  int h = v2.y - v0.y + 1;
-  int x02[h], x012[h];
-  _sf_interpolate_x(v0, v1, x012);
-  _sf_interpolate_x(v1, v2, &x012[v1.y - v0.y]);
-  _sf_interpolate_x(v0, v2, x02);
-  int mid_idx = v1.y - v0.y;
-  int *xl = (x02[mid_idx] < x012[mid_idx]) ? x02  : x012;
-  int *xr = (x02[mid_idx] < x012[mid_idx]) ? x012 : x02;
-  for (int y = v0.y; y <= v2.y; ++y) {
-    for (int x = xl[y - v0.y]; x <= xr[y - v0.y]; ++x) {
-      sf_pixel(ctx, c, (sf_ivec2_t){x, y});
-    }
-  }
-}
-
-void sf_tri_depth(sf_ctx_t *ctx, sf_pkd_clr_t c, sf_fvec3_t v0, sf_fvec3_t v1, sf_fvec3_t v2) {
+void sf_tri(sf_ctx_t *ctx, sf_pkd_clr_t c, sf_fvec3_t v0, sf_fvec3_t v1, sf_fvec3_t v2, bool use_depth) {
   if (v1.y < v0.y) { sf_fvec3_t t = v0; v0 = v1; v1 = t; }
   if (v2.y < v0.y) { sf_fvec3_t t = v0; v0 = v2; v2 = t; }
   if (v2.y < v1.y) { sf_fvec3_t t = v1; v1 = v2; v2 = t; }
-
+  if (v2.y < 0 || v0.y >= ctx->h) return;
   int h = (int)v2.y - (int)v0.y + 1;
-  if (h <= 1 || h > 1024) return;
-
-  int x02[1024], x012[1024];
-  float z02[1024], z012[1024];
-
+  if (h <= 1 || h > 8192) return;
+  int x02[h], x012[h];
+  float z02[h], z012[h];
   _sf_interpolate_x((sf_ivec2_t){(int)v0.x, (int)v0.y}, (sf_ivec2_t){(int)v2.x, (int)v2.y}, x02);
   _sf_interpolate_f(v0.z, v2.z, h - 1, z02);
-
   int h01 = (int)v1.y - (int)v0.y;
   int h12 = (int)v2.y - (int)v1.y;
-
   _sf_interpolate_x((sf_ivec2_t){(int)v0.x, (int)v0.y}, (sf_ivec2_t){(int)v1.x, (int)v1.y}, x012);
   _sf_interpolate_f(v0.z, v1.z, h01, z012);
   _sf_interpolate_x((sf_ivec2_t){(int)v1.x, (int)v1.y}, (sf_ivec2_t){(int)v2.x, (int)v2.y}, &x012[h01]);
   _sf_interpolate_f(v1.z, v2.z, h12, &z012[h01]);
-
   int *xl = x02, *xr = x012;
   float *zl = z02, *zr = z012;
-
   if (h01 < h && x012[h01] < x02[h01]) {
     xl = x012; xr = x02;
     zl = z012; zr = z02;
   }
-
   for (int y = (int)v0.y; y <= (int)v2.y; ++y) {
-    int idx = y - (int)v0.y;
     if (y < 0 || y >= ctx->h) continue;
-
-    int x_start = xl[idx];
-    int x_end = xr[idx];
-    float z_start = zl[idx];
-    float z_end = zr[idx];
-
-    float width = (float)(x_end - x_start);
-    for (int x = x_start; x <= x_end; ++x) {
-      if (x < 0 || x >= ctx->w) continue;
-      float t = (width == 0) ? 0.0f : (float)(x - x_start) / width;
-      float z = z_start + (z_end - z_start) * t;
-      sf_pixel_depth(ctx, c, (sf_ivec2_t){(int)x, (int)y}, z);
+    int idx = y - (int)v0.y;
+    int x_s = xl[idx], x_e = xr[idx];
+    float z_s = zl[idx], z_e = zr[idx];
+    float w = (float)(x_e - x_s);
+    float dz = (w <= 0.0f) ? 0.0f : (z_e - z_s) / w;
+    int ox = x_s;
+    if (x_s < 0) x_s = 0;
+    if (x_e >= ctx->w) x_e = ctx->w - 1;
+    float cz = z_s + (dz * (float)(x_s - ox));
+    int bi = y * ctx->w + x_s;
+    for (int x = x_s; x <= x_e; ++x) {
+      if (use_depth) {
+        if (cz < ctx->z_buffer[bi]) {
+          ctx->z_buffer[bi] = cz;
+          ctx->buffer[bi] = c;
+        }
+      } else {
+        ctx->buffer[bi] = c;
+      }
+      cz += dz;
+      bi++;
     }
   }
 }
@@ -843,6 +796,24 @@ void _sf_interpolate_f(float v0, float v1, int steps, float *out) {
   for (int i = 0; i <= steps; ++i) {
     out[i] = v0 + (step * i);
   }
+}
+
+sf_fvec3_t _sf_intersect_near(sf_fvec3_t v0, sf_fvec3_t v1, float near) {
+  float t = (near - v0.z) / (v1.z - v0.z);
+  return (sf_fvec3_t){
+    v0.x + (v1.x - v0.x) * t,
+    v0.y + (v1.y - v0.y) * t,
+    near
+  };
+}
+
+sf_fvec3_t _sf_project_vertex(sf_ctx_t *ctx, sf_fvec3_t v, sf_fmat4_t P) {
+  sf_fvec3_t proj = sf_fmat4_mul_vec3(P, v);
+  return (sf_fvec3_t){
+    (proj.x + 1.0f) * 0.5f * (float)ctx->w,
+    (1.0f - (proj.y + 1.0f) * 0.5f) * (float)ctx->h,
+    proj.z
+  };
 }
 
 const char* _sf_log_lvl_to_str(sf_log_level_t level) {

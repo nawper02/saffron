@@ -17,7 +17,7 @@ int main(int argc, char* argv[])
                                             width, height);
   sf_ctx_t sf_ctx;
   sf_init(&sf_ctx, width, height);
-  sf_ctx.camera.pos    = (sf_fvec3_t){0.0f, 0.0f, -5.0f};
+  sf_ctx.camera.pos    = (sf_fvec3_t){0.0f, 5.0f, -5.0f};
   sf_ctx.camera.target = (sf_fvec3_t){0.0f, 0.0f, 0.0f};
   sf_ctx.camera.P      = sf_make_psp_fmat4(60.0f, (float)width/height, 0.1f, 100.0f);
   sf_ctx.camera.V      = sf_make_view_fmat4(sf_ctx.camera.pos, sf_ctx.camera.target, (sf_fvec3_t){0,1,0});
