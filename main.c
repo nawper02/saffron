@@ -22,7 +22,7 @@ int main(int argc, char* argv[])
   sf_ctx.camera.P      = sf_make_psp_fmat4(60.0f, (float)width/height, 0.1f, 100.0f);
   sf_ctx.camera.V      = sf_make_view_fmat4(sf_ctx.camera.pos, sf_ctx.camera.target, (sf_fvec3_t){0,1,0});
   sf_set_logger(&sf_ctx, sf_logger_console, NULL);
-  sf_load_obj(&sf_ctx, "../assets/cube.obj", "teapot");
+  sf_load_obj(&sf_ctx, "../assets/teapot.obj", "teapot");
   sf_enti_t* teapot = sf_add_enti(&sf_ctx, sf_get_obj(&sf_ctx, "teapot"), "teapot");
   float rotation = 0.0f;
 
