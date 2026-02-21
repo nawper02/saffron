@@ -64,7 +64,17 @@ typedef struct { float m[4][4];       } sf_fmat4_t;
 
 typedef struct {
   sf_fvec3_t                    pos;
-  sf_fvec3_t                    target;
+  sf_fvec3_t                    front;
+  sf_fvec3_t                    up;
+  sf_fvec3_t                    right;
+  sf_fvec3_t                    world_up;
+  float                         yaw;
+  float                         pitch;
+  float                         fov;
+  float                         near_plane;
+  float                         far_plane;
+  bool                          is_view_dirty;
+  bool                          is_proj_dirty;
   sf_fmat4_t                    V;
   sf_fmat4_t                    P;
 } sf_camera_t;
@@ -79,6 +89,10 @@ typedef struct {
 typedef struct {
   sf_obj_t                      obj;
   sf_fmat4_t                    M;
+  sf_fvec3_t                    pos;
+  sf_fvec3_t                    rot;
+  sf_fvec3_t                    scale;
+  bool                          is_dirty;
   int32_t                       id;
   const char                   *name;
 } sf_enti_t;
@@ -122,6 +136,8 @@ void        sf_init             (sf_ctx_t *ctx, int w, int h);
 void        sf_destroy          (sf_ctx_t *ctx);
 sf_arena_t  sf_arena_init       (size_t size);
 void*       sf_arena_alloc      (sf_ctx_t *ctx, sf_arena_t *arena, size_t size);
+size_t      sf_arena_save       (sf_arena_t *arena);
+void        sf_arena_restore    (sf_arena_t *arena, size_t mark);
 void        sf_set_logger       (sf_ctx_t *ctx, sf_log_fn log_cb, void* userdata);
 void        sf_logger_console   (const char* message, void* userdata);
 void        sf_log              (sf_ctx_t *ctx, sf_log_level_t level, const char* fmt, ...);
@@ -130,6 +146,17 @@ sf_obj_t*   sf_load_obj         (sf_ctx_t *ctx, const char *filename, const char
 sf_obj_t*   _sf_get_obj         (sf_ctx_t *ctx, const char *objname, bool should_log_failure);
 sf_enti_t*  sf_add_enti         (sf_ctx_t *ctx, sf_obj_t *obj, const char *entiname);
 sf_enti_t*  _sf_get_enti        (sf_ctx_t *ctx, const char *entiname, bool should_log_failure);
+void        sf_enti_set_pos     (sf_enti_t *enti, float x, float y, float z);
+void        sf_enti_move        (sf_enti_t *enti, float dx, float dy, float dz);
+void        sf_enti_set_rot     (sf_enti_t *enti, float rx, float ry, float rz);
+void        sf_enti_rotate      (sf_enti_t *enti, float drx, float dry, float drz);
+void        sf_enti_set_scale   (sf_enti_t *enti, float sx, float sy, float sz);
+void        sf_camera_set_psp   (sf_ctx_t *ctx, float fov, float near_plane, float far_plane);
+void        sf_camera_set_pos   (sf_ctx_t *ctx, float x, float y, float z);
+void        sf_camera_move_loc  (sf_ctx_t *ctx, float fwd, float right, float up);
+void        sf_camera_look_at   (sf_ctx_t *ctx, sf_fvec3_t target);
+void        sf_camera_add_yp    (sf_ctx_t *ctx, float yaw_offset, float pitch_offset);
+void        _sf_update_cam_vecs (sf_ctx_t *ctx);
 void        sf_render_enti      (sf_ctx_t *ctx, sf_enti_t *enti);
 void        sf_render_ctx       (sf_ctx_t *ctx);
 void        sf_time_update      (sf_ctx_t *ctx);
@@ -158,6 +185,7 @@ sf_fmat4_t  sf_make_rot_fmat4   (sf_fvec3_t angles);
 sf_fmat4_t  sf_make_psp_fmat4   (float fov_deg, float aspect, float near, float far);
 sf_fmat4_t  sf_make_idn_fmat4   (void);
 sf_fmat4_t  sf_make_view_fmat4  (sf_fvec3_t eye, sf_fvec3_t target, sf_fvec3_t up);
+sf_fmat4_t  sf_make_scale_fmat4 (sf_fvec3_t scale);
 
 /* SF_IMPLEMENTATION_HELPERS */
 uint32_t    _sf_vec_to_index    (sf_ctx_t *ctx, sf_ivec2_t v);
@@ -199,12 +227,22 @@ void sf_init(sf_ctx_t *ctx, int w, int h) {
   ctx->entities                 = sf_arena_alloc(ctx, &ctx->arena, SF_MAX_ENTITIES * sizeof(sf_enti_t));
   ctx->obj_count                = 0;
   ctx->enti_count               = 0;
+  ctx->camera.pos               = (sf_fvec3_t){0.0f, 0.0f, 0.0f};
+  ctx->camera.world_up          = (sf_fvec3_t){0.0f, 1.0f, 0.0f};
+  ctx->camera.yaw               = -90.0f;
+  ctx->camera.pitch             = 0.0f;
+  ctx->camera.fov               = 60.0f;
+  ctx->camera.near_plane        = 0.1f;
+  ctx->camera.far_plane         = 100.0f;
+  ctx->camera.is_view_dirty     = true;
+  ctx->camera.is_proj_dirty     = true;
   ctx->_start_ticks             = _sf_get_ticks();
   ctx->_last_ticks              = ctx->_start_ticks;
   ctx->delta_time               = 0.0f;
   ctx->elapsed_time             = 0.0f;
   ctx->fps                      = 0.0f;
   ctx->frame_count              = 0;
+  _sf_update_cam_vecs(ctx);
   SF_LOG(ctx, SF_LOG_INFO,
               SF_LOG_INDENT "buffer : %dx%d\n"
               SF_LOG_INDENT "memory : %d\n"
@@ -254,6 +292,14 @@ void* sf_arena_alloc(sf_ctx_t *ctx, sf_arena_t *arena, size_t size) {
               size, arena->offset, arena->size - arena->offset);
 
   return ptr;
+}
+
+size_t sf_arena_save(sf_arena_t *arena) {
+  return arena->offset;
+}
+
+void sf_arena_restore(sf_arena_t *arena, size_t mark) {
+  arena->offset = mark;
 }
 
 void sf_set_logger(sf_ctx_t *ctx, sf_log_fn callback, void* userdata) {
@@ -394,9 +440,13 @@ sf_enti_t* sf_add_enti(sf_ctx_t *ctx, sf_obj_t *obj, const char *entiname) {
   }
 
   sf_enti_t *enti = &ctx->entities[ctx->enti_count++];
-  enti->obj   = *obj;
-  enti->M     = sf_make_idn_fmat4();
-  enti->id    = ctx->enti_count - 1;
+  enti->obj       = *obj;
+  enti->M         = sf_make_idn_fmat4();
+  enti->pos       = (sf_fvec3_t){0.0f, 0.0f, 0.0f};
+  enti->rot       = (sf_fvec3_t){0.0f, 0.0f, 0.0f};
+  enti->scale     = (sf_fvec3_t){1.0f, 1.0f, 1.0f};
+  enti->is_dirty  = true;
+  enti->id        = ctx->enti_count - 1;
 
   size_t name_len = strlen(entiname) + 1;
   enti->name = (const char*)sf_arena_alloc(ctx, &ctx->arena, name_len);
@@ -427,17 +477,102 @@ sf_enti_t* _sf_get_enti(sf_ctx_t *ctx, const char *entiname, bool should_log_fai
   return NULL;
 }
 
+void sf_enti_set_pos(sf_enti_t *enti, float x, float y, float z) {
+  enti->pos = (sf_fvec3_t){x, y, z};
+  enti->is_dirty = true;
+}
+
+void sf_enti_move(sf_enti_t *enti, float dx, float dy, float dz) {
+  enti->pos.x += dx;
+  enti->pos.y += dy;
+  enti->pos.z += dz;
+  enti->is_dirty = true;
+}
+
+void sf_enti_set_rot(sf_enti_t *enti, float rx, float ry, float rz) {
+  enti->rot = (sf_fvec3_t){rx, ry, rz};
+  enti->is_dirty = true;
+}
+
+void sf_enti_rotate(sf_enti_t *enti, float drx, float dry, float drz) {
+  enti->rot.x += drx;
+  enti->rot.y += dry;
+  enti->rot.z += drz;
+  enti->is_dirty = true;
+}
+
+void sf_enti_set_scale(sf_enti_t *enti, float sx, float sy, float sz) {
+  enti->scale = (sf_fvec3_t){sx, sy, sz};
+  enti->is_dirty = true;
+}
+
+void _sf_update_cam_vecs(sf_ctx_t *ctx) {
+  sf_fvec3_t front;
+  front.x = cosf(SF_DEG2RAD(ctx->camera.yaw)) * cosf(SF_DEG2RAD(ctx->camera.pitch));
+  front.y = sinf(SF_DEG2RAD(ctx->camera.pitch));
+  front.z = sinf(SF_DEG2RAD(ctx->camera.yaw)) * cosf(SF_DEG2RAD(ctx->camera.pitch));
+  ctx->camera.front = sf_fvec3_norm(front);
+  ctx->camera.right = sf_fvec3_norm(sf_fvec3_cross(ctx->camera.front, ctx->camera.world_up));
+  ctx->camera.up    = sf_fvec3_norm(sf_fvec3_cross(ctx->camera.right, ctx->camera.front));
+  ctx->camera.is_view_dirty = true;
+}
+
+void sf_camera_set_psp(sf_ctx_t *ctx, float fov, float near_plane, float far_plane) {
+  ctx->camera.fov        = fov;
+  ctx->camera.near_plane = near_plane;
+  ctx->camera.far_plane  = far_plane;
+  ctx->camera.is_proj_dirty = true;
+}
+
+void sf_camera_set_pos(sf_ctx_t *ctx, float x, float y, float z) {
+  ctx->camera.pos = (sf_fvec3_t){x, y, z};
+  ctx->camera.is_view_dirty = true;
+}
+
+void sf_camera_move_loc(sf_ctx_t *ctx, float fwd, float right, float up) {
+  sf_fvec3_t m_fwd = {ctx->camera.front.x * fwd, ctx->camera.front.y * fwd, ctx->camera.front.z * fwd};
+  sf_fvec3_t m_rgt = {ctx->camera.right.x * right, ctx->camera.right.y * right, ctx->camera.right.z * right};
+  sf_fvec3_t m_up  = {ctx->camera.up.x * up, ctx->camera.up.y * up, ctx->camera.up.z * up};
+  ctx->camera.pos = sf_fvec3_add(ctx->camera.pos, m_fwd);
+  ctx->camera.pos = sf_fvec3_add(ctx->camera.pos, m_rgt);
+  ctx->camera.pos = sf_fvec3_add(ctx->camera.pos, m_up);
+  ctx->camera.is_view_dirty = true;
+}
+
+void sf_camera_look_at(sf_ctx_t *ctx, sf_fvec3_t target) {
+  ctx->camera.front = sf_fvec3_norm(sf_fvec3_sub(target, ctx->camera.pos));
+  ctx->camera.right = sf_fvec3_norm(sf_fvec3_cross(ctx->camera.front, ctx->camera.world_up));
+  ctx->camera.up    = sf_fvec3_norm(sf_fvec3_cross(ctx->camera.right, ctx->camera.front));
+  ctx->camera.pitch = SF_RAD2DEG(asinf(ctx->camera.front.y));
+  ctx->camera.yaw   = SF_RAD2DEG(atan2f(ctx->camera.front.z, ctx->camera.front.x));
+  ctx->camera.is_view_dirty = true;
+}
+
+void sf_camera_add_yp(sf_ctx_t *ctx, float yaw_offset, float pitch_offset) {
+  ctx->camera.yaw   += yaw_offset;
+  ctx->camera.pitch += pitch_offset;
+  if (ctx->camera.pitch > 89.0f)  ctx->camera.pitch = 89.0f;
+  if (ctx->camera.pitch < -89.0f) ctx->camera.pitch = -89.0f;
+  _sf_update_cam_vecs(ctx);
+}
+
 void sf_render_enti(sf_ctx_t *ctx, sf_enti_t *enti) {
+  size_t mark = sf_arena_save(&ctx->arena);
   sf_fmat4_t MV = sf_fmat4_mul_fmat4(enti->M, ctx->camera.V);
   sf_fmat4_t P = ctx->camera.P;
   float near = 0.1f;
+  sf_fvec3_t* tv = sf_arena_alloc(ctx, &ctx->arena, enti->obj.v_cnt * sizeof(sf_fvec3_t));
+  if (!tv) return;
+  for (int i = 0; i < enti->obj.v_cnt; i++) {
+    tv[i] = sf_fmat4_mul_vec3(MV, enti->obj.v[i]);
+  }
   for (int i = 0; i < enti->obj.f_cnt; i++) {
     sf_ivec3_t f = enti->obj.f[i];
-    sf_fvec3_t v[3] = {
-      sf_fmat4_mul_vec3(MV, enti->obj.v[f.x]),
-      sf_fmat4_mul_vec3(MV, enti->obj.v[f.y]),
-      sf_fmat4_mul_vec3(MV, enti->obj.v[f.z])
-    };
+    sf_fvec3_t v[3] = { tv[f.x], tv[f.y], tv[f.z] };
+    sf_fvec3_t a = sf_fvec3_sub(v[1], v[0]);
+    sf_fvec3_t b = sf_fvec3_sub(v[2], v[0]);
+    sf_fvec3_t n = sf_fvec3_cross(a, b);
+    if (sf_fvec3_dot(n, v[0]) >= 0) continue;
     sf_fvec3_t in[3], out[3];
     int inc = 0, outc = 0;
     for (int j = 0; j < 3; j++) {
@@ -457,13 +592,32 @@ void sf_render_enti(sf_ctx_t *ctx, sf_enti_t *enti) {
       sf_tri(ctx, SF_CLR_RED, _sf_project_vertex(ctx, in[1], P), _sf_project_vertex(ctx, v1, P), _sf_project_vertex(ctx, v2, P), true);
     }
   }
+  sf_arena_restore(&ctx->arena, mark);
 }
 
 void sf_render_ctx(sf_ctx_t *ctx) {
+  if (ctx->camera.is_proj_dirty) {
+    float aspect = (float)ctx->w / (float)ctx->h;
+    ctx->camera.P = sf_make_psp_fmat4(ctx->camera.fov, aspect, ctx->camera.near_plane, ctx->camera.far_plane);
+    ctx->camera.is_proj_dirty = false;
+  }
+  if (ctx->camera.is_view_dirty) {
+    sf_fvec3_t target = sf_fvec3_add(ctx->camera.pos, ctx->camera.front);
+    ctx->camera.V = sf_make_view_fmat4(ctx->camera.pos, target, ctx->camera.up);
+    ctx->camera.is_view_dirty = false;
+  }
   sf_fill(ctx, SF_CLR_BLACK);
   sf_clear_depth(ctx); 
   for (int i = 0; i < ctx->enti_count; i++) {
-    sf_render_enti(ctx, &ctx->entities[i]);
+    sf_enti_t *enti = &ctx->entities[i];
+    if (enti->is_dirty) {
+      sf_fmat4_t t_mat = sf_make_tsl_fmat4(enti->pos.x, enti->pos.y, enti->pos.z);
+      sf_fmat4_t r_mat = sf_make_rot_fmat4(enti->rot);
+      sf_fmat4_t s_mat = sf_make_scale_fmat4(enti->scale);
+      enti->M = sf_fmat4_mul_fmat4(t_mat, sf_fmat4_mul_fmat4(r_mat, s_mat));
+      enti->is_dirty = false;
+    }
+    sf_render_enti(ctx, enti);
   }
 }
 
@@ -758,6 +912,14 @@ sf_fmat4_t sf_make_view_fmat4(sf_fvec3_t eye, sf_fvec3_t target, sf_fvec3_t up) 
   m.m[3][1] = -sf_fvec3_dot(u, eye);
   m.m[3][2] = -sf_fvec3_dot(f, eye);
 
+  return m;
+}
+
+sf_fmat4_t sf_make_scale_fmat4(sf_fvec3_t s) {
+  sf_fmat4_t m = sf_make_idn_fmat4();
+  m.m[0][0] = s.x;
+  m.m[1][1] = s.y;
+  m.m[2][2] = s.z;
   return m;
 }
 
