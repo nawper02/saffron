@@ -37,9 +37,13 @@ int main(int argc, char* argv[])
       sf_fvec3_t angles = { rotation, rotation * 0.5f, 0.0f };
       teapot->M = sf_fmat4_mul_fmat4(sf_make_tsl_fmat4(0, 0, 0), sf_make_rot_fmat4(angles));
 
+      sf_time_update(&sf_ctx);
       sf_render_ctx(&sf_ctx);
 
       sf_put_text(&sf_ctx, "SAFFRON 3D TEST", (sf_svec2_t){10, 10}, SF_CLR_WHITE, 1);
+      char fps_text[32];
+      snprintf(fps_text, sizeof(fps_text), "FPS: %.0f", sf_ctx.fps);
+      sf_put_text(&sf_ctx, fps_text, (sf_svec2_t){width-80, 10}, SF_CLR_WHITE, 1);
 
       //sf_fill(&sf_ctx, SF_CLR_BLUE);
       //for (int i = 0; i < 80; ++i) {

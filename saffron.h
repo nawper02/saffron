@@ -30,6 +30,7 @@ extern "C" {
 #include <stdarg.h>
 #include <stdbool.h>
 #include <math.h>
+#include <time.h>
 
 /* SF_DEFINES */
 #define SF_ARENA_SIZE          10485760
@@ -37,6 +38,7 @@ extern "C" {
 #define SF_MAX_ENTITIES        100
 #define SF_LOG_INDENT          "            "
 #define SF_PI                  3.14159265359f
+#define SF_NANOS_PER_SEC       1000000000ULL
 
 #define SF_LOG(ctx, level, fmt, ...)  _sf_log(ctx, level, __func__, fmt, ##__VA_ARGS__)
 #define SF_ALIGN_SIZE(size)           (((size) + 7) & ~7)
@@ -111,6 +113,13 @@ typedef struct {
 
   sf_camera_t                   camera;
 
+  float                         delta_time;
+  float                         elapsed_time;
+  float                         fps;
+  uint32_t                      frame_count;
+  uint64_t                      _start_ticks;
+  uint64_t                      _last_ticks;
+
   sf_log_fn                     log_cb;
   void*                         log_user;
   sf_log_level_t                log_min;
@@ -131,6 +140,8 @@ sf_enti_t*  sf_add_enti         (sf_ctx_t *ctx, sf_obj_t *obj, const char *entin
 sf_enti_t*  _sf_get_enti        (sf_ctx_t *ctx, const char *entiname, bool should_log_failure);
 void        sf_render_enti      (sf_ctx_t *ctx, sf_enti_t *enti);
 void        sf_render_ctx       (sf_ctx_t *ctx);
+void        sf_time_update      (sf_ctx_t *ctx);
+uint64_t    _sf_get_ticks       (void);
 
 /* SF_DRAWING_FUNCTIONS */
 void        sf_fill             (sf_ctx_t *ctx, sf_pkd_clr_t c);
@@ -195,6 +206,12 @@ void sf_init(sf_ctx_t *ctx, int w, int h) {
   ctx->entities                 = sf_arena_alloc(ctx, &ctx->arena, SF_MAX_ENTITIES * sizeof(sf_enti_t));
   ctx->obj_count                = 0;
   ctx->enti_count               = 0;
+  ctx->_start_ticks             = _sf_get_ticks();
+  ctx->_last_ticks              = ctx->_start_ticks;
+  ctx->delta_time               = 0.0f;
+  ctx->elapsed_time             = 0.0f;
+  ctx->fps                      = 0.0f;
+  ctx->frame_count              = 0;
   SF_LOG(ctx, SF_LOG_INFO,
               SF_LOG_INDENT "buffer : %dx%d\n"
               SF_LOG_INDENT "memory : %d\n"
@@ -477,6 +494,25 @@ void sf_render_ctx(sf_ctx_t *ctx) {
   for (int i = 0; i < ctx->enti_count; i++) {
     sf_render_enti(ctx, &ctx->entities[i]);
   }
+}
+
+uint64_t _sf_get_ticks(void) {
+  struct timespec ts;
+  clock_gettime(CLOCK_MONOTONIC, &ts);
+  return (uint64_t)ts.tv_sec * SF_NANOS_PER_SEC + (uint64_t)ts.tv_nsec;
+}
+
+void sf_time_update(sf_ctx_t *ctx) {
+  uint64_t current_ticks = _sf_get_ticks();
+  uint64_t diff = current_ticks - ctx->_last_ticks;
+  ctx->delta_time = (float)((double)diff / (double)SF_NANOS_PER_SEC);
+  ctx->elapsed_time = (float)((double)(current_ticks - ctx->_start_ticks) / (double)SF_NANOS_PER_SEC);
+  ctx->_last_ticks = current_ticks;
+  if (ctx->delta_time > 0.0f) {
+    float instant_fps = 1.0f / ctx->delta_time;
+    ctx->fps = (ctx->fps * 0.9f) + (instant_fps * 0.1f);
+  }
+  ctx->frame_count++;
 }
 
 /* SF_DRAWING_FUNCTIONS */
