@@ -151,12 +151,12 @@ void        sf_enti_move        (sf_enti_t *enti, float dx, float dy, float dz);
 void        sf_enti_set_rot     (sf_enti_t *enti, float rx, float ry, float rz);
 void        sf_enti_rotate      (sf_enti_t *enti, float drx, float dry, float drz);
 void        sf_enti_set_scale   (sf_enti_t *enti, float sx, float sy, float sz);
-void        sf_camera_set_psp   (sf_ctx_t *ctx, float fov, float near_plane, float far_plane);
-void        sf_camera_set_pos   (sf_ctx_t *ctx, float x, float y, float z);
-void        sf_camera_move_loc  (sf_ctx_t *ctx, float fwd, float right, float up);
-void        sf_camera_look_at   (sf_ctx_t *ctx, sf_fvec3_t target);
-void        sf_camera_add_yp    (sf_ctx_t *ctx, float yaw_offset, float pitch_offset);
-void        _sf_update_cam_vecs (sf_ctx_t *ctx);
+void        sf_camera_set_psp   (sf_camera_t *cam, float fov, float near_plane, float far_plane);
+void        sf_camera_set_pos   (sf_camera_t *cam, float x, float y, float z);
+void        sf_camera_move_loc  (sf_camera_t *cam, float fwd, float right, float up);
+void        sf_camera_look_at   (sf_camera_t *cam, sf_fvec3_t target);
+void        sf_camera_add_yp    (sf_camera_t *cam, float yaw_offset, float pitch_offset);
+void        _sf_update_cam_vecs (sf_camera_t *cam);
 void        sf_render_enti      (sf_ctx_t *ctx, sf_enti_t *enti);
 void        sf_render_ctx       (sf_ctx_t *ctx);
 void        sf_time_update      (sf_ctx_t *ctx);
@@ -242,7 +242,7 @@ void sf_init(sf_ctx_t *ctx, int w, int h) {
   ctx->elapsed_time             = 0.0f;
   ctx->fps                      = 0.0f;
   ctx->frame_count              = 0;
-  _sf_update_cam_vecs(ctx);
+  _sf_update_cam_vecs(&ctx->camera);
   SF_LOG(ctx, SF_LOG_INFO,
               SF_LOG_INDENT "buffer : %dx%d\n"
               SF_LOG_INDENT "memory : %d\n"
@@ -506,54 +506,54 @@ void sf_enti_set_scale(sf_enti_t *enti, float sx, float sy, float sz) {
   enti->is_dirty = true;
 }
 
-void _sf_update_cam_vecs(sf_ctx_t *ctx) {
+void _sf_update_cam_vecs(sf_camera_t *cam) {
   sf_fvec3_t front;
-  front.x = cosf(SF_DEG2RAD(ctx->camera.yaw)) * cosf(SF_DEG2RAD(ctx->camera.pitch));
-  front.y = sinf(SF_DEG2RAD(ctx->camera.pitch));
-  front.z = sinf(SF_DEG2RAD(ctx->camera.yaw)) * cosf(SF_DEG2RAD(ctx->camera.pitch));
-  ctx->camera.front = sf_fvec3_norm(front);
-  ctx->camera.right = sf_fvec3_norm(sf_fvec3_cross(ctx->camera.front, ctx->camera.world_up));
-  ctx->camera.up    = sf_fvec3_norm(sf_fvec3_cross(ctx->camera.right, ctx->camera.front));
-  ctx->camera.is_view_dirty = true;
+  front.x = cosf(SF_DEG2RAD(cam->yaw)) * cosf(SF_DEG2RAD(cam->pitch));
+  front.y = sinf(SF_DEG2RAD(cam->pitch));
+  front.z = sinf(SF_DEG2RAD(cam->yaw)) * cosf(SF_DEG2RAD(cam->pitch));
+  cam->front = sf_fvec3_norm(front);
+  cam->right = sf_fvec3_norm(sf_fvec3_cross(cam->front, cam->world_up));
+  cam->up    = sf_fvec3_norm(sf_fvec3_cross(cam->right, cam->front));
+  cam->is_view_dirty = true;
 }
 
-void sf_camera_set_psp(sf_ctx_t *ctx, float fov, float near_plane, float far_plane) {
-  ctx->camera.fov        = fov;
-  ctx->camera.near_plane = near_plane;
-  ctx->camera.far_plane  = far_plane;
-  ctx->camera.is_proj_dirty = true;
+void sf_camera_set_psp(sf_camera_t *cam, float fov, float near_plane, float far_plane) {
+  cam->fov        = fov;
+  cam->near_plane = near_plane;
+  cam->far_plane  = far_plane;
+  cam->is_proj_dirty = true;
 }
 
-void sf_camera_set_pos(sf_ctx_t *ctx, float x, float y, float z) {
-  ctx->camera.pos = (sf_fvec3_t){x, y, z};
-  ctx->camera.is_view_dirty = true;
+void sf_camera_set_pos(sf_camera_t *cam, float x, float y, float z) {
+  cam->pos = (sf_fvec3_t){x, y, z};
+  cam->is_view_dirty = true;
 }
 
-void sf_camera_move_loc(sf_ctx_t *ctx, float fwd, float right, float up) {
-  sf_fvec3_t m_fwd = {ctx->camera.front.x * fwd, ctx->camera.front.y * fwd, ctx->camera.front.z * fwd};
-  sf_fvec3_t m_rgt = {ctx->camera.right.x * right, ctx->camera.right.y * right, ctx->camera.right.z * right};
-  sf_fvec3_t m_up  = {ctx->camera.up.x * up, ctx->camera.up.y * up, ctx->camera.up.z * up};
-  ctx->camera.pos = sf_fvec3_add(ctx->camera.pos, m_fwd);
-  ctx->camera.pos = sf_fvec3_add(ctx->camera.pos, m_rgt);
-  ctx->camera.pos = sf_fvec3_add(ctx->camera.pos, m_up);
-  ctx->camera.is_view_dirty = true;
+void sf_camera_move_loc(sf_camera_t *cam, float fwd, float right, float up) {
+  sf_fvec3_t m_fwd = {cam->front.x * fwd, cam->front.y * fwd, cam->front.z * fwd};
+  sf_fvec3_t m_rgt = {cam->right.x * right, cam->right.y * right, cam->right.z * right};
+  sf_fvec3_t m_up  = {cam->up.x * up, cam->up.y * up, cam->up.z * up};
+  cam->pos = sf_fvec3_add(cam->pos, m_fwd);
+  cam->pos = sf_fvec3_add(cam->pos, m_rgt);
+  cam->pos = sf_fvec3_add(cam->pos, m_up);
+  cam->is_view_dirty = true;
 }
 
-void sf_camera_look_at(sf_ctx_t *ctx, sf_fvec3_t target) {
-  ctx->camera.front = sf_fvec3_norm(sf_fvec3_sub(target, ctx->camera.pos));
-  ctx->camera.right = sf_fvec3_norm(sf_fvec3_cross(ctx->camera.front, ctx->camera.world_up));
-  ctx->camera.up    = sf_fvec3_norm(sf_fvec3_cross(ctx->camera.right, ctx->camera.front));
-  ctx->camera.pitch = SF_RAD2DEG(asinf(ctx->camera.front.y));
-  ctx->camera.yaw   = SF_RAD2DEG(atan2f(ctx->camera.front.z, ctx->camera.front.x));
-  ctx->camera.is_view_dirty = true;
+void sf_camera_look_at(sf_camera_t *cam, sf_fvec3_t target) {
+  cam->front = sf_fvec3_norm(sf_fvec3_sub(target, cam->pos));
+  cam->right = sf_fvec3_norm(sf_fvec3_cross(cam->front, cam->world_up));
+  cam->up    = sf_fvec3_norm(sf_fvec3_cross(cam->right, cam->front));
+  cam->pitch = SF_RAD2DEG(asinf(cam->front.y));
+  cam->yaw   = SF_RAD2DEG(atan2f(cam->front.z, cam->front.x));
+  cam->is_view_dirty = true;
 }
 
-void sf_camera_add_yp(sf_ctx_t *ctx, float yaw_offset, float pitch_offset) {
-  ctx->camera.yaw   += yaw_offset;
-  ctx->camera.pitch += pitch_offset;
-  if (ctx->camera.pitch > 89.0f)  ctx->camera.pitch = 89.0f;
-  if (ctx->camera.pitch < -89.0f) ctx->camera.pitch = -89.0f;
-  _sf_update_cam_vecs(ctx);
+void sf_camera_add_yp(sf_camera_t *cam, float yaw_offset, float pitch_offset) {
+  cam->yaw   += yaw_offset;
+  cam->pitch += pitch_offset;
+  if (cam->pitch > 89.0f)  cam->pitch = 89.0f;
+  if (cam->pitch < -89.0f) cam->pitch = -89.0f;
+  _sf_update_cam_vecs(cam);
 }
 
 void sf_render_enti(sf_ctx_t *ctx, sf_enti_t *enti) {

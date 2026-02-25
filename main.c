@@ -19,9 +19,11 @@ int main(int argc, char* argv[])
   sf_init(&sf_ctx, width, height);
   sf_set_logger(&sf_ctx, sf_logger_console, NULL);
 
-  sf_camera_set_psp(&sf_ctx, 60.0f, 0.1f, 100.0f);
-  sf_camera_set_pos(&sf_ctx, 0.0f, 3.0f, -8.0f);
-  sf_camera_look_at(&sf_ctx, (sf_fvec3_t){0.0f, 0.0f, 0.0f});
+  sf_camera_t* main_cam = &sf_ctx.camera;
+
+  sf_camera_set_psp(main_cam, 60.0f, 0.1f, 100.0f);
+  sf_camera_set_pos(main_cam, 0.0f, 3.0f, -8.0f);
+  sf_camera_look_at(main_cam, (sf_fvec3_t){0.0f, 0.0f, 0.0f});
 
   sf_load_obj(&sf_ctx, "../assets/teapot.obj", "teapot");
   sf_enti_t* teapot = sf_add_enti(&sf_ctx, sf_get_obj(&sf_ctx, "teapot"), "teapot");
@@ -42,17 +44,17 @@ int main(int argc, char* argv[])
     float move_speed = 5.0f * sf_ctx.delta_time;
     float look_speed = 60.0f * sf_ctx.delta_time;
 
-    if (state[SDL_SCANCODE_W]) sf_camera_move_loc(&sf_ctx, move_speed, 0.0f, 0.0f);
-    if (state[SDL_SCANCODE_S]) sf_camera_move_loc(&sf_ctx, -move_speed, 0.0f, 0.0f);
-    if (state[SDL_SCANCODE_A]) sf_camera_move_loc(&sf_ctx, 0.0f, -move_speed, 0.0f);
-    if (state[SDL_SCANCODE_D]) sf_camera_move_loc(&sf_ctx, 0.0f, move_speed, 0.0f);
-    if (state[SDL_SCANCODE_SPACE]) sf_camera_move_loc(&sf_ctx, 0.0f, 0.0f, move_speed);
-    if (state[SDL_SCANCODE_LSHIFT]) sf_camera_move_loc(&sf_ctx, 0.0f, 0.0f, -move_speed);
+    if (state[SDL_SCANCODE_W]) sf_camera_move_loc(main_cam, move_speed, 0.0f, 0.0f);
+    if (state[SDL_SCANCODE_S]) sf_camera_move_loc(main_cam, -move_speed, 0.0f, 0.0f);
+    if (state[SDL_SCANCODE_A]) sf_camera_move_loc(main_cam, 0.0f, -move_speed, 0.0f);
+    if (state[SDL_SCANCODE_D]) sf_camera_move_loc(main_cam, 0.0f, move_speed, 0.0f);
+    if (state[SDL_SCANCODE_SPACE]) sf_camera_move_loc(main_cam, 0.0f, 0.0f, move_speed);
+    if (state[SDL_SCANCODE_LSHIFT]) sf_camera_move_loc(main_cam, 0.0f, 0.0f, -move_speed);
 
-    if (state[SDL_SCANCODE_UP])    sf_camera_add_yp(&sf_ctx, 0.0f, look_speed);
-    if (state[SDL_SCANCODE_DOWN])  sf_camera_add_yp(&sf_ctx, 0.0f, -look_speed);
-    if (state[SDL_SCANCODE_LEFT])  sf_camera_add_yp(&sf_ctx, -look_speed, 0.0f);
-    if (state[SDL_SCANCODE_RIGHT]) sf_camera_add_yp(&sf_ctx, look_speed, 0.0f);
+    if (state[SDL_SCANCODE_UP])    sf_camera_add_yp(main_cam, 0.0f, look_speed);
+    if (state[SDL_SCANCODE_DOWN])  sf_camera_add_yp(main_cam, 0.0f, -look_speed);
+    if (state[SDL_SCANCODE_LEFT])  sf_camera_add_yp(main_cam, -look_speed, 0.0f);
+    if (state[SDL_SCANCODE_RIGHT]) sf_camera_add_yp(main_cam, look_speed, 0.0f);
 
     sf_enti_rotate(teapot, 1.0f * sf_ctx.delta_time, 1.5f * sf_ctx.delta_time, 0.0f);
     sf_enti_rotate(teapot2, -2.0f * sf_ctx.delta_time, -0.5f * sf_ctx.delta_time, 0.0f);
