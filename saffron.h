@@ -571,7 +571,7 @@ void sf_render_enti(sf_ctx_t *ctx, sf_enti_t *enti) {
     sf_fvec3_t v[3] = { tv[f.x], tv[f.y], tv[f.z] };
     sf_fvec3_t a = sf_fvec3_sub(v[1], v[0]);
     sf_fvec3_t b = sf_fvec3_sub(v[2], v[0]);
-    sf_fvec3_t n = sf_fvec3_cross(b, a);
+    sf_fvec3_t n = sf_fvec3_cross(a, b);
     float      d = sf_fvec3_dot(n, v[0]);
     if (d >= 0) continue;
 
@@ -591,18 +591,18 @@ void sf_render_enti(sf_ctx_t *ctx, sf_enti_t *enti) {
     sf_fvec3_t in[3], out[3];
     int inc = 0, outc = 0;
     for (int j = 0; j < 3; j++) {
-      if (v[j].z >= near) in[inc++] = v[j];
+      if (v[j].z <= -near) in[inc++] = v[j];
       else out[outc++] = v[j];
     }
     if (inc == 3) {
       sf_tri(ctx, shaded_color, _sf_project_vertex(ctx, v[0], P), _sf_project_vertex(ctx, v[1], P), _sf_project_vertex(ctx, v[2], P), true);
     } else if (inc == 1) {
-      sf_fvec3_t v1 = _sf_intersect_near(in[0], out[0], near);
-      sf_fvec3_t v2 = _sf_intersect_near(in[0], out[1], near);
+      sf_fvec3_t v1 = _sf_intersect_near(in[0], out[0], -near);
+      sf_fvec3_t v2 = _sf_intersect_near(in[0], out[1], -near);
       sf_tri(ctx, shaded_color, _sf_project_vertex(ctx, in[0], P), _sf_project_vertex(ctx, v1, P), _sf_project_vertex(ctx, v2, P), true);
     } else if (inc == 2) {
-      sf_fvec3_t v1 = _sf_intersect_near(in[0], out[0], near);
-      sf_fvec3_t v2 = _sf_intersect_near(in[1], out[0], near);
+      sf_fvec3_t v1 = _sf_intersect_near(in[0], out[0], -near);
+      sf_fvec3_t v2 = _sf_intersect_near(in[1], out[0], -near);
       sf_tri(ctx, shaded_color, _sf_project_vertex(ctx, in[0], P), _sf_project_vertex(ctx, in[1], P), _sf_project_vertex(ctx, v1, P), true);
       sf_tri(ctx, shaded_color, _sf_project_vertex(ctx, in[1], P), _sf_project_vertex(ctx, v1, P), _sf_project_vertex(ctx, v2, P), true);
     }
@@ -886,8 +886,8 @@ sf_fmat4_t sf_make_psp_fmat4(float fov_deg, float aspect, float near, float far)
 
     m.m[0][0] = 1.0f / (tan_half_fov * aspect);
     m.m[1][1] = 1.0f / tan_half_fov;
-    m.m[2][2] = (-near - far) / z_range;
-    m.m[2][3] = 1.0f; 
+    m.m[2][2] = (near + far) / z_range;
+    m.m[2][3] = -1.0f; 
     m.m[3][2] = (2.0f * far * near) / z_range;
 
     return m;
@@ -919,13 +919,13 @@ sf_fmat4_t sf_make_view_fmat4(sf_fvec3_t eye, sf_fvec3_t target, sf_fvec3_t up) 
   m.m[1][1] = u.y;
   m.m[2][1] = u.z;
 
-  m.m[0][2] = f.x;
-  m.m[1][2] = f.y;
-  m.m[2][2] = f.z;
+  m.m[0][2] = -f.x;
+  m.m[1][2] = -f.y;
+  m.m[2][2] = -f.z;
 
   m.m[3][0] = -sf_fvec3_dot(r, eye);
   m.m[3][1] = -sf_fvec3_dot(u, eye);
-  m.m[3][2] = -sf_fvec3_dot(f, eye);
+  m.m[3][2] =  sf_fvec3_dot(f, eye);
 
   return m;
 }

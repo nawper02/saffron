@@ -22,14 +22,14 @@ int main(int argc, char* argv[])
   sf_camera_t* main_cam = &sf_ctx.camera;
 
   sf_camera_set_psp(main_cam, 60.0f, 0.1f, 100.0f);
-  sf_camera_set_pos(main_cam, 0.0f, 3.0f, -8.0f);
+  sf_camera_set_pos(main_cam, 0.0f, 0.0f, 8.0f);
   sf_camera_look_at(main_cam, (sf_fvec3_t){0.0f, 0.0f, 0.0f});
 
   sf_load_obj(&sf_ctx, "../assets/teapot.obj", "teapot");
   sf_enti_t* teapot = sf_add_enti(&sf_ctx, sf_get_obj(&sf_ctx, "teapot"), "teapot");
   sf_enti_t* teapot2 = sf_add_enti(&sf_ctx, sf_get_obj(&sf_ctx, "teapot"), "teapot2");
-  sf_enti_set_pos(teapot, -2.5f, 0.0f, 0.0f);
-  sf_enti_set_pos(teapot2, 2.5f, 0.0f, 0.0f);
+  sf_enti_set_pos(teapot, 2.5f, 0.0f, 0.0f);
+  sf_enti_set_pos(teapot2,-2.5f, 0.0f, 0.0f);
   sf_enti_set_scale(teapot, 1.5f, 1.5f, 1.5f);   // Big teapot
   sf_enti_set_scale(teapot2, 0.8f, 0.8f, 0.8f);  // Small teapot
                                                  //
