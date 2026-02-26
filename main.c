@@ -60,6 +60,7 @@ int main(int argc, char* argv[])
     sf_enti_rotate(teapot2, -2.0f * sf_ctx.delta_time, -0.5f * sf_ctx.delta_time, 0.0f);
 
     sf_render_ctx(&sf_ctx);
+    sf_draw_debug_axes(&sf_ctx);
 
     sf_put_text(&sf_ctx, "SAFFRON 3D DEMO", (sf_ivec2_t){10, 10}, SF_CLR_WHITE, 1);
     sf_put_text(&sf_ctx, "WASD: Move | ARROWS: Look", (sf_ivec2_t){10, 25}, SF_CLR_GREEN, 1);

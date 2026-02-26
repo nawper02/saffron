@@ -171,6 +171,7 @@ void        sf_rect             (sf_ctx_t *ctx, sf_pkd_clr_t c, sf_ivec2_t v0, s
 void        sf_tri              (sf_ctx_t *ctx, sf_pkd_clr_t c, sf_fvec3_t v0, sf_fvec3_t v1, sf_fvec3_t v2, bool use_depth);
 void        sf_put_text         (sf_ctx_t *ctx, const char *text, sf_ivec2_t p, sf_pkd_clr_t c, int scale);
 void        sf_clear_depth      (sf_ctx_t *ctx);
+void        sf_draw_debug_axes  (sf_ctx_t *ctx);
 
 /* SF_LA_FUNCTIONS */
 sf_fmat4_t  sf_fmat4_mul_fmat4  (sf_fmat4_t m0, sf_fmat4_t m1);
@@ -675,18 +676,24 @@ void sf_pixel_depth(sf_ctx_t *ctx, sf_pkd_clr_t c, sf_ivec2_t v, float z) {
 }
 
 void sf_line(sf_ctx_t *ctx, sf_pkd_clr_t c, sf_ivec2_t v0, sf_ivec2_t v1) {
-  if (v1.y - v0.y > v1.x - v0.x) {
-    int x01[v1.y-v0.y+1];
-    _sf_interpolate_x(v0, v1, x01);
-    for (int y = v0.y; y <= v1.y; ++y) {
-      sf_pixel(ctx, c, (sf_ivec2_t){x01[y-v0.y],y});
+  int dx = abs(v1.x - v0.x);
+  int sx = v0.x < v1.x ? 1 : -1;
+  int dy = -abs(v1.y - v0.y);
+  int sy = v0.y < v1.y ? 1 : -1;
+  int err = dx + dy;
+  int e2;
+
+  while (1) {
+    sf_pixel(ctx, c, v0);
+    if (v0.x == v1.x && v0.y == v1.y) break;
+    e2 = 2 * err;
+    if (e2 >= dy) {
+      err  += dy;
+      v0.x += sx; 
     }
-  }
-  else {
-    int y01[v1.x-v0.x+1];
-    _sf_interpolate_y(v0, v1, y01);
-    for (int x = v0.x; x <= v1.x; ++x) {
-      sf_pixel(ctx, c, (sf_ivec2_t){x,y01[x-v0.x]});
+    if (e2 <= dx) {
+      err  += dx;
+      v0.y += sy;
     }
   }
 }
@@ -791,6 +798,27 @@ void sf_clear_depth(sf_ctx_t *ctx) {
   for (int i = 0; i < ctx->buffer_size; ++i) {
     ctx->z_buffer[i] = 1000000.0f;
   }
+}
+
+void sf_draw_debug_axes(sf_ctx_t *ctx) {
+  int cx = 50;
+  int cy = ctx->h - 50;
+  float scale = 50.0f;
+
+  sf_fvec3_t x_axis = { ctx->camera.V.m[0][0], ctx->camera.V.m[0][1], ctx->camera.V.m[0][2] };
+  sf_fvec3_t y_axis = { ctx->camera.V.m[1][0], ctx->camera.V.m[1][1], ctx->camera.V.m[1][2] };
+  sf_fvec3_t z_axis = { ctx->camera.V.m[2][0], ctx->camera.V.m[2][1], ctx->camera.V.m[2][2] };
+
+  #define DRAW_AXIS(axis, color) \
+    sf_line(ctx, color, \
+            (sf_ivec2_t){cx, cy}, \
+            (sf_ivec2_t){cx + (int)(axis.x * scale), cy - (int)(axis.y * scale)})
+
+  DRAW_AXIS(x_axis, SF_CLR_RED);
+  DRAW_AXIS(y_axis, SF_CLR_GREEN);
+  DRAW_AXIS(z_axis, SF_CLR_BLUE);
+  
+  #undef DRAW_AXIS
 }
 
 /* SF_LA_FUNCTIONS */
