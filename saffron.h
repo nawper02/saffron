@@ -801,23 +801,26 @@ void sf_clear_depth(sf_ctx_t *ctx) {
 }
 
 void sf_draw_debug_axes(sf_ctx_t *ctx) {
-  int cx = 50;
-  int cy = ctx->h - 50;
-  float scale = 50.0f;
+  int cx = 40;
+  int cy = ctx->h - 40;
+  float scale = 30.0f;
 
   sf_fvec3_t x_axis = { ctx->camera.V.m[0][0], ctx->camera.V.m[0][1], ctx->camera.V.m[0][2] };
   sf_fvec3_t y_axis = { ctx->camera.V.m[1][0], ctx->camera.V.m[1][1], ctx->camera.V.m[1][2] };
   sf_fvec3_t z_axis = { ctx->camera.V.m[2][0], ctx->camera.V.m[2][1], ctx->camera.V.m[2][2] };
 
-  #define DRAW_AXIS(axis, color) \
-    sf_line(ctx, color, \
-            (sf_ivec2_t){cx, cy}, \
-            (sf_ivec2_t){cx + (int)(axis.x * scale), cy - (int)(axis.y * scale)})
+  #define DRAW_AXIS(axis, color, label) do { \
+    sf_ivec2_t end_pt = { cx + (int)(axis.x * scale), cy - (int)(axis.y * scale) }; \
+    sf_line(ctx, color, (sf_ivec2_t){cx, cy}, end_pt); \
+    int text_x = end_pt.x + (int)(axis.x * 12.0f) - 4; \
+    int text_y = end_pt.y - (int)(axis.y * 12.0f) - 4; \
+    sf_put_text(ctx, label, (sf_ivec2_t){text_x, text_y}, color, 1); \
+  } while(0)
 
-  DRAW_AXIS(x_axis, SF_CLR_RED);
-  DRAW_AXIS(y_axis, SF_CLR_GREEN);
-  DRAW_AXIS(z_axis, SF_CLR_BLUE);
-  
+  DRAW_AXIS(x_axis, SF_CLR_RED, "X");
+  DRAW_AXIS(y_axis, SF_CLR_GREEN, "Y");
+  DRAW_AXIS(z_axis, SF_CLR_BLUE, "Z");
+
   #undef DRAW_AXIS
 }
 
