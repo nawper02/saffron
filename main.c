@@ -25,14 +25,15 @@ int main(int argc, char* argv[])
   sf_camera_set_pos(main_cam, 0.0f, 0.0f, 8.0f);
   sf_camera_look_at(main_cam, (sf_fvec3_t){0.0f, 0.0f, 0.0f});
 
+  sf_load_obj(&sf_ctx, "../assets/mk2.obj", "mk2");
   sf_load_obj(&sf_ctx, "../assets/teapot.obj", "teapot");
   sf_enti_t* teapot = sf_add_enti(&sf_ctx, sf_get_obj(&sf_ctx, "teapot"), "teapot");
-  sf_enti_t* teapot2 = sf_add_enti(&sf_ctx, sf_get_obj(&sf_ctx, "teapot"), "teapot2");
-  sf_enti_set_pos(teapot, 2.5f, 0.0f, 0.0f);
-  sf_enti_set_pos(teapot2,-2.5f, 0.0f, 0.0f);
-  sf_enti_set_scale(teapot, 1.5f, 1.5f, 1.5f);   // Big teapot
-  sf_enti_set_scale(teapot2, 0.8f, 0.8f, 0.8f);  // Small teapot
-                                                 //
+  sf_enti_t* mk2 = sf_add_enti(&sf_ctx, sf_get_obj(&sf_ctx, "mk2"), "mk2");
+  sf_enti_set_pos(mk2, 0.0, 0.0f, 0.0f);
+  sf_enti_set_pos(teapot,-1.5f, 1.0f, 0.0f);
+  sf_enti_set_scale(mk2, 15.0f, 15.0f, 15.0f);
+  sf_enti_set_scale(teapot, 0.8f, 0.8f, 0.8f);
+
   int running = 1;
   SDL_Event event;
   while (running) {
@@ -57,7 +58,7 @@ int main(int argc, char* argv[])
     if (state[SDL_SCANCODE_RIGHT]) sf_camera_add_yp(main_cam, look_speed, 0.0f);
 
     sf_enti_rotate(teapot, 1.0f * sf_ctx.delta_time, 1.5f * sf_ctx.delta_time, 0.0f);
-    sf_enti_rotate(teapot2, -2.0f * sf_ctx.delta_time, -0.5f * sf_ctx.delta_time, 0.0f);
+    sf_enti_rotate(mk2, -2.0f * sf_ctx.delta_time, -0.5f * sf_ctx.delta_time, 0.0f);
 
     sf_render_ctx(&sf_ctx);
     sf_draw_debug_axes(&sf_ctx);

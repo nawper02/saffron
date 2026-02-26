@@ -57,6 +57,7 @@ typedef enum {
 typedef uint32_t sf_pkd_clr_t;
 typedef struct { uint8_t  r, g, b, a; } sf_unpkd_clr_t;
 typedef struct { int      x, y;       } sf_ivec2_t;
+typedef struct { float    x, y;       } sf_fvec2_t;
 typedef struct { int      x, y, z;    } sf_svec3_t;
 typedef struct { float    x, y, z;    } sf_fvec3_t;
 typedef struct { int      x, y, z;    } sf_ivec3_t;
@@ -78,14 +79,30 @@ typedef struct {
   sf_fmat4_t                    V;
   sf_fmat4_t                    P;
 } sf_camera_t;
+
+typedef struct { 
+  int v;
+  int vt;
+  int vn;
+} sf_vtx_idx_t;
+
+typedef struct {
+  sf_vtx_idx_t                  idx[3];
+} sf_face_t;
+
 typedef struct {
   sf_fvec3_t                   *v;
-  sf_ivec3_t                   *f;
+  sf_fvec2_t                   *vt;
+  sf_fvec3_t                   *vn;
+  sf_face_t                    *f;
   int32_t                       v_cnt;
+  int32_t                       vt_cnt;
+  int32_t                       vn_cnt;
   int32_t                       f_cnt;
   int32_t                       id;
   const char                   *name;
 } sf_obj_t;
+
 typedef struct {
   sf_obj_t                      obj;
   sf_fmat4_t                    M;
@@ -102,6 +119,7 @@ typedef struct {
   size_t                        offset;
   uint8_t                      *buffer;
 } sf_arena_t;
+
 typedef struct {
   int                           w;
   int                           h;
@@ -200,7 +218,7 @@ const char* _sf_log_lvl_to_str  (sf_log_level_t level);
 
 /* SF_UTILITIES */
 sf_pkd_clr_t sf_pack_color (sf_unpkd_clr_t);
-size_t            sf_obj_memusg (sf_obj_t *obj);
+size_t       sf_obj_memusg (sf_obj_t *obj);
 
 /* SF_FONT_DATA */
 static const uint8_t            _sf_font_8x8[];
@@ -346,22 +364,28 @@ sf_obj_t* sf_load_obj(sf_ctx_t *ctx, const char *filename, const char *objname) 
     return NULL;
   }
 
-  FILE *f = fopen(filename, "r");
-  if (!f) {
+  FILE *file = fopen(filename, "r");
+  if (!file) {
     SF_LOG(ctx, SF_LOG_ERROR, SF_LOG_INDENT "could not open %s\n", filename);
     return NULL;
   }
 
-  int32_t v_cnt = 0, f_cnt = 0; char line[256];
-  while (fgets(line, sizeof(line), f)) {
+  int32_t v_cnt = 0, vt_cnt = 0, vn_cnt = 0, f_cnt = 0; char line[256];
+  while (fgets(line, sizeof(line), file)) {
     if      (line[0] == 'v' && line[1] == ' ') v_cnt++;
+    else if (line[0] == 'v' && line[1] == 't' && line[2] == ' ') vt_cnt++;
+    else if (line[0] == 'v' && line[1] == 'n' && line[2] == ' ') vn_cnt++;
     else if (line[0] == 'f' && line[1] == ' ') f_cnt++;
   }
 
   sf_obj_t *obj = &ctx->objs[ctx->obj_count++];
-  obj->f_cnt = f_cnt; obj->v_cnt = v_cnt;
-  obj->v = sf_arena_alloc(ctx, &ctx->arena, v_cnt * sizeof(sf_fvec3_t));
-  obj->f = sf_arena_alloc(ctx, &ctx->arena, f_cnt * sizeof(sf_ivec3_t));
+  obj->v_cnt = v_cnt; obj->vt_cnt = vt_cnt; obj->vn_cnt = vn_cnt; obj->f_cnt = f_cnt;
+  
+  obj->v  = sf_arena_alloc(ctx, &ctx->arena, v_cnt * sizeof(sf_fvec3_t));
+  obj->vt = sf_arena_alloc(ctx, &ctx->arena, vt_cnt * sizeof(sf_fvec2_t));
+  obj->vn = sf_arena_alloc(ctx, &ctx->arena, vn_cnt * sizeof(sf_fvec3_t));
+  obj->f  = sf_arena_alloc(ctx, &ctx->arena, f_cnt * sizeof(sf_face_t));
+  
   size_t name_len = strlen(objname) + 1;
   obj->name = (const char*)sf_arena_alloc(ctx, &ctx->arena, name_len);
   if (obj->name) {
@@ -371,7 +395,7 @@ sf_obj_t* sf_load_obj(sf_ctx_t *ctx, const char *filename, const char *objname) 
 
   if (!obj->v || !obj->f || !obj->name) {
     SF_LOG(ctx, SF_LOG_ERROR, SF_LOG_INDENT "out of arena memory for %s\n", filename);
-    fclose(f);
+    fclose(file);
     return NULL;
   }
 
@@ -380,30 +404,56 @@ sf_obj_t* sf_load_obj(sf_ctx_t *ctx, const char *filename, const char *objname) 
               SF_LOG_INDENT "name   : %s\n"
               SF_LOG_INDENT "id     : %d\n"
               SF_LOG_INDENT "verts  : %d\n"
+              SF_LOG_INDENT "uvs    : %d\n"
+              SF_LOG_INDENT "norms  : %d\n"
               SF_LOG_INDENT "faces  : %d\n"
-              SF_LOG_INDENT "size   : %d\n"
+              SF_LOG_INDENT "size   : %zu\n"
               SF_LOG_INDENT "mem    : %.2f\n"
               SF_LOG_INDENT "obj_id : %d\n",
-              filename, objname, obj->id, v_cnt, f_cnt, 
+              filename, objname, obj->id, v_cnt, vt_cnt, vn_cnt, f_cnt, 
               sf_obj_memusg(obj), 
               ((float)ctx->arena.offset / (float)ctx->arena.size) * 100.0f,
               ctx->obj_count - 1);
 
-  rewind(f);
-  int v_idx = 0, f_idx = 0;
-  while (fgets(line, sizeof(line), f)) {
+  rewind(file);
+  int v_idx = 0, vt_idx = 0, vn_idx = 0, f_idx = 0;
+  while (fgets(line, sizeof(line), file)) {
     if (line[0] == 'v' && line[1] == ' ') {
       sscanf(line, "v %f %f %f", &obj->v[v_idx].x, &obj->v[v_idx].y, &obj->v[v_idx].z);
       v_idx++;
     }
+    else if (line[0] == 'v' && line[1] == 't' && line[2] == ' ') {
+      sscanf(line, "vt %f %f", &obj->vt[vt_idx].x, &obj->vt[vt_idx].y);
+      vt_idx++;
+    }
+    else if (line[0] == 'v' && line[1] == 'n' && line[2] == ' ') {
+      sscanf(line, "vn %f %f %f", &obj->vn[vn_idx].x, &obj->vn[vn_idx].y, &obj->vn[vn_idx].z);
+      vn_idx++;
+    }
     else if (line[0] == 'f' && line[1] == ' ') {
-      sscanf(line, "f %d %d %d", &obj->f[f_idx].x, &obj->f[f_idx].y, &obj->f[f_idx].z);
-      obj->f[f_idx].x -= 1; obj->f[f_idx].y -= 1; obj->f[f_idx].z -= 1;
-      f_idx++;
+      int v[3] = {0}, vt[3] = {0}, vn[3] = {0};
+      char t1[32], t2[32], t3[32];
+      if (sscanf(line, "f %31s %31s %31s", t1, t2, t3) == 3) {
+        sscanf(t1, "%d/%d/%d", &v[0], &vt[0], &vn[0]);
+        if (strstr(t1, "//")) sscanf(t1, "%d//%d", &v[0], &vn[0]);
+
+        sscanf(t2, "%d/%d/%d", &v[1], &vt[1], &vn[1]);
+        if (strstr(t2, "//")) sscanf(t2, "%d//%d", &v[1], &vn[1]);
+
+        sscanf(t3, "%d/%d/%d", &v[2], &vt[2], &vn[2]);
+        if (strstr(t3, "//")) sscanf(t3, "%d//%d", &v[2], &vn[2]);
+
+        for (int i = 0; i < 3; i++) {
+          obj->f[f_idx].idx[i].v  = v[i] > 0 ? v[i] - 1 : -1;
+          obj->f[f_idx].idx[i].vt = vt[i] > 0 ? vt[i] - 1 : -1;
+          obj->f[f_idx].idx[i].vn = vn[i] > 0 ? vn[i] - 1 : -1;
+        }
+        f_idx++;
+      }
     }
   }
 
-  fclose(f);
+  fclose(file);
   return obj;
 }
 
@@ -568,8 +618,12 @@ void sf_render_enti(sf_ctx_t *ctx, sf_enti_t *enti) {
     tv[i] = sf_fmat4_mul_vec3(MV, enti->obj.v[i]);
   }
   for (int i = 0; i < enti->obj.f_cnt; i++) {
-    sf_ivec3_t f = enti->obj.f[i];
-    sf_fvec3_t v[3] = { tv[f.x], tv[f.y], tv[f.z] };
+    sf_face_t face = enti->obj.f[i];
+    sf_fvec3_t v[3] = {
+        tv[face.idx[0].v],
+        tv[face.idx[1].v],
+        tv[face.idx[2].v]
+    };
     sf_fvec3_t a = sf_fvec3_sub(v[1], v[0]);
     sf_fvec3_t b = sf_fvec3_sub(v[2], v[0]);
     sf_fvec3_t n = sf_fvec3_cross(a, b);
@@ -1044,9 +1098,11 @@ sf_pkd_clr_t sf_pack_color(sf_unpkd_clr_t c) {
 
 size_t sf_obj_memusg(sf_obj_t *obj) {
   if (!obj) return 0;
-  size_t v_size = obj->v_cnt * sizeof(sf_fvec3_t);
-  size_t f_size = obj->f_cnt * sizeof(sf_ivec3_t);
-  return v_size + f_size;
+  size_t v_size  = obj->v_cnt * sizeof(sf_fvec3_t);
+  size_t vt_size = obj->vt_cnt * sizeof(sf_fvec2_t);
+  size_t vn_size = obj->vn_cnt * sizeof(sf_fvec3_t);
+  size_t f_size  = obj->f_cnt * sizeof(sf_face_t);
+  return v_size + vt_size + vn_size + f_size;
 }
 
 /* SF_FONT_DATA */
