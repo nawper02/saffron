@@ -571,8 +571,23 @@ void sf_render_enti(sf_ctx_t *ctx, sf_enti_t *enti) {
     sf_fvec3_t v[3] = { tv[f.x], tv[f.y], tv[f.z] };
     sf_fvec3_t a = sf_fvec3_sub(v[1], v[0]);
     sf_fvec3_t b = sf_fvec3_sub(v[2], v[0]);
-    sf_fvec3_t n = sf_fvec3_cross(a, b);
-    if (sf_fvec3_dot(n, v[0]) >= 0) continue;
+    sf_fvec3_t n = sf_fvec3_cross(b, a);
+    float      d = sf_fvec3_dot(n, v[0]);
+    if (d >= 0) continue;
+
+    // fake lighting
+    float n_len = sqrtf(n.x*n.x + n.y*n.y + n.z*n.z);
+    sf_fvec3_t n_norm = { n.x / n_len, n.y / n_len, n.z / n_len };
+    float v_len = sqrtf(v[0].x*v[0].x + v[0].y*v[0].y + v[0].z*v[0].z);
+    sf_fvec3_t view_dir = { -v[0].x / v_len, -v[0].y / v_len, -v[0].z / v_len };
+    float dot_val = sf_fvec3_dot(n_norm, view_dir);
+    if (dot_val < 0.0f) dot_val = 0.0f;
+    float ambient = 0.2f;
+    float intensity = ambient + (1.0f - ambient) * dot_val;
+    uint8_t base_r = 255;
+    uint8_t r = (uint8_t)(base_r * intensity);
+    sf_pkd_clr_t shaded_color = (0xFF000000) | (r << 16);
+
     sf_fvec3_t in[3], out[3];
     int inc = 0, outc = 0;
     for (int j = 0; j < 3; j++) {
@@ -580,16 +595,16 @@ void sf_render_enti(sf_ctx_t *ctx, sf_enti_t *enti) {
       else out[outc++] = v[j];
     }
     if (inc == 3) {
-      sf_tri(ctx, SF_CLR_RED, _sf_project_vertex(ctx, v[0], P), _sf_project_vertex(ctx, v[1], P), _sf_project_vertex(ctx, v[2], P), true);
+      sf_tri(ctx, shaded_color, _sf_project_vertex(ctx, v[0], P), _sf_project_vertex(ctx, v[1], P), _sf_project_vertex(ctx, v[2], P), true);
     } else if (inc == 1) {
       sf_fvec3_t v1 = _sf_intersect_near(in[0], out[0], near);
       sf_fvec3_t v2 = _sf_intersect_near(in[0], out[1], near);
-      sf_tri(ctx, SF_CLR_RED, _sf_project_vertex(ctx, in[0], P), _sf_project_vertex(ctx, v1, P), _sf_project_vertex(ctx, v2, P), true);
+      sf_tri(ctx, shaded_color, _sf_project_vertex(ctx, in[0], P), _sf_project_vertex(ctx, v1, P), _sf_project_vertex(ctx, v2, P), true);
     } else if (inc == 2) {
       sf_fvec3_t v1 = _sf_intersect_near(in[0], out[0], near);
       sf_fvec3_t v2 = _sf_intersect_near(in[1], out[0], near);
-      sf_tri(ctx, SF_CLR_RED, _sf_project_vertex(ctx, in[0], P), _sf_project_vertex(ctx, in[1], P), _sf_project_vertex(ctx, v1, P), true);
-      sf_tri(ctx, SF_CLR_RED, _sf_project_vertex(ctx, in[1], P), _sf_project_vertex(ctx, v1, P), _sf_project_vertex(ctx, v2, P), true);
+      sf_tri(ctx, shaded_color, _sf_project_vertex(ctx, in[0], P), _sf_project_vertex(ctx, in[1], P), _sf_project_vertex(ctx, v1, P), true);
+      sf_tri(ctx, shaded_color, _sf_project_vertex(ctx, in[1], P), _sf_project_vertex(ctx, v1, P), _sf_project_vertex(ctx, v2, P), true);
     }
   }
   sf_arena_restore(&ctx->arena, mark);
