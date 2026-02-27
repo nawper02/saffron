@@ -74,12 +74,12 @@ int main(int argc, char* argv[]) {
   sf_camera_set_pos(main_cam, 0.0f, 0.0f, 8.0f);
   sf_camera_look_at(main_cam, (sf_fvec3_t){0.0f, 0.0f, 0.0f});
 
-  sf_load_obj(&sf_ctx, "../assets/mk2.obj", "mk2");
-  sf_load_obj(&sf_ctx, "../assets/teapot.obj", "teapot");
-  sf_enti_t* teapot = sf_add_enti(&sf_ctx, sf_get_obj(&sf_ctx, "teapot"), "teapot");
-  sf_enti_t* mk2 = sf_add_enti(&sf_ctx, sf_get_obj(&sf_ctx, "mk2"), "mk2");
+  sf_obj_t* mk2o = sf_load_obj(&sf_ctx, "../assets/mk2.obj", "mk2");
+  sf_obj_t* teapoto = sf_load_obj(&sf_ctx, "../assets/teapot.obj", "teapot");
+  sf_enti_t* teapot = sf_add_enti(&sf_ctx, teapoto, "teapot");
+  sf_enti_t* mk2 = sf_add_enti(&sf_ctx, mk2o, "mk2");
   sf_enti_set_pos(mk2, 0.0, 0.0f, 0.0f);
-  sf_enti_set_pos(teapot,-1.5f, 1.0f, 0.0f);
+  sf_enti_set_pos(teapot, -3.0f, 1.0f, 0.0f);
   sf_enti_set_scale(mk2, 15.0f, 15.0f, 15.0f);
   sf_enti_set_scale(teapot, 0.8f, 0.8f, 0.8f);
 

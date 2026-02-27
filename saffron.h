@@ -911,10 +911,11 @@ void sf_render_ctx(sf_ctx_t *ctx) {
   for (int i = 0; i < ctx->enti_count; i++) {
     sf_enti_t *enti = &ctx->entities[i];
     if (enti->is_dirty) {
-      sf_fmat4_t t_mat = sf_make_tsl_fmat4(enti->pos.x, enti->pos.y, enti->pos.z);
-      sf_fmat4_t r_mat = sf_make_rot_fmat4(enti->rot);
-      sf_fmat4_t s_mat = sf_make_scale_fmat4(enti->scale);
-      enti->M = sf_fmat4_mul_fmat4(t_mat, sf_fmat4_mul_fmat4(r_mat, s_mat));
+      sf_fmat4_t t_mat  = sf_make_tsl_fmat4(enti->pos.x, enti->pos.y, enti->pos.z);
+      sf_fmat4_t r_mat  = sf_make_rot_fmat4(enti->rot);
+      sf_fmat4_t s_mat  = sf_make_scale_fmat4(enti->scale);
+      sf_fmat4_t rs_mat = sf_fmat4_mul_fmat4(r_mat, s_mat);
+      enti->M           = sf_fmat4_mul_fmat4(rs_mat, t_mat);
       enti->is_dirty = false;
     }
     sf_render_enti(ctx, enti);
