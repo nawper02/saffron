@@ -11,7 +11,7 @@ foreach(EXAMPLE_SRC ${EXAMPLE_SOURCES})
     add_executable(${TARGET_NAME} ${EXAMPLE_SRC})
     target_link_libraries(${TARGET_NAME} ${SDL2_LIBRARIES} m)
     target_compile_definitions(${TARGET_NAME} PRIVATE 
-        SAFFRON_ASSET_DIR="${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_DATADIR}/Saffron/assets/"
+        SAFFRON_ASSET_DIR="${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_DATADIR}/saffron/assets/"
     )
     install(TARGETS ${TARGET_NAME} 
             DESTINATION ${CMAKE_INSTALL_BINDIR})
