@@ -28,6 +28,7 @@ extern "C" {
 #define SF_ARENA_SIZE          10485760
 #define SF_MAX_OBJS            10
 #define SF_MAX_ENTITIES        100
+#define SF_MAX_LIGHTS          10
 #define SF_LOG_INDENT          "            "
 #define SF_PI                  3.14159265359f
 #define SF_NANOS_PER_SEC       1000000000ULL
@@ -114,6 +115,18 @@ typedef struct {
   const char                   *name;
 } sf_enti_t;
 
+typedef enum {
+  SF_LIGHT_DIR,
+  SF_LIGHT_POINT
+} sf_light_type_t;
+
+typedef struct {
+  sf_light_type_t               type;
+  sf_fvec3_t                    pos_dir;
+  sf_fvec3_t                    color;
+  float                         intensity;
+} sf_light_t;
+
 typedef struct {
   size_t                        size;
   size_t                        offset;
@@ -134,6 +147,9 @@ typedef struct {
   int32_t                       obj_count;
   sf_enti_t                    *entities;
   int32_t                       enti_count;
+
+  sf_light_t                   *lights;
+  int32_t                       light_count;
 
   sf_camera_t                   camera;
 
@@ -169,6 +185,8 @@ void        sf_enti_move        (sf_enti_t *enti, float dx, float dy, float dz);
 void        sf_enti_set_rot     (sf_enti_t *enti, float rx, float ry, float rz);
 void        sf_enti_rotate      (sf_enti_t *enti, float drx, float dry, float drz);
 void        sf_enti_set_scale   (sf_enti_t *enti, float sx, float sy, float sz);
+sf_light_t* sf_add_light_dir    (sf_ctx_t *ctx, sf_fvec3_t dir, sf_fvec3_t color, float intensity);
+sf_light_t* sf_add_light_point  (sf_ctx_t *ctx, sf_fvec3_t pos, sf_fvec3_t color, float intensity);
 void        sf_camera_set_psp   (sf_camera_t *cam, float fov, float near_plane, float far_plane);
 void        sf_camera_set_pos   (sf_camera_t *cam, float x, float y, float z);
 void        sf_camera_move_loc  (sf_camera_t *cam, float fwd, float right, float up);
@@ -244,8 +262,10 @@ void sf_init(sf_ctx_t *ctx, int w, int h) {
   ctx->log_min                  = SF_LOG_INFO;
   ctx->objs                     = sf_arena_alloc(ctx, &ctx->arena, SF_MAX_OBJS     * sizeof(sf_obj_t));
   ctx->entities                 = sf_arena_alloc(ctx, &ctx->arena, SF_MAX_ENTITIES * sizeof(sf_enti_t));
+  ctx->lights                   = sf_arena_alloc(ctx, &ctx->arena, SF_MAX_LIGHTS   * sizeof(sf_light_t));
   ctx->obj_count                = 0;
   ctx->enti_count               = 0;
+  ctx->light_count              = 0;
   ctx->camera.pos               = (sf_fvec3_t){0.0f, 0.0f, 0.0f};
   ctx->camera.world_up          = (sf_fvec3_t){0.0f, 1.0f, 0.0f};
   ctx->camera.yaw               = -90.0f;
@@ -557,6 +577,26 @@ void sf_enti_set_scale(sf_enti_t *enti, float sx, float sy, float sz) {
   enti->is_dirty = true;
 }
 
+sf_light_t* sf_add_light_dir(sf_ctx_t *ctx, sf_fvec3_t dir, sf_fvec3_t color, float intensity) {
+  if (ctx->light_count >= SF_MAX_LIGHTS) return NULL;
+  sf_light_t *l = &ctx->lights[ctx->light_count++];
+  l->type      = SF_LIGHT_DIR;
+  l->pos_dir   = sf_fvec3_norm(dir);
+  l->color     = color;
+  l->intensity = intensity;
+  return l;
+}
+
+sf_light_t* sf_add_light_point(sf_ctx_t *ctx, sf_fvec3_t pos, sf_fvec3_t color, float intensity) {
+  if (ctx->light_count >= SF_MAX_LIGHTS) return NULL;
+  sf_light_t *l = &ctx->lights[ctx->light_count++];
+  l->type      = SF_LIGHT_POINT;
+  l->pos_dir   = pos;
+  l->color     = color;
+  l->intensity = intensity;
+  return l;
+}
+
 void _sf_update_cam_vecs(sf_camera_t *cam) {
   sf_fvec3_t front;
   front.x = cosf(SF_DEG2RAD(cam->yaw)) * cosf(SF_DEG2RAD(cam->pitch));
@@ -609,48 +649,88 @@ void sf_camera_add_yp(sf_camera_t *cam, float yaw_offset, float pitch_offset) {
 
 void sf_render_enti(sf_ctx_t *ctx, sf_enti_t *enti) {
   size_t mark = sf_arena_save(&ctx->arena);
-  sf_fmat4_t MV = sf_fmat4_mul_fmat4(enti->M, ctx->camera.V);
+
+  sf_fmat4_t M = enti->M;
+  sf_fmat4_t V = ctx->camera.V;
   sf_fmat4_t P = ctx->camera.P;
   float near = 0.1f;
-  sf_fvec3_t* tv = sf_arena_alloc(ctx, &ctx->arena, enti->obj.v_cnt * sizeof(sf_fvec3_t));
-  if (!tv) return;
+
+  sf_fvec3_t* wv = sf_arena_alloc(ctx, &ctx->arena, enti->obj.v_cnt * sizeof(sf_fvec3_t));
+  sf_fvec3_t* vv = sf_arena_alloc(ctx, &ctx->arena, enti->obj.v_cnt * sizeof(sf_fvec3_t));
+  if (!wv || !vv) return;
+
   for (int i = 0; i < enti->obj.v_cnt; i++) {
-    tv[i] = sf_fmat4_mul_vec3(MV, enti->obj.v[i]);
+    wv[i] = sf_fmat4_mul_vec3(M, enti->obj.v[i]);
+    vv[i] = sf_fmat4_mul_vec3(V, wv[i]);
   }
+
   for (int i = 0; i < enti->obj.f_cnt; i++) {
     sf_face_t face = enti->obj.f[i];
-    sf_fvec3_t v[3] = {
-        tv[face.idx[0].v],
-        tv[face.idx[1].v],
-        tv[face.idx[2].v]
-    };
-    sf_fvec3_t a = sf_fvec3_sub(v[1], v[0]);
-    sf_fvec3_t b = sf_fvec3_sub(v[2], v[0]);
-    sf_fvec3_t n = sf_fvec3_cross(a, b);
-    float      d = sf_fvec3_dot(n, v[0]);
+ 
+    sf_fvec3_t v_world[3] = { wv[face.idx[0].v], wv[face.idx[1].v], wv[face.idx[2].v] };
+    sf_fvec3_t v_view[3]  = { vv[face.idx[0].v], vv[face.idx[1].v], vv[face.idx[2].v] };
+
+    sf_fvec3_t a_v = sf_fvec3_sub(v_view[1], v_view[0]);
+    sf_fvec3_t b_v = sf_fvec3_sub(v_view[2], v_view[0]);
+    sf_fvec3_t n_v = sf_fvec3_cross(a_v, b_v);
+    float d = sf_fvec3_dot(n_v, v_view[0]);
     if (d >= 0) continue;
 
-    // fake lighting
-    float n_len = sqrtf(n.x*n.x + n.y*n.y + n.z*n.z);
-    sf_fvec3_t n_norm = { n.x / n_len, n.y / n_len, n.z / n_len };
-    float v_len = sqrtf(v[0].x*v[0].x + v[0].y*v[0].y + v[0].z*v[0].z);
-    sf_fvec3_t view_dir = { -v[0].x / v_len, -v[0].y / v_len, -v[0].z / v_len };
-    float dot_val = sf_fvec3_dot(n_norm, view_dir);
-    if (dot_val < 0.0f) dot_val = 0.0f;
-    float ambient = 0.2f;
-    float intensity = ambient + (1.0f - ambient) * dot_val;
-    uint8_t base_r = 255;
-    uint8_t r = (uint8_t)(base_r * intensity);
-    sf_pkd_clr_t shaded_color = (0xFF000000) | (r << 16);
+    sf_fvec3_t a_w = sf_fvec3_sub(v_world[1], v_world[0]);
+    sf_fvec3_t b_w = sf_fvec3_sub(v_world[2], v_world[0]);
+    sf_fvec3_t n_w = sf_fvec3_norm(sf_fvec3_cross(a_w, b_w));
+
+    sf_fvec3_t centroid = {
+      (v_world[0].x + v_world[1].x + v_world[2].x) / 3.0f,
+      (v_world[0].y + v_world[1].y + v_world[2].y) / 3.0f,
+      (v_world[0].z + v_world[1].z + v_world[2].z) / 3.0f
+    };
+
+    sf_fvec3_t base_color  = {1.0f, 1.0f, 1.0f};
+    sf_fvec3_t final_color = {0.1f, 0.1f, 0.1f};
+
+    for (int l = 0; l < ctx->light_count; l++) {
+      sf_light_t *light = &ctx->lights[l];
+      sf_fvec3_t light_dir;
+      float atten = 1.0f;
+
+      if (light->type == SF_LIGHT_DIR) {
+        light_dir = sf_fvec3_norm((sf_fvec3_t){-light->pos_dir.x, -light->pos_dir.y, -light->pos_dir.z});
+      } else {
+        sf_fvec3_t diff = sf_fvec3_sub(light->pos_dir, centroid);
+        float dist = sqrtf(diff.x*diff.x + diff.y*diff.y + diff.z*diff.z);
+        light_dir = sf_fvec3_norm(diff);
+        atten = 1.0f / (1.0f + 0.09f * dist + 0.032f * (dist * dist));
+      }
+
+      float diff_factor = sf_fvec3_dot(n_w, light_dir);
+      if (diff_factor > 0.0f) {
+        final_color.x += light->color.x * light->intensity * diff_factor * atten * base_color.x;
+        final_color.y += light->color.y * light->intensity * diff_factor * atten * base_color.y;
+        final_color.z += light->color.z * light->intensity * diff_factor * atten * base_color.z;
+      }
+    }
+
+    final_color.x = final_color.x > 1.0f ? 1.0f : final_color.x;
+    final_color.y = final_color.y > 1.0f ? 1.0f : final_color.y;
+    final_color.z = final_color.z > 1.0f ? 1.0f : final_color.z;
+
+    sf_pkd_clr_t shaded_color = sf_pack_color((sf_unpkd_clr_t){
+      (uint8_t)(final_color.x * 255),
+      (uint8_t)(final_color.y * 255),
+      (uint8_t)(final_color.z * 255),
+      255
+    });
 
     sf_fvec3_t in[3], out[3];
     int inc = 0, outc = 0;
     for (int j = 0; j < 3; j++) {
-      if (v[j].z <= -near) in[inc++] = v[j];
-      else out[outc++] = v[j];
+      if (v_view[j].z <= -near) in[inc++] = v_view[j];
+      else out[outc++] = v_view[j];
     }
+ 
     if (inc == 3) {
-      sf_tri(ctx, shaded_color, _sf_project_vertex(ctx, v[0], P), _sf_project_vertex(ctx, v[1], P), _sf_project_vertex(ctx, v[2], P), true);
+      sf_tri(ctx, shaded_color, _sf_project_vertex(ctx, v_view[0], P), _sf_project_vertex(ctx, v_view[1], P), _sf_project_vertex(ctx, v_view[2], P), true);
     } else if (inc == 1) {
       sf_fvec3_t v1 = _sf_intersect_near(in[0], out[0], -near);
       sf_fvec3_t v2 = _sf_intersect_near(in[0], out[1], -near);

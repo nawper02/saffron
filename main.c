@@ -34,6 +34,8 @@ int main(int argc, char* argv[])
   sf_enti_set_scale(mk2, 15.0f, 15.0f, 15.0f);
   sf_enti_set_scale(teapot, 0.8f, 0.8f, 0.8f);
 
+  sf_add_light_point(&sf_ctx, (sf_fvec3_t){2.0f, 5.0f, 2.0f}, (sf_fvec3_t){1.0f, 0.8f, 0.8f}, 2.0f);
+
   int running = 1;
   SDL_Event event;
   while (running) {
