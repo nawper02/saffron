@@ -131,6 +131,16 @@ typedef struct {
 } sf_light_t;
 
 typedef struct {
+  const char*                   name;
+  int32_t                       obj_start_idx;
+  int32_t                       obj_count;
+  int32_t                       enti_start_idx;
+  int32_t                       enti_count;
+  int32_t                       light_start_idx;
+  int32_t                       light_count;
+} sf_world_t;
+
+typedef struct {
   size_t                        size;
   size_t                        offset;
   uint8_t                      *buffer;
@@ -141,8 +151,12 @@ typedef enum {
   SF_KEY_A, SF_KEY_B, SF_KEY_C, SF_KEY_D, SF_KEY_E, SF_KEY_F, SF_KEY_G, SF_KEY_H,
   SF_KEY_I, SF_KEY_J, SF_KEY_K, SF_KEY_L, SF_KEY_M, SF_KEY_N, SF_KEY_O, SF_KEY_P,
   SF_KEY_Q, SF_KEY_R, SF_KEY_S, SF_KEY_T, SF_KEY_U, SF_KEY_V, SF_KEY_W, SF_KEY_X,
-  SF_KEY_Y, SF_KEY_Z, SF_KEY_SPACE, SF_KEY_LSHIFT, SF_KEY_UP, SF_KEY_DOWN,
-  SF_KEY_LEFT, SF_KEY_RIGHT, SF_KEY_MAX
+  SF_KEY_Y, SF_KEY_Z,
+  SF_KEY_0, SF_KEY_1, SF_KEY_2, SF_KEY_3, SF_KEY_4,
+  SF_KEY_5, SF_KEY_6, SF_KEY_7, SF_KEY_8, SF_KEY_9,
+  SF_KEY_SPACE, SF_KEY_LSHIFT, SF_KEY_UP, SF_KEY_DOWN,
+  SF_KEY_LEFT, SF_KEY_RIGHT,
+  SF_KEY_MAX
 } sf_key_t;
 
 typedef enum {
@@ -245,6 +259,8 @@ void        sf_enti_rotate      (sf_enti_t *enti, float drx, float dry, float dr
 void        sf_enti_set_scale   (sf_enti_t *enti, float sx, float sy, float sz);
 sf_light_t* sf_add_light_dir    (sf_ctx_t *ctx, sf_fvec3_t dir, sf_fvec3_t color, float intensity);
 sf_light_t* sf_add_light_point  (sf_ctx_t *ctx, sf_fvec3_t pos, sf_fvec3_t color, float intensity);
+sf_world_t* sf_load_world       (sf_ctx_t *ctx, const char *filename, const char *world_name);
+void        sf_clear_world      (sf_ctx_t *ctx, sf_world_t *world);
 void        sf_camera_set_psp   (sf_camera_t *cam, float fov, float near_plane, float far_plane);
 void        sf_camera_set_pos   (sf_camera_t *cam, float x, float y, float z);
 void        sf_camera_move_loc  (sf_camera_t *cam, float fwd, float right, float up);
@@ -662,6 +678,97 @@ sf_light_t* sf_add_light_point(sf_ctx_t *ctx, sf_fvec3_t pos, sf_fvec3_t color, 
   l->color     = color;
   l->intensity = intensity;
   return l;
+}
+
+sf_world_t* sf_load_world(sf_ctx_t *ctx, const char *filename, const char *world_name) {
+  FILE *file = fopen(filename, "r");
+  if (!file) {
+    SF_LOG(ctx, SF_LOG_ERROR, SF_LOG_INDENT "could not open %s\n", filename);
+    return NULL;
+  }
+
+  sf_world_t *world = (sf_world_t*)sf_arena_alloc(ctx, &ctx->arena, sizeof(sf_world_t));
+  world->name            = world_name;
+  world->obj_start_idx   = ctx->obj_count;
+  world->enti_start_idx  = ctx->enti_count;
+  world->light_start_idx = ctx->light_count;
+
+  char line[512];
+  while (fgets(line, sizeof(line), file)) {
+    if (line[0] == '#' || line[0] == '\n' || line[0] == '\r') continue;
+
+    char cmd;
+    sscanf(line, " %c", &cmd);
+
+    if (cmd == 'm') {
+      char m_name[64], m_path[256];
+      if (sscanf(line, "m %63s %255s", m_name, m_path) == 2) {
+        sf_load_obj(ctx, m_path, m_name);
+      }
+    } 
+    else if (cmd == 'e') {
+      char m_name[64], e_name[64];
+      float px, py, pz, rx, ry, rz, sx, sy, sz;
+      if (sscanf(line, "e %63s %63s %f %f %f %f %f %f %f %f %f", 
+        m_name, e_name, &px, &py, &pz, &rx, &ry, &rz, &sx, &sy, &sz) == 11) {
+
+        sf_obj_t *obj = _sf_get_obj(ctx, m_name, true);
+        if (obj) {
+          sf_enti_t *enti = sf_add_enti(ctx, obj, e_name);
+          sf_enti_set_pos(enti, px, py, pz);
+          sf_enti_set_rot(enti, rx, ry, rz);
+          sf_enti_set_scale(enti, sx, sy, sz);
+        }
+      }
+    }
+    else if (cmd == 'l') {
+      char l_type[16];
+      float x, y, z, r, g, b, i;
+      sscanf(line, "l %15s %f %f %f %f %f %f %f", l_type, &x, &y, &z, &r, &g, &b, &i);
+ 
+      if (strcmp(l_type, "dir") == 0) {
+        sf_add_light_dir(ctx, (sf_fvec3_t){x, y, z}, (sf_fvec3_t){r, g, b}, i);
+      } else if (strcmp(l_type, "point") == 0) {
+        sf_add_light_point(ctx, (sf_fvec3_t){x, y, z}, (sf_fvec3_t){r, g, b}, i);
+      }
+    }
+    else if (cmd == 'c') {
+      float px, py, pz, tx, ty, tz;
+      if (sscanf(line, "c %f %f %f %f %f %f", &px, &py, &pz, &tx, &ty, &tz) == 6) {
+        sf_camera_set_pos(&ctx->camera, px, py, pz);
+        sf_camera_look_at(&ctx->camera, (sf_fvec3_t){tx, ty, tz});
+      }
+    }
+  }
+
+  world->obj_count   = ctx->obj_count   - world->obj_start_idx;
+  world->enti_count  = ctx->enti_count  - world->enti_start_idx;
+  world->light_count = ctx->light_count - world->light_start_idx;
+
+  fclose(file);
+  SF_LOG(ctx, SF_LOG_INFO, SF_LOG_INDENT "loaded '%s' (%d entities)\n", world_name, world->enti_count);
+  return world;
+}
+
+void sf_clear_world(sf_ctx_t *ctx, sf_world_t *world) {
+    if (!world) return;
+
+    SF_LOG(ctx, SF_LOG_INFO, SF_LOG_INDENT "clearing '%s' (%d entities)\n", world->name, world->enti_count);
+
+    // 1. Reset counts to the state before this world was loaded
+    // This effectively "deletes" the entities/objs/lights from the context's linear arrays
+    ctx->obj_count   = world->obj_start_idx;
+    ctx->enti_count  = world->enti_count > 0 ? world->enti_start_idx : ctx->enti_count;
+    ctx->light_count = world->light_count > 0 ? world->light_start_idx : ctx->light_count;
+
+    // 2. Roll back the arena memory
+    // We calculate the mark based on the first allocation made during sf_load_world
+    // Note: This assumes the world structure itself was the first thing allocated in that session.
+    size_t world_mem_mark = (size_t)((uint8_t*)world - ctx->arena.buffer);
+    sf_arena_restore(&ctx->arena, world_mem_mark);
+    
+    // Optional: Clear the camera or input if you want a totally fresh slate
+    // ctx->camera.pos = (sf_fvec3_t){0,0,0}; 
 }
 
 void _sf_update_cam_vecs(sf_camera_t *cam) {

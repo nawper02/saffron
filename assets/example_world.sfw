@@ -1,0 +1,16 @@
+# Camera Setup (Position: 0,0,8 | Target: 0,0,0)
+c 0.0 0.0 8.0  0.0 0.0 0.0
+
+# Mesh Definitions
+m mk2      ../assets/mk2.obj
+m teapot   ../assets/teapot.obj
+
+# Entity Instances (mesh_name, entity_name, pos_xyz, rot_xyz, scale_xyz)
+# mk2: pos(0,0,0), scale(15,15,15)
+e mk2    mk2     0.0 0.0 0.0   0.0 0.0 0.0   15.0 15.0 15.0
+
+# teapot: pos(-3,1,0), scale(0.8,0.8,0.8)
+e teapot teapot -3.0 1.0 0.0   0.0 0.0 0.0   0.8 0.8 0.8
+
+# Lighting (type, pos_xyz, color_rgb, intensity)
+l point  2.0 5.0 2.0   1.0 0.8 0.8   2.0

@@ -47,12 +47,25 @@ static sf_key_t _sf_sdl_map_key(SDL_Scancode code) {
     case SDL_SCANCODE_X: return SF_KEY_X;
     case SDL_SCANCODE_Y: return SF_KEY_Y;
     case SDL_SCANCODE_Z: return SF_KEY_Z;
-    case SDL_SCANCODE_SPACE: return SF_KEY_SPACE;
+
+    case SDL_SCANCODE_0: return SF_KEY_0;
+    case SDL_SCANCODE_1: return SF_KEY_1;
+    case SDL_SCANCODE_2: return SF_KEY_2;
+    case SDL_SCANCODE_3: return SF_KEY_3;
+    case SDL_SCANCODE_4: return SF_KEY_4;
+    case SDL_SCANCODE_5: return SF_KEY_5;
+    case SDL_SCANCODE_6: return SF_KEY_6;
+    case SDL_SCANCODE_7: return SF_KEY_7;
+    case SDL_SCANCODE_8: return SF_KEY_8;
+    case SDL_SCANCODE_9: return SF_KEY_9;
+
+    case SDL_SCANCODE_SPACE:  return SF_KEY_SPACE;
     case SDL_SCANCODE_LSHIFT: return SF_KEY_LSHIFT;
-    case SDL_SCANCODE_UP: return SF_KEY_UP;
-    case SDL_SCANCODE_DOWN: return SF_KEY_DOWN;
-    case SDL_SCANCODE_LEFT: return SF_KEY_LEFT;
-    case SDL_SCANCODE_RIGHT: return SF_KEY_RIGHT;
+    case SDL_SCANCODE_UP:     return SF_KEY_UP;
+    case SDL_SCANCODE_DOWN:   return SF_KEY_DOWN;
+    case SDL_SCANCODE_LEFT:   return SF_KEY_LEFT;
+    case SDL_SCANCODE_RIGHT:  return SF_KEY_RIGHT;
+
     default: return SF_KEY_UNKNOWN;
   }
 }
