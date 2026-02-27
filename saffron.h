@@ -29,6 +29,7 @@ extern "C" {
 #define SF_MAX_OBJS            10
 #define SF_MAX_ENTITIES        100
 #define SF_MAX_LIGHTS          10
+#define SF_MAX_CB_PER_EVT      4
 #define SF_LOG_INDENT          "            "
 #define SF_PI                  3.14159265359f
 #define SF_NANOS_PER_SEC       1000000000ULL
@@ -47,6 +48,8 @@ extern "C" {
 #define SF_CLR_WHITE            ((sf_pkd_clr_t)0xFFFFFFFF)
 
 /* SF_TYPES */
+typedef struct sf_ctx_t_ sf_ctx_t;
+
 typedef void (*sf_log_fn)(const char* message, void* userdata);
 typedef enum {
   SF_LOG_DEBUG,
@@ -133,7 +136,59 @@ typedef struct {
   uint8_t                      *buffer;
 } sf_arena_t;
 
+typedef enum {
+  SF_KEY_UNKNOWN = 0,
+  SF_KEY_A, SF_KEY_B, SF_KEY_C, SF_KEY_D, SF_KEY_E, SF_KEY_F, SF_KEY_G, SF_KEY_H,
+  SF_KEY_I, SF_KEY_J, SF_KEY_K, SF_KEY_L, SF_KEY_M, SF_KEY_N, SF_KEY_O, SF_KEY_P,
+  SF_KEY_Q, SF_KEY_R, SF_KEY_S, SF_KEY_T, SF_KEY_U, SF_KEY_V, SF_KEY_W, SF_KEY_X,
+  SF_KEY_Y, SF_KEY_Z, SF_KEY_SPACE, SF_KEY_LSHIFT, SF_KEY_UP, SF_KEY_DOWN,
+  SF_KEY_LEFT, SF_KEY_RIGHT, SF_KEY_MAX
+} sf_key_t;
+
+typedef enum {
+  SF_MOUSE_LEFT = 0,
+  SF_MOUSE_RIGHT,
+  SF_MOUSE_MIDDLE,
+  SF_MOUSE_MAX
+} sf_mouse_btn_t;
+
+typedef enum {
+  SF_EVT_RENDER_START = 0,
+  SF_EVT_RENDER_END,
+  SF_EVT_KEY_DOWN,
+  SF_EVT_KEY_UP,
+  SF_EVT_MOUSE_MOVE,
+  SF_EVT_MOUSE_DOWN,
+  SF_EVT_MOUSE_UP,
+  SF_EVT_MAX
+} sf_event_type_t;
+
 typedef struct {
+  sf_event_type_t type;
+  union {
+    struct { sf_key_t key; } key;
+    struct { int x, y, dx, dy; } mouse_move;
+    struct { sf_mouse_btn_t btn; int x, y; } mouse_btn;
+  } data;
+} sf_event_t;
+
+typedef void (*sf_event_cb)(struct sf_ctx_t_ *ctx, const sf_event_t *event, void *userdata);
+
+typedef struct {
+  sf_event_cb                   cb;
+  void                         *userdata;
+} sf_callback_entry_t;
+
+typedef struct {
+    bool                        keys[SF_KEY_MAX];
+    bool                        keys_prev[SF_KEY_MAX];
+    int                         mouse_x, mouse_y;
+    int                         mouse_dx, mouse_dy;
+    bool                        mouse_btns[SF_MOUSE_MAX];
+    bool                        mouse_btns_prev[SF_MOUSE_MAX];
+} sf_input_state_t;
+
+struct sf_ctx_t_ {
   int                           w;
   int                           h;
   int                           buffer_size;
@@ -151,6 +206,9 @@ typedef struct {
   sf_light_t                   *lights;
   int32_t                       light_count;
 
+  sf_input_state_t              input;
+  sf_callback_entry_t           callbacks[SF_EVT_MAX][SF_MAX_CB_PER_EVT];
+
   sf_camera_t                   camera;
 
   float                         delta_time;
@@ -163,7 +221,7 @@ typedef struct {
   sf_log_fn                     log_cb;
   void*                         log_user;
   sf_log_level_t                log_min;
-} sf_ctx_t;
+};
 
 /* SF_CORE_FUNCTIONS */
 void        sf_init             (sf_ctx_t *ctx, int w, int h);
@@ -192,6 +250,14 @@ void        sf_camera_set_pos   (sf_camera_t *cam, float x, float y, float z);
 void        sf_camera_move_loc  (sf_camera_t *cam, float fwd, float right, float up);
 void        sf_camera_look_at   (sf_camera_t *cam, sf_fvec3_t target);
 void        sf_camera_add_yp    (sf_camera_t *cam, float yaw_offset, float pitch_offset);
+void        sf_reg_event        (sf_ctx_t *ctx, sf_event_type_t type, sf_event_cb cb, void *userdata);
+void        sf_trigger_event    (sf_ctx_t *ctx, const sf_event_t *event);
+void        sf_input_cycle_state(sf_ctx_t *ctx);
+void        sf_input_set_key    (sf_ctx_t *ctx, sf_key_t key, bool is_down);
+void        sf_input_set_mouse_p(sf_ctx_t *ctx, int x, int y);
+void        sf_input_set_mouse_b(sf_ctx_t *ctx, sf_mouse_btn_t btn, bool is_down);
+bool        sf_key_down         (sf_ctx_t *ctx, sf_key_t key);
+bool        sf_key_pressed      (sf_ctx_t *ctx, sf_key_t key);
 void        _sf_update_cam_vecs (sf_camera_t *cam);
 void        sf_render_enti      (sf_ctx_t *ctx, sf_enti_t *enti);
 void        sf_render_ctx       (sf_ctx_t *ctx);
@@ -251,6 +317,7 @@ static const uint8_t            _sf_font_8x8[];
 
 /* SF_CORE_FUNCTIONS */
 void sf_init(sf_ctx_t *ctx, int w, int h) {
+  memset(ctx, 0, sizeof(sf_ctx_t));
   ctx->w                        = w;
   ctx->h                        = h;
   ctx->buffer_size              = w * h;
@@ -647,6 +714,85 @@ void sf_camera_add_yp(sf_camera_t *cam, float yaw_offset, float pitch_offset) {
   _sf_update_cam_vecs(cam);
 }
 
+void sf_reg_event(sf_ctx_t *ctx, sf_event_type_t type, sf_event_cb cb, void *userdata) {
+  if (type >= SF_EVT_MAX) return;
+  for (int i = 0; i < SF_MAX_CB_PER_EVT; ++i) {
+    if (ctx->callbacks[type][i].cb == NULL) {
+      ctx->callbacks[type][i].cb = cb;
+      ctx->callbacks[type][i].userdata = userdata;
+      return;
+    }
+  }
+  SF_LOG(ctx, SF_LOG_WARN, SF_LOG_INDENT "Callback slots full for event type %d\n", type);
+}
+
+void sf_trigger_event(sf_ctx_t *ctx, const sf_event_t *event) {
+  if (event->type >= SF_EVT_MAX) return;
+  for (int i = 0; i < SF_MAX_CB_PER_EVT; ++i) {
+    if (ctx->callbacks[event->type][i].cb) {
+      ctx->callbacks[event->type][i].cb(ctx, event, ctx->callbacks[event->type][i].userdata);
+    }
+  }
+}
+
+void sf_input_cycle_state(sf_ctx_t *ctx) {
+  memcpy(ctx->input.keys_prev, ctx->input.keys, sizeof(ctx->input.keys));
+  memcpy(ctx->input.mouse_btns_prev, ctx->input.mouse_btns, sizeof(ctx->input.mouse_btns));
+  ctx->input.mouse_dx = 0;
+  ctx->input.mouse_dy = 0;
+}
+
+void sf_input_set_key(sf_ctx_t *ctx, sf_key_t key, bool is_down) {
+  if (key == SF_KEY_UNKNOWN || key >= SF_KEY_MAX) return;
+
+  if (ctx->input.keys[key] != is_down) {
+    ctx->input.keys[key] = is_down;
+    sf_event_t ev;
+    ev.type = is_down ? SF_EVT_KEY_DOWN : SF_EVT_KEY_UP;
+    ev.data.key.key = key;
+    sf_trigger_event(ctx, &ev);
+  }
+}
+
+void sf_input_set_mouse_p(sf_ctx_t *ctx, int x, int y) {
+  ctx->input.mouse_dx = x - ctx->input.mouse_x;
+  ctx->input.mouse_dy = y - ctx->input.mouse_y;
+  ctx->input.mouse_x = x;
+  ctx->input.mouse_y = y;
+
+  if (ctx->input.mouse_dx != 0 || ctx->input.mouse_dy != 0) {
+    sf_event_t ev;
+    ev.type = SF_EVT_MOUSE_MOVE;
+    ev.data.mouse_move.x = x;
+    ev.data.mouse_move.y = y;
+    ev.data.mouse_move.dx = ctx->input.mouse_dx;
+    ev.data.mouse_move.dy = ctx->input.mouse_dy;
+    sf_trigger_event(ctx, &ev);
+  }
+}
+
+void sf_input_set_mouse_b(sf_ctx_t *ctx, sf_mouse_btn_t btn, bool is_down) {
+  if (btn >= SF_MOUSE_MAX) return;
+
+  if (ctx->input.mouse_btns[btn] != is_down) {
+    ctx->input.mouse_btns[btn] = is_down;
+    sf_event_t ev;
+    ev.type = is_down ? SF_EVT_MOUSE_DOWN : SF_EVT_MOUSE_UP;
+    ev.data.mouse_btn.btn = btn;
+    ev.data.mouse_btn.x = ctx->input.mouse_x;
+    ev.data.mouse_btn.y = ctx->input.mouse_y;
+    sf_trigger_event(ctx, &ev);
+  }
+}
+
+bool sf_key_down(sf_ctx_t *ctx, sf_key_t key) {
+  return ctx->input.keys[key];
+}
+
+bool sf_key_pressed(sf_ctx_t *ctx, sf_key_t key) {
+  return ctx->input.keys[key] && !ctx->input.keys_prev[key];
+}
+
 void sf_render_enti(sf_ctx_t *ctx, sf_enti_t *enti) {
   size_t mark = sf_arena_save(&ctx->arena);
 
@@ -746,6 +892,10 @@ void sf_render_enti(sf_ctx_t *ctx, sf_enti_t *enti) {
 }
 
 void sf_render_ctx(sf_ctx_t *ctx) {
+  sf_event_t ev_start;
+  ev_start.type = SF_EVT_RENDER_START;
+  sf_trigger_event(ctx, &ev_start);
+
   if (ctx->camera.is_proj_dirty) {
     float aspect = (float)ctx->w / (float)ctx->h;
     ctx->camera.P = sf_make_psp_fmat4(ctx->camera.fov, aspect, ctx->camera.near_plane, ctx->camera.far_plane);
@@ -769,6 +919,10 @@ void sf_render_ctx(sf_ctx_t *ctx) {
     }
     sf_render_enti(ctx, enti);
   }
+
+  sf_event_t ev_end;
+  ev_end.type = SF_EVT_RENDER_END;
+  sf_trigger_event(ctx, &ev_end);
 }
 
 uint64_t _sf_get_ticks(void) {
