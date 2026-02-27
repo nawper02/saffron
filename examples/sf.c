@@ -53,11 +53,15 @@ void on_render_start(sf_ctx_t *ctx, const sf_event_t *ev, void *userdata) {
 /* --- MAIN PROGRAM --- */
 
 int main(int argc, char* argv[]) {
-  const int width = 800;
-  const int height = 600;
+  const int width = 683;
+  const int height = 384;
 
   SDL_Init(SDL_INIT_VIDEO);
-  SDL_Window* window = SDL_CreateWindow("Saffron 3D Engine Demo", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, width, height, 0);
+  SDL_Window* window = SDL_CreateWindow("Saffron 3D Engine Demo", 
+                                      SDL_WINDOWPOS_UNDEFINED, 
+                                      SDL_WINDOWPOS_UNDEFINED, 
+                                      width, height, 
+                                      SDL_WINDOW_FULLSCREEN_DESKTOP);
   SDL_Renderer* renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
 
   SDL_Texture* texture = SDL_CreateTexture(renderer, 
@@ -99,6 +103,7 @@ int main(int argc, char* argv[]) {
     /* 2. Poll and translate SDL events directly into Saffron */
     while (SDL_PollEvent(&event)) {
       if (event.type == SDL_QUIT) running = 0;
+      if (sf_key_pressed(&sf_ctx, SF_KEY_Q)) running = 0;
       sf_sdl_process_event(&sf_ctx, &event);
     }
 
@@ -110,7 +115,7 @@ int main(int argc, char* argv[]) {
 
     /* UI Rendering */
     sf_put_text(&sf_ctx, "SAFFRON 3D DEMO", (sf_ivec2_t){10, 10}, SF_CLR_WHITE, 1);
-    sf_put_text(&sf_ctx, "WASD: Move | ARROWS: Look | R: Reset", (sf_ivec2_t){10, 25}, SF_CLR_GREEN, 1);
+    sf_put_text(&sf_ctx, "WASD: Move | ARROWS: Look | R: Reset | Q: Quit", (sf_ivec2_t){10, 25}, SF_CLR_GREEN, 1);
 
     char fps_text[32];
     snprintf(fps_text, sizeof(fps_text), "FPS: %.0f", sf_ctx.fps);
