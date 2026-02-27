@@ -111,19 +111,80 @@ void render_to_terminal_pixels(uint32_t *buffer, int width, int height, int scal
 }
 
 /* --- CALLBACKS --- */
-void on_render_start(sf_ctx_t *ctx, const sf_event_t *ev, void *userdata) {
+void on_render_end(sf_ctx_t *ctx, const sf_event_t *ev, void *userdata) {
     /* 1. Spin the MK2 */
     sf_enti_t *mk2 = sf_get_enti(ctx, "mk2");
     if (mk2) {
         sf_enti_rotate(mk2, 1.0f * ctx->delta_time, 0.5f * ctx->delta_time, 0.0f);
     }
 
-    /* 2. Update Light Color */
+    /* 2. Light Color Prep */
+    sf_fvec3_t l_clr = {1.0f, 1.0f, 1.0f};
     if (ctx->light_count > 0) {
         sf_light_t *light = &ctx->lights[0];
         light->color.x = (sinf(ctx->elapsed_time * 1.5f) + 1.0f) * 0.5f;
         light->color.y = (sinf(ctx->elapsed_time * 2.0f) + 1.0f) * 0.5f;
         light->color.z = (sinf(ctx->elapsed_time * 0.7f) + 1.0f) * 0.5f;
+        l_clr = light->color;
+    }
+
+    /* 3. The Clockwise Scrolling Snake */
+    const char *text = "SAFFRON   ";
+    int text_len = (int)strlen(text);
+    int char_spacing = 10; 
+    float speed = 80.0f;
+    
+    int margin_lt = 6;  // Left/Top margin
+    int margin_rb = 14; // Right/Bottom margin (extra room for character width)
+    
+    int W = ctx->w - (margin_lt + margin_rb);
+    int H = ctx->h - (margin_lt + margin_rb);
+    int perimeter = 2 * (W + H);
+    
+    // We subtract the offset to move 'forward' in a clockwise direction
+    float scroll_offset = ctx->elapsed_time * speed;
+    int total_chars = perimeter / char_spacing;
+
+    for (int i = 0; i < total_chars; i++) {
+        // 'd' is the position of this specific character in the snake
+        // We use (scroll_offset - i * spacing) to make the tail follow the head
+        float d = fmodf(scroll_offset - (i * char_spacing), (float)perimeter);
+        if (d < 0) d += perimeter; 
+
+        sf_ivec2_t pos;
+
+        // CLOCKWISE Logic
+        if (d < W) { 
+            // Top Edge: Left to Right
+            pos.x = margin_lt + (int)d;
+            pos.y = margin_lt;
+        } else if (d < (W + H)) { 
+            // Right Edge: Top to Bottom
+            pos.x = W + margin_lt;
+            pos.y = margin_lt + (int)(d - W);
+        } else if (d < (2 * W + H)) { 
+            // Bottom Edge: Right to Left
+            pos.x = (W + margin_lt) - (int)(d - (W + H));
+            pos.y = H + margin_lt;
+        } else { 
+            // Left Edge: Bottom to Top
+            pos.x = margin_lt;
+            pos.y = (H + margin_lt) - (int)(d - (2 * W + H));
+        }
+
+        // FADE: i=0 is the head (brightest)
+        float fade = 1.0f - ((float)i / total_chars);
+        if (fade < 0.1f) fade = 0.1f; // Keep a faint ghosting for the tail
+
+        uint8_t r = (uint8_t)(l_clr.x * 255 * fade);
+        uint8_t g = (uint8_t)(l_clr.y * 255 * fade);
+        uint8_t b = (uint8_t)(l_clr.z * 255 * fade);
+        sf_pkd_clr_t char_clr = (0xFF << 24) | (b << 16) | (g << 8) | r;
+
+        // The character at index 'i' in the snake
+        char c[2] = { text[i % text_len], '\0' };
+        
+        sf_put_text(ctx, c, pos, char_clr, 1);
     }
 }
 
@@ -152,7 +213,7 @@ int main(int argc, char* argv[]) {
 
     /* Initial light source */
     sf_add_light_dir(&sf_ctx, (sf_fvec3_t){1.0f, -1.0f, -1.0f}, (sf_fvec3_t){1.0f, 1.0f, 1.0f}, 1.2f);
-    sf_reg_event(&sf_ctx, SF_EVT_RENDER_START, on_render_start, NULL);
+    sf_reg_event(&sf_ctx, SF_EVT_RENDER_END, on_render_end, NULL);
 
     /* Increase stdout buffer size to prevent tearing/flickering */
     setvbuf(stdout, NULL, _IOFBF, 65536);
