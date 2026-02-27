@@ -15,7 +15,7 @@ void on_key_down(sf_ctx_t *ctx, const sf_event_t *ev, void *userdata) {
   sf_camera_t *cam = &ctx->camera;
   
   /* Press 'R' to reset the camera to its starting position */
-  if (ev->data.key.key == SF_KEY_R) {
+  if (ev->key == SF_KEY_R) {
     sf_camera_set_pos(cam, 0.0f, 0.0f, 8.0f);
     sf_camera_look_at(cam, (sf_fvec3_t){0.0f, 0.0f, 0.0f});
     SF_LOG(ctx, SF_LOG_INFO, "Camera reset to origin.\n");

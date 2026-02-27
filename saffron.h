@@ -166,10 +166,10 @@ typedef enum {
 typedef struct {
   sf_event_type_t type;
   union {
-    struct { sf_key_t key; } key;
+    sf_key_t key;
     struct { int x, y, dx, dy; } mouse_move;
     struct { sf_mouse_btn_t btn; int x, y; } mouse_btn;
-  } data;
+  };
 } sf_event_t;
 
 typedef void (*sf_event_cb)(struct sf_ctx_t_ *ctx, const sf_event_t *event, void *userdata);
@@ -749,7 +749,7 @@ void sf_input_set_key(sf_ctx_t *ctx, sf_key_t key, bool is_down) {
     ctx->input.keys[key] = is_down;
     sf_event_t ev;
     ev.type = is_down ? SF_EVT_KEY_DOWN : SF_EVT_KEY_UP;
-    ev.data.key.key = key;
+    ev.key = key;
     sf_trigger_event(ctx, &ev);
   }
 }
@@ -757,16 +757,16 @@ void sf_input_set_key(sf_ctx_t *ctx, sf_key_t key, bool is_down) {
 void sf_input_set_mouse_p(sf_ctx_t *ctx, int x, int y) {
   ctx->input.mouse_dx = x - ctx->input.mouse_x;
   ctx->input.mouse_dy = y - ctx->input.mouse_y;
-  ctx->input.mouse_x = x;
-  ctx->input.mouse_y = y;
+  ctx->input.mouse_x  = x;
+  ctx->input.mouse_y  = y;
 
   if (ctx->input.mouse_dx != 0 || ctx->input.mouse_dy != 0) {
     sf_event_t ev;
     ev.type = SF_EVT_MOUSE_MOVE;
-    ev.data.mouse_move.x = x;
-    ev.data.mouse_move.y = y;
-    ev.data.mouse_move.dx = ctx->input.mouse_dx;
-    ev.data.mouse_move.dy = ctx->input.mouse_dy;
+    ev.mouse_move.x  = x;
+    ev.mouse_move.y  = y;
+    ev.mouse_move.dx = ctx->input.mouse_dx;
+    ev.mouse_move.dy = ctx->input.mouse_dy;
     sf_trigger_event(ctx, &ev);
   }
 }
@@ -778,9 +778,9 @@ void sf_input_set_mouse_b(sf_ctx_t *ctx, sf_mouse_btn_t btn, bool is_down) {
     ctx->input.mouse_btns[btn] = is_down;
     sf_event_t ev;
     ev.type = is_down ? SF_EVT_MOUSE_DOWN : SF_EVT_MOUSE_UP;
-    ev.data.mouse_btn.btn = btn;
-    ev.data.mouse_btn.x = ctx->input.mouse_x;
-    ev.data.mouse_btn.y = ctx->input.mouse_y;
+    ev.mouse_btn.btn = btn;
+    ev.mouse_btn.x = ctx->input.mouse_x;
+    ev.mouse_btn.y = ctx->input.mouse_y;
     sf_trigger_event(ctx, &ev);
   }
 }

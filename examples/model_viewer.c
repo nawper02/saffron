@@ -17,13 +17,13 @@ bool g_auto_rotate = true;
 /* Handles single, discrete button presses */
 void on_key_down(sf_ctx_t *ctx, const sf_event_t *ev, void *userdata) {
   /* Toggle auto-rotation with Spacebar */
-  if (ev->data.key.key == SF_KEY_SPACE) {
+  if (ev->key == SF_KEY_SPACE) {
     g_auto_rotate = !g_auto_rotate;
     SF_LOG(ctx, SF_LOG_INFO, "Auto-rotate: %s\n", g_auto_rotate ? "ON" : "OFF");
   }
   
   /* Randomize the main light color when pressing 'L' */
-  if (ev->data.key.key == SF_KEY_L) {
+  if (ev->key == SF_KEY_L) {
     if (ctx->light_count > 0) {
       /* Generate random floats between 0.2 and 1.0 to avoid pitching to pitch black */
       float r = ((rand() % 80) + 20) / 100.0f;
@@ -35,7 +35,7 @@ void on_key_down(sf_ctx_t *ctx, const sf_event_t *ev, void *userdata) {
   }
 
   /* Reset view with 'R' */
-  if (ev->data.key.key == SF_KEY_R) {
+  if (ev->key == SF_KEY_R) {
     sf_camera_set_pos(&ctx->camera, 0.0f, 0.0f, 15.0f);
     sf_camera_look_at(&ctx->camera, (sf_fvec3_t){0.0f, 0.0f, 0.0f});
     sf_enti_t *model = sf_get_enti(ctx, "model");
