@@ -1,0 +1,19 @@
+# Camera Setup (Position: 0,0,8 | Target: 0,0,0)
+c 0.0 0.0 8.0  0.0 0.0 0.0
+
+# Mesh Definitions
+m mk2      mk2.obj
+m teapot   teapot.obj
+m cube     cube.obj
+
+# Textures
+t brick_tex Brick_01-128x128.bmp
+t wood_tex  Wood_20-128x128.bmp
+
+# Entity Instances (mesh, name, pos, rot, scale, optional_texture)
+e mk2    mk2     0.0 0.0 0.0 0.0 0.0 0.0  15.0 15.0 15.0  brick_tex
+e teapot teapot -3.0 1.0 0.0 0.0 0.0 0.0   0.8 0.8 0.8     wood_tex
+e cube   cube    0.0 1.0 0.0 0.0 0.0 0.0   1.0 1.0 1.0    brick_tex
+
+# Lighting (type, pos_xyz, color_rgb, intensity)
+l point  2.0 5.0 2.0   1.0 0.8 0.8   2.0

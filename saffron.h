@@ -23,16 +23,21 @@ extern "C" {
 #include <stdbool.h>
 #include <math.h>
 #include <time.h>
+#include <unistd.h>
+#include <dirent.h>
+#include <sys/stat.h>
 
 /* SF_DEFINES */
 #define SF_ARENA_SIZE          10485760
 #define SF_MAX_OBJS            10
 #define SF_MAX_ENTITIES        100
 #define SF_MAX_LIGHTS          10
+#define SF_MAX_TEXTURES        20
 #define SF_MAX_CB_PER_EVT      4
 #define SF_LOG_INDENT          "            "
 #define SF_PI                  3.14159265359f
 #define SF_NANOS_PER_SEC       1000000000ULL
+#define SF_ASSET_PATH          "/usr/local/share/saffron/sf_assets"
 
 #define SF_LOG(ctx, level, fmt, ...)  _sf_log(ctx, level, __func__, fmt, ##__VA_ARGS__)
 #define SF_ALIGN_SIZE(size)           (((size) + 7) & ~7)
@@ -84,6 +89,14 @@ typedef struct {
   sf_fmat4_t                    P;
 } sf_camera_t;
 
+typedef struct {
+  sf_fvec3_t   *px;
+  int           w;
+  int           h;
+  int32_t       id;
+  const char   *name;
+} sf_tex_t;
+
 typedef struct { 
   int v;
   int vt;
@@ -115,6 +128,7 @@ typedef struct {
   sf_fvec3_t                    scale;
   bool                          is_dirty;
   int32_t                       id;
+  sf_tex_t                 *tex;
   const char                   *name;
 } sf_enti_t;
 
@@ -216,6 +230,8 @@ struct sf_ctx_t_ {
   int32_t                       obj_count;
   sf_enti_t                    *entities;
   int32_t                       enti_count;
+  sf_tex_t                     *textures;
+  int32_t                       tex_count;
 
   sf_light_t                   *lights;
   int32_t                       light_count;
@@ -248,6 +264,8 @@ void        sf_set_logger       (sf_ctx_t *ctx, sf_log_fn log_cb, void* userdata
 void        sf_logger_console   (const char* message, void* userdata);
 void        sf_log              (sf_ctx_t *ctx, sf_log_level_t level, const char* fmt, ...);
 void        _sf_log             (sf_ctx_t *ctx, sf_log_level_t level, const char* func, const char* fmt, ...);
+sf_tex_t*   sf_load_texture_bmp (sf_ctx_t *ctx, const char *filename, const char *texname);
+sf_tex_t*   _sf_get_texture     (sf_ctx_t *ctx, const char *texname, bool should_log_failure);
 sf_obj_t*   sf_load_obj         (sf_ctx_t *ctx, const char *filename, const char *objname);
 sf_obj_t*   _sf_get_obj         (sf_ctx_t *ctx, const char *objname, bool should_log_failure);
 sf_enti_t*  sf_add_enti         (sf_ctx_t *ctx, sf_obj_t *obj, const char *entiname);
@@ -257,6 +275,7 @@ void        sf_enti_move        (sf_enti_t *enti, float dx, float dy, float dz);
 void        sf_enti_set_rot     (sf_enti_t *enti, float rx, float ry, float rz);
 void        sf_enti_rotate      (sf_enti_t *enti, float drx, float dry, float drz);
 void        sf_enti_set_scale   (sf_enti_t *enti, float sx, float sy, float sz);
+void        sf_enti_set_tex     (sf_ctx_t *ctx, const char *enti_name, const char *tex_name);
 sf_light_t* sf_add_light_dir    (sf_ctx_t *ctx, sf_fvec3_t dir, sf_fvec3_t color, float intensity);
 sf_light_t* sf_add_light_point  (sf_ctx_t *ctx, sf_fvec3_t pos, sf_fvec3_t color, float intensity);
 sf_world_t* sf_load_world       (sf_ctx_t *ctx, const char *filename, const char *world_name);
@@ -287,6 +306,7 @@ void        sf_pixel_depth      (sf_ctx_t *ctx, sf_pkd_clr_t c, sf_ivec2_t v0, f
 void        sf_line             (sf_ctx_t *ctx, sf_pkd_clr_t c, sf_ivec2_t v0, sf_ivec2_t v1);
 void        sf_rect             (sf_ctx_t *ctx, sf_pkd_clr_t c, sf_ivec2_t v0, sf_ivec2_t v1);
 void        sf_tri              (sf_ctx_t *ctx, sf_pkd_clr_t c, sf_fvec3_t v0, sf_fvec3_t v1, sf_fvec3_t v2, bool use_depth);
+void        sf_tri_tex          (sf_ctx_t *ctx, sf_tex_t *tex, sf_fvec3_t v0, sf_fvec3_t v1, sf_fvec3_t v2, sf_fvec3_t uvz0, sf_fvec3_t uvz1, sf_fvec3_t uvz2, sf_fvec3_t l_int);
 void        sf_put_text         (sf_ctx_t *ctx, const char *text, sf_ivec2_t p, sf_pkd_clr_t c, int scale);
 void        sf_clear_depth      (sf_ctx_t *ctx);
 void        sf_draw_debug_axes  (sf_ctx_t *ctx);
@@ -309,12 +329,17 @@ sf_fmat4_t  sf_make_scale_fmat4 (sf_fvec3_t scale);
 /* SF_IMPLEMENTATION_HELPERS */
 uint32_t    _sf_vec_to_index    (sf_ctx_t *ctx, sf_ivec2_t v);
 void        _sf_swap_svec2      (sf_ivec2_t *v0, sf_ivec2_t *v1);
-void        _sf_interpolate_x   (sf_ivec2_t  v0, sf_ivec2_t v1, int *xs);
-void        _sf_interpolate_y   (sf_ivec2_t  v0, sf_ivec2_t v1, int *ys);
-void        _sf_interpolate_f   (float v0, float v1, int steps, float *out);
+void        _sf_swap_fvec3      (sf_fvec3_t *v0, sf_fvec3_t *v1);
+void        _sf_interp_fvec3    (sf_fvec3_t v0, sf_fvec3_t v1, int steps, sf_fvec3_t *out);
+void        _sf_interp_x        (sf_ivec2_t  v0, sf_ivec2_t v1, int *xs);
+void        _sf_interp_y        (sf_ivec2_t  v0, sf_ivec2_t v1, int *ys);
+void        _sf_interp_f        (float v0, float v1, int steps, float *out);
+float       _sf_lerp_f          (float a, float b, float t);
+sf_fvec3_t  _sf_lerp_fvec3      (sf_fvec3_t a, sf_fvec3_t b, float t);
 sf_fvec3_t  _sf_intersect_near  (sf_fvec3_t v0, sf_fvec3_t v1, float near);
 sf_fvec3_t  _sf_project_vertex  (sf_ctx_t *ctx, sf_fvec3_t v, sf_fmat4_t P);
 const char* _sf_log_lvl_to_str  (sf_log_level_t level);
+bool        _sf_resolve_asset   (const char* filename, char* out_path, size_t max_len);
 
 /* SF_UTILITIES */
 sf_pkd_clr_t sf_pack_color (sf_unpkd_clr_t);
@@ -346,9 +371,11 @@ void sf_init(sf_ctx_t *ctx, int w, int h) {
   ctx->objs                     = sf_arena_alloc(ctx, &ctx->arena, SF_MAX_OBJS     * sizeof(sf_obj_t));
   ctx->entities                 = sf_arena_alloc(ctx, &ctx->arena, SF_MAX_ENTITIES * sizeof(sf_enti_t));
   ctx->lights                   = sf_arena_alloc(ctx, &ctx->arena, SF_MAX_LIGHTS   * sizeof(sf_light_t));
+  ctx->textures                 = sf_arena_alloc(ctx, &ctx->arena, SF_MAX_TEXTURES * sizeof(sf_tex_t));
   ctx->obj_count                = 0;
   ctx->enti_count               = 0;
   ctx->light_count              = 0;
+  ctx->tex_count                = 0;
   ctx->camera.pos               = (sf_fvec3_t){0.0f, 0.0f, 0.0f};
   ctx->camera.world_up          = (sf_fvec3_t){0.0f, 1.0f, 0.0f};
   ctx->camera.yaw               = -90.0f;
@@ -384,6 +411,8 @@ void sf_destroy(sf_ctx_t *ctx) {
   ctx->h                        = 0;
   ctx->enti_count               = 0;
   ctx->obj_count                = 0;
+  ctx->tex_count                = 0;
+  ctx->light_count              = 0;
   SF_LOG(ctx, SF_LOG_INFO,
               SF_LOG_INDENT "buffer : %dx%d\n"
               SF_LOG_INDENT "memory : %d\n"
@@ -448,6 +477,65 @@ void _sf_log(sf_ctx_t *ctx, sf_log_level_t level, const char* func, const char* 
            func, _sf_log_lvl_to_str(level), msg_buffer);
 
   ctx->log_cb(final_buffer, ctx->log_user);
+}
+
+sf_tex_t* sf_load_texture_bmp(sf_ctx_t *ctx, const char *filename, const char *texname) {
+  if (ctx->tex_count >= SF_MAX_TEXTURES) return NULL;
+  if (_sf_get_texture(ctx, texname, false) != NULL) return NULL;
+  char path[512];
+  if (!_sf_resolve_asset(filename, path, sizeof(path))) {
+    SF_LOG(ctx, SF_LOG_ERROR, SF_LOG_INDENT "Missing texture file: %s\n", filename);
+    return NULL;
+  }
+  FILE *file = fopen(path, "rb");
+  if (!file) return NULL;
+  uint8_t header[54];
+  if (fread(header, 1, 54, file) != 54 || header[0] != 'B' || header[1] != 'M') {
+    fclose(file);
+    SF_LOG(ctx, SF_LOG_ERROR, SF_LOG_INDENT "Invalid BMP format: %s\n", filename);
+    return NULL;
+  }
+  uint32_t data_offset = header[10] | (header[11]<<8) | (header[12]<<16) | (header[13]<<24);
+  int32_t w = header[18] | (header[19]<<8) | (header[20]<<16) | (header[21]<<24);
+  int32_t h = header[22] | (header[23]<<8) | (header[24]<<16) | (header[25]<<24);
+  int32_t h_abs = abs(h);
+  sf_tex_t *tex = &ctx->textures[ctx->tex_count++];
+  tex->w = w;
+  tex->h = h_abs;
+  tex->id = ctx->tex_count - 1;
+  tex->px = sf_arena_alloc(ctx, &ctx->arena, w * h_abs * sizeof(sf_fvec3_t));
+  size_t name_len = strlen(texname) + 1;
+  tex->name = (const char*)sf_arena_alloc(ctx, &ctx->arena, name_len);
+  if (tex->name) memcpy((void*)tex->name, texname, name_len);
+  fseek(file, data_offset, SEEK_SET);
+  int padding = (4 - (w * 3) % 4) % 4;
+  uint8_t bgr[3];
+  for (int y = 0; y < h_abs; y++) {
+    int dest_y = (h > 0) ? (h_abs - 1 - y) : y; 
+    for (int x = 0; x < w; x++) {
+      fread(bgr, 1, 3, file);
+      float r = bgr[2] / 255.0f;
+      float g = bgr[1] / 255.0f;
+      float b = bgr[0] / 255.0f;
+      tex->px[dest_y * w + x] = (sf_fvec3_t){ powf(r, 2.2f), powf(g, 2.2f), powf(b, 2.2f) };
+    }
+    fseek(file, padding, SEEK_CUR);
+  }
+  fclose(file);
+  SF_LOG(ctx, SF_LOG_INFO, SF_LOG_INDENT "loaded texture : %s (%dx%d)\n", texname, w, h_abs);
+  return tex;
+}
+
+sf_tex_t* _sf_get_texture(sf_ctx_t *ctx, const char *texname, bool should_log_failure) {
+  for (int32_t i = 0; i < ctx->tex_count; ++i) {
+    if (ctx->textures[i].name && strcmp(ctx->textures[i].name, texname) == 0) {
+      return &ctx->textures[i];
+    }
+  }
+  if (should_log_failure) {
+    SF_LOG(ctx, SF_LOG_WARN, SF_LOG_INDENT "texture '%s' not found\n", texname);
+  }
+  return NULL;
 }
 
 sf_obj_t* sf_load_obj(sf_ctx_t *ctx, const char *filename, const char *objname) {
@@ -686,38 +774,46 @@ sf_world_t* sf_load_world(sf_ctx_t *ctx, const char *filename, const char *world
     SF_LOG(ctx, SF_LOG_ERROR, SF_LOG_INDENT "could not open %s\n", filename);
     return NULL;
   }
-
   sf_world_t *world = (sf_world_t*)sf_arena_alloc(ctx, &ctx->arena, sizeof(sf_world_t));
-  world->name            = world_name;
-  world->obj_start_idx   = ctx->obj_count;
-  world->enti_start_idx  = ctx->enti_count;
+  world->name = world_name;
+  world->obj_start_idx = ctx->obj_count;
+  world->enti_start_idx = ctx->enti_count;
   world->light_start_idx = ctx->light_count;
-
   char line[512];
   while (fgets(line, sizeof(line), file)) {
     if (line[0] == '#' || line[0] == '\n' || line[0] == '\r') continue;
-
     char cmd;
     sscanf(line, " %c", &cmd);
-
-    if (cmd == 'm') {
-      char m_name[64], m_path[256];
-      if (sscanf(line, "m %63s %255s", m_name, m_path) == 2) {
-        sf_load_obj(ctx, m_path, m_name);
+    if (cmd == 't') {
+      char t_name[64], t_file[256];
+      if (sscanf(line, "t %63s %255s", t_name, t_file) == 2) {
+        sf_load_texture_bmp(ctx, t_file, t_name);
+      }
+    }
+    else if (cmd == 'm') {
+      char m_name[64], m_file[256], r_path[512];
+      if (sscanf(line, "m %63s %255s", m_name, m_file) == 2) {
+        if (_sf_resolve_asset(m_file, r_path, sizeof(r_path))) {
+          sf_load_obj(ctx, r_path, m_name);
+        }
       }
     } 
     else if (cmd == 'e') {
-      char m_name[64], e_name[64];
+      char m_name[64], e_name[64], t_name[64] = {0};
       float px, py, pz, rx, ry, rz, sx, sy, sz;
-      if (sscanf(line, "e %63s %63s %f %f %f %f %f %f %f %f %f", 
-        m_name, e_name, &px, &py, &pz, &rx, &ry, &rz, &sx, &sy, &sz) == 11) {
-
+      int res = sscanf(line, "e %63s %63s %f %f %f %f %f %f %f %f %f %63s", 
+        m_name, e_name, &px, &py, &pz, &rx, &ry, &rz, &sx, &sy, &sz, t_name);
+      if (res >= 11) {
         sf_obj_t *obj = _sf_get_obj(ctx, m_name, true);
         if (obj) {
           sf_enti_t *enti = sf_add_enti(ctx, obj, e_name);
           sf_enti_set_pos(enti, px, py, pz);
           sf_enti_set_rot(enti, rx, ry, rz);
           sf_enti_set_scale(enti, sx, sy, sz);
+          if (res == 12) {
+            enti->tex = _sf_get_texture(ctx, t_name, true);
+            SF_LOG(ctx, SF_LOG_INFO, SF_LOG_INDENT "Assigned texture %s to %s\n", t_name, e_name);
+          }
         }
       }
     }
@@ -725,7 +821,6 @@ sf_world_t* sf_load_world(sf_ctx_t *ctx, const char *filename, const char *world
       char l_type[16];
       float x, y, z, r, g, b, i;
       sscanf(line, "l %15s %f %f %f %f %f %f %f", l_type, &x, &y, &z, &r, &g, &b, &i);
- 
       if (strcmp(l_type, "dir") == 0) {
         sf_add_light_dir(ctx, (sf_fvec3_t){x, y, z}, (sf_fvec3_t){r, g, b}, i);
       } else if (strcmp(l_type, "point") == 0) {
@@ -740,11 +835,9 @@ sf_world_t* sf_load_world(sf_ctx_t *ctx, const char *filename, const char *world
       }
     }
   }
-
-  world->obj_count   = ctx->obj_count   - world->obj_start_idx;
-  world->enti_count  = ctx->enti_count  - world->enti_start_idx;
+  world->obj_count = ctx->obj_count - world->obj_start_idx;
+  world->enti_count = ctx->enti_count - world->enti_start_idx;
   world->light_count = ctx->light_count - world->light_start_idx;
-
   fclose(file);
   SF_LOG(ctx, SF_LOG_INFO, SF_LOG_INDENT "loaded '%s' (%d entities)\n", world_name, world->enti_count);
   return world;
@@ -902,51 +995,38 @@ bool sf_key_pressed(sf_ctx_t *ctx, sf_key_t key) {
 
 void sf_render_enti(sf_ctx_t *ctx, sf_enti_t *enti) {
   size_t mark = sf_arena_save(&ctx->arena);
-
   sf_fmat4_t M = enti->M;
   sf_fmat4_t V = ctx->camera.V;
   sf_fmat4_t P = ctx->camera.P;
   float near = 0.1f;
-
   sf_fvec3_t* wv = sf_arena_alloc(ctx, &ctx->arena, enti->obj.v_cnt * sizeof(sf_fvec3_t));
   sf_fvec3_t* vv = sf_arena_alloc(ctx, &ctx->arena, enti->obj.v_cnt * sizeof(sf_fvec3_t));
   if (!wv || !vv) return;
-
   for (int i = 0; i < enti->obj.v_cnt; i++) {
     wv[i] = sf_fmat4_mul_vec3(M, enti->obj.v[i]);
     vv[i] = sf_fmat4_mul_vec3(V, wv[i]);
   }
-
   for (int i = 0; i < enti->obj.f_cnt; i++) {
     sf_face_t face = enti->obj.f[i];
- 
     sf_fvec3_t v_world[3] = { wv[face.idx[0].v], wv[face.idx[1].v], wv[face.idx[2].v] };
     sf_fvec3_t v_view[3]  = { vv[face.idx[0].v], vv[face.idx[1].v], vv[face.idx[2].v] };
-
     sf_fvec3_t a_v = sf_fvec3_sub(v_view[1], v_view[0]);
     sf_fvec3_t b_v = sf_fvec3_sub(v_view[2], v_view[0]);
     sf_fvec3_t n_v = sf_fvec3_cross(a_v, b_v);
-    float d = sf_fvec3_dot(n_v, v_view[0]);
-    if (d >= 0) continue;
-
+    if (sf_fvec3_dot(n_v, v_view[0]) >= 0) continue;
     sf_fvec3_t a_w = sf_fvec3_sub(v_world[1], v_world[0]);
     sf_fvec3_t b_w = sf_fvec3_sub(v_world[2], v_world[0]);
     sf_fvec3_t n_w = sf_fvec3_norm(sf_fvec3_cross(a_w, b_w));
-
     sf_fvec3_t centroid = {
       (v_world[0].x + v_world[1].x + v_world[2].x) / 3.0f,
       (v_world[0].y + v_world[1].y + v_world[2].y) / 3.0f,
       (v_world[0].z + v_world[1].z + v_world[2].z) / 3.0f
     };
-
-    sf_fvec3_t base_color  = {1.0f, 1.0f, 1.0f};
-    sf_fvec3_t final_color = {0.1f, 0.1f, 0.1f};
-
+    sf_fvec3_t l_int = {0.1f, 0.1f, 0.1f};
     for (int l = 0; l < ctx->light_count; l++) {
       sf_light_t *light = &ctx->lights[l];
       sf_fvec3_t light_dir;
       float atten = 1.0f;
-
       if (light->type == SF_LIGHT_DIR) {
         light_dir = sf_fvec3_norm((sf_fvec3_t){-light->pos_dir.x, -light->pos_dir.y, -light->pos_dir.z});
       } else {
@@ -955,44 +1035,76 @@ void sf_render_enti(sf_ctx_t *ctx, sf_enti_t *enti) {
         light_dir = sf_fvec3_norm(diff);
         atten = 1.0f / (1.0f + 0.09f * dist + 0.032f * (dist * dist));
       }
-
       float diff_factor = sf_fvec3_dot(n_w, light_dir);
       if (diff_factor > 0.0f) {
-        final_color.x += light->color.x * light->intensity * diff_factor * atten * base_color.x;
-        final_color.y += light->color.y * light->intensity * diff_factor * atten * base_color.y;
-        final_color.z += light->color.z * light->intensity * diff_factor * atten * base_color.z;
+        l_int.x += light->color.x * light->intensity * diff_factor * atten;
+        l_int.y += light->color.y * light->intensity * diff_factor * atten;
+        l_int.z += light->color.z * light->intensity * diff_factor * atten;
       }
     }
-
-    final_color.x = final_color.x > 1.0f ? 1.0f : final_color.x;
-    final_color.y = final_color.y > 1.0f ? 1.0f : final_color.y;
-    final_color.z = final_color.z > 1.0f ? 1.0f : final_color.z;
-
-    sf_pkd_clr_t shaded_color = sf_pack_color((sf_unpkd_clr_t){
-      (uint8_t)(final_color.x * 255),
-      (uint8_t)(final_color.y * 255),
-      (uint8_t)(final_color.z * 255),
-      255
-    });
-
-    sf_fvec3_t in[3], out[3];
+    l_int.x = l_int.x > 1.0f ? 1.0f : l_int.x;
+    l_int.y = l_int.y > 1.0f ? 1.0f : l_int.y;
+    l_int.z = l_int.z > 1.0f ? 1.0f : l_int.z;
+    sf_fvec2_t uvs[3] = {0};
+    bool has_uvs = (enti->obj.vt_cnt > 0 && face.idx[0].vt != -1);
+    if (has_uvs) {
+      uvs[0] = enti->obj.vt[face.idx[0].vt];
+      uvs[1] = enti->obj.vt[face.idx[1].vt];
+      uvs[2] = enti->obj.vt[face.idx[2].vt];
+    }
+    sf_fvec3_t uvz[3];
+    for (int j = 0; j < 3; j++) {
+      float z = -v_view[j].z;
+      if (z < near) z = near;
+      float iz = 1.0f / z;
+      uvz[j] = (sf_fvec3_t){ uvs[j].x * iz, uvs[j].y * iz, iz };
+    }
+    sf_fvec3_t in[3], out[3], in_uvz[3], out_uvz[3];
     int inc = 0, outc = 0;
     for (int j = 0; j < 3; j++) {
-      if (v_view[j].z <= -near) in[inc++] = v_view[j];
-      else out[outc++] = v_view[j];
+      if (v_view[j].z <= -near) {
+        in_uvz[inc] = uvz[j];
+        in[inc++] = v_view[j];
+      } else {
+        out_uvz[outc] = uvz[j];
+        out[outc++] = v_view[j];
+      }
     }
- 
-    if (inc == 3) {
-      sf_tri(ctx, shaded_color, _sf_project_vertex(ctx, v_view[0], P), _sf_project_vertex(ctx, v_view[1], P), _sf_project_vertex(ctx, v_view[2], P), true);
-    } else if (inc == 1) {
-      sf_fvec3_t v1 = _sf_intersect_near(in[0], out[0], -near);
-      sf_fvec3_t v2 = _sf_intersect_near(in[0], out[1], -near);
-      sf_tri(ctx, shaded_color, _sf_project_vertex(ctx, in[0], P), _sf_project_vertex(ctx, v1, P), _sf_project_vertex(ctx, v2, P), true);
-    } else if (inc == 2) {
-      sf_fvec3_t v1 = _sf_intersect_near(in[0], out[0], -near);
-      sf_fvec3_t v2 = _sf_intersect_near(in[1], out[0], -near);
-      sf_tri(ctx, shaded_color, _sf_project_vertex(ctx, in[0], P), _sf_project_vertex(ctx, in[1], P), _sf_project_vertex(ctx, v1, P), true);
-      sf_tri(ctx, shaded_color, _sf_project_vertex(ctx, in[1], P), _sf_project_vertex(ctx, v1, P), _sf_project_vertex(ctx, v2, P), true);
+    if (enti->tex && has_uvs) {
+      if (inc == 3) {
+        sf_tri_tex(ctx, enti->tex, _sf_project_vertex(ctx, in[0], P), _sf_project_vertex(ctx, in[1], P), _sf_project_vertex(ctx, in[2], P), in_uvz[0], in_uvz[1], in_uvz[2], l_int);
+      } else if (inc == 1) {
+        float t1 = ((-near) - in[0].z) / (out[0].z - in[0].z);
+        float t2 = ((-near) - in[0].z) / (out[1].z - in[0].z);
+        sf_fvec3_t v1 = { in[0].x + (out[0].x - in[0].x) * t1, in[0].y + (out[0].y - in[0].y) * t1, -near };
+        sf_fvec3_t v2 = { in[0].x + (out[1].x - in[0].x) * t2, in[0].y + (out[1].y - in[0].y) * t2, -near };
+        sf_fvec3_t uvz1 = { in_uvz[0].x + (out_uvz[0].x - in_uvz[0].x) * t1, in_uvz[0].y + (out_uvz[0].y - in_uvz[0].y) * t1, in_uvz[0].z + (out_uvz[0].z - in_uvz[0].z) * t1 };
+        sf_fvec3_t uvz2 = { in_uvz[0].x + (out_uvz[1].x - in_uvz[0].x) * t2, in_uvz[0].y + (out_uvz[1].y - in_uvz[0].y) * t2, in_uvz[0].z + (out_uvz[1].z - in_uvz[0].z) * t2 };
+        sf_tri_tex(ctx, enti->tex, _sf_project_vertex(ctx, in[0], P), _sf_project_vertex(ctx, v1, P), _sf_project_vertex(ctx, v2, P), in_uvz[0], uvz1, uvz2, l_int);
+      } else if (inc == 2) {
+        float t1 = ((-near) - in[0].z) / (out[0].z - in[0].z);
+        float t2 = ((-near) - in[1].z) / (out[0].z - in[1].z);
+        sf_fvec3_t v1 = { in[0].x + (out[0].x - in[0].x) * t1, in[0].y + (out[0].y - in[0].y) * t1, -near };
+        sf_fvec3_t v2 = { in[1].x + (out[0].x - in[1].x) * t2, in[1].y + (out[0].y - in[1].y) * t2, -near };
+        sf_fvec3_t uvz1 = { in_uvz[0].x + (out_uvz[0].x - in_uvz[0].x) * t1, in_uvz[0].y + (out_uvz[0].y - in_uvz[0].y) * t1, in_uvz[0].z + (out_uvz[0].z - in_uvz[0].z) * t1 };
+        sf_fvec3_t uvz2 = { in_uvz[1].x + (out_uvz[0].x - in_uvz[1].x) * t2, in_uvz[1].y + (out_uvz[0].y - in_uvz[1].y) * t2, in_uvz[1].z + (out_uvz[0].z - in_uvz[1].z) * t2 };
+        sf_tri_tex(ctx, enti->tex, _sf_project_vertex(ctx, in[0], P), _sf_project_vertex(ctx, in[1], P), _sf_project_vertex(ctx, v1, P), in_uvz[0], in_uvz[1], uvz1, l_int);
+        sf_tri_tex(ctx, enti->tex, _sf_project_vertex(ctx, in[1], P), _sf_project_vertex(ctx, v1, P), _sf_project_vertex(ctx, v2, P), in_uvz[1], uvz1, uvz2, l_int);
+      }
+    } else {
+      sf_pkd_clr_t shaded_color = sf_pack_color((sf_unpkd_clr_t){(uint8_t)(l_int.x * 255), (uint8_t)(l_int.y * 255), (uint8_t)(l_int.z * 255), 255});
+      if (inc == 3) {
+        sf_tri(ctx, shaded_color, _sf_project_vertex(ctx, v_view[0], P), _sf_project_vertex(ctx, v_view[1], P), _sf_project_vertex(ctx, v_view[2], P), true);
+      } else if (inc == 1) {
+        sf_fvec3_t v1 = _sf_intersect_near(in[0], out[0], -near);
+        sf_fvec3_t v2 = _sf_intersect_near(in[0], out[1], -near);
+        sf_tri(ctx, shaded_color, _sf_project_vertex(ctx, in[0], P), _sf_project_vertex(ctx, v1, P), _sf_project_vertex(ctx, v2, P), true);
+      } else if (inc == 2) {
+        sf_fvec3_t v1 = _sf_intersect_near(in[0], out[0], -near);
+        sf_fvec3_t v2 = _sf_intersect_near(in[1], out[0], -near);
+        sf_tri(ctx, shaded_color, _sf_project_vertex(ctx, in[0], P), _sf_project_vertex(ctx, in[1], P), _sf_project_vertex(ctx, v1, P), true);
+        sf_tri(ctx, shaded_color, _sf_project_vertex(ctx, in[1], P), _sf_project_vertex(ctx, v1, P), _sf_project_vertex(ctx, v2, P), true);
+      }
     }
   }
   sf_arena_restore(&ctx->arena, mark);
@@ -1115,14 +1227,14 @@ void sf_tri(sf_ctx_t *ctx, sf_pkd_clr_t c, sf_fvec3_t v0, sf_fvec3_t v1, sf_fvec
   if (h <= 1 || h > 8192) return;
   int x02[h], x012[h];
   float z02[h], z012[h];
-  _sf_interpolate_x((sf_ivec2_t){(int)v0.x, (int)v0.y}, (sf_ivec2_t){(int)v2.x, (int)v2.y}, x02);
-  _sf_interpolate_f(v0.z, v2.z, h - 1, z02);
+  _sf_interp_x((sf_ivec2_t){(int)v0.x, (int)v0.y}, (sf_ivec2_t){(int)v2.x, (int)v2.y}, x02);
+  _sf_interp_f(v0.z, v2.z, h - 1, z02);
   int h01 = (int)v1.y - (int)v0.y;
   int h12 = (int)v2.y - (int)v1.y;
-  _sf_interpolate_x((sf_ivec2_t){(int)v0.x, (int)v0.y}, (sf_ivec2_t){(int)v1.x, (int)v1.y}, x012);
-  _sf_interpolate_f(v0.z, v1.z, h01, z012);
-  _sf_interpolate_x((sf_ivec2_t){(int)v1.x, (int)v1.y}, (sf_ivec2_t){(int)v2.x, (int)v2.y}, &x012[h01]);
-  _sf_interpolate_f(v1.z, v2.z, h12, &z012[h01]);
+  _sf_interp_x((sf_ivec2_t){(int)v0.x, (int)v0.y}, (sf_ivec2_t){(int)v1.x, (int)v1.y}, x012);
+  _sf_interp_f(v0.z, v1.z, h01, z012);
+  _sf_interp_x((sf_ivec2_t){(int)v1.x, (int)v1.y}, (sf_ivec2_t){(int)v2.x, (int)v2.y}, &x012[h01]);
+  _sf_interp_f(v1.z, v2.z, h12, &z012[h01]);
   int *xl = x02, *xr = x012;
   float *zl = z02, *zr = z012;
   if (h01 < h && x012[h01] < x02[h01]) {
@@ -1152,6 +1264,71 @@ void sf_tri(sf_ctx_t *ctx, sf_pkd_clr_t c, sf_fvec3_t v0, sf_fvec3_t v1, sf_fvec
       }
       cz += dz;
       bi++;
+    }
+  }
+}
+
+void sf_tri_tex(sf_ctx_t *ctx, sf_tex_t *tex, sf_fvec3_t v0, sf_fvec3_t v1, sf_fvec3_t v2, sf_fvec3_t uvz0, sf_fvec3_t uvz1, sf_fvec3_t uvz2, sf_fvec3_t l_int) {
+  if (v1.y < v0.y) { _sf_swap_fvec3(&v0, &v1); _sf_swap_fvec3(&uvz0, &uvz1); }
+  if (v2.y < v0.y) { _sf_swap_fvec3(&v0, &v2); _sf_swap_fvec3(&uvz0, &uvz2); }
+  if (v2.y < v1.y) { _sf_swap_fvec3(&v1, &v2); _sf_swap_fvec3(&uvz1, &uvz2); }
+  if (v2.y < 0 || v0.y >= ctx->h) return;
+  int th = (int)v2.y - (int)v0.y + 1;
+  if (th <= 1 || th > 1024) return;
+
+  int x02[th], x012[th];
+  float z02[th], z012[th];
+  sf_fvec3_t uvz02[th], uvz012[th];
+
+  _sf_interp_x((sf_ivec2_t){(int)v0.x, (int)v0.y}, (sf_ivec2_t){(int)v2.x, (int)v2.y}, x02);
+  _sf_interp_f(v0.z, v2.z, th - 1, z02);
+  _sf_interp_fvec3(uvz0, uvz2, th - 1, uvz02);
+
+  int h01 = (int)v1.y - (int)v0.y;
+  int h12 = (int)v2.y - (int)v1.y;
+
+  if (h01 > 0) {
+    _sf_interp_x((sf_ivec2_t){(int)v0.x, (int)v0.y}, (sf_ivec2_t){(int)v1.x, (int)v1.y}, x012);
+    _sf_interp_f(v0.z, v1.z, h01, z012);
+    _sf_interp_fvec3(uvz0, uvz1, h01, uvz012);
+  }
+  if (h12 > 0) {
+    _sf_interp_x((sf_ivec2_t){(int)v1.x, (int)v1.y}, (sf_ivec2_t){(int)v2.x, (int)v2.y}, &x012[h01]);
+    _sf_interp_f(v1.z, v2.z, h12, &z012[h01]);
+    _sf_interp_fvec3(uvz1, uvz2, h12, &uvz012[h01]);
+  }
+
+  int *xl = x02, *xr = x012;
+  float *zl = z02, *zr = z012;
+  sf_fvec3_t *uvzl = uvz02, *uvzr = uvz012;
+  if (h01 < th && x012[h01] < x02[h01]) {
+    xl = x012; xr = x02; zl = z012; zr = z02; uvzl = uvz012; uvzr = uvz02;
+  }
+
+  for (int y = (int)v0.y; y <= (int)v2.y; ++y) {
+    if (y < 0 || y >= ctx->h) continue;
+    int i = y - (int)v0.y;
+    int xs = xl[i], xe = xr[i];
+    float scan_w = (float)(xe - xs);
+    if (scan_w <= 0) continue;
+    for (int x = xs; x <= xe; x++) {
+      if (x < 0 || x >= ctx->w) continue;
+      float t = (float)(x - xs) / scan_w;
+      float cz = zl[i] + (zr[i] - zl[i]) * t;
+      int bi = y * ctx->w + x;
+      if (cz < ctx->z_buffer[bi]) {
+        sf_fvec3_t uvz = _sf_lerp_fvec3(uvzl[i], uvzr[i], t);
+        float u = uvz.x / uvz.z, v = uvz.y / uvz.z;
+        int tx = (int)(u * (float)tex->w) % tex->w;
+        int ty = (int)(v * (float)tex->h) % tex->h;
+        if (tx < 0) tx += tex->w; if (ty < 0) ty += tex->h;
+        sf_fvec3_t texel = tex->px[ty * tex->w + tx];
+        float r = texel.x * l_int.x, g = texel.y * l_int.y, b = texel.z * l_int.z;
+        ctx->z_buffer[bi] = cz;
+        ctx->buffer[bi] = sf_pack_color((sf_unpkd_clr_t){
+          (uint8_t)(sqrtf(r) * 255.0f), (uint8_t)(sqrtf(g) * 255.0f), (uint8_t)(sqrtf(b) * 255.0f), 255
+        });
+      }
     }
   }
 }
@@ -1374,7 +1551,23 @@ void _sf_swap_svec2(sf_ivec2_t *v0, sf_ivec2_t *v1) {
   sf_ivec2_t t = *v0; *v0 = *v1; *v1 = t;
 }
 
-void _sf_interpolate_x(sf_ivec2_t v0, sf_ivec2_t v1, int *xs) {
+void _sf_swap_fvec3(sf_fvec3_t *v0, sf_fvec3_t *v1) {
+    sf_fvec3_t t = *v0; *v0 = *v1; *v1 = t;
+}
+
+void _sf_interp_fvec3(sf_fvec3_t v0, sf_fvec3_t v1, int steps, sf_fvec3_t *out) {
+  if (steps <= 0) return;
+  float step_x = (v1.x - v0.x) / steps;
+  float step_y = (v1.y - v0.y) / steps;
+  float step_z = (v1.z - v0.z) / steps;
+  for (int i = 0; i <= steps; ++i) {
+    out[i].x = v0.x + (step_x * i);
+    out[i].y = v0.y + (step_y * i);
+    out[i].z = v0.z + (step_z * i);
+  }
+}
+
+void _sf_interp_x(sf_ivec2_t v0, sf_ivec2_t v1, int *xs) {
   if (v0.y == v1.y) {
     xs[0] = v0.x;
     return;
@@ -1384,7 +1577,7 @@ void _sf_interpolate_x(sf_ivec2_t v0, sf_ivec2_t v1, int *xs) {
   }
 }
 
-void _sf_interpolate_y(sf_ivec2_t v0, sf_ivec2_t v1, int *ys) {
+void _sf_interp_y(sf_ivec2_t v0, sf_ivec2_t v1, int *ys) {
   if (v0.x == v1.x) {
     ys[0] = v0.y;
     return;
@@ -1394,12 +1587,24 @@ void _sf_interpolate_y(sf_ivec2_t v0, sf_ivec2_t v1, int *ys) {
   }
 }
 
-void _sf_interpolate_f(float v0, float v1, int steps, float *out) {
+void _sf_interp_f(float v0, float v1, int steps, float *out) {
   if (steps == 0) return;
   float step = (v1 - v0) / steps;
   for (int i = 0; i <= steps; ++i) {
     out[i] = v0 + (step * i);
   }
+}
+
+float _sf_lerp_f(float a, float b, float t) {
+  return a + (b - a) * t;
+}
+
+sf_fvec3_t _sf_lerp_fvec3(sf_fvec3_t a, sf_fvec3_t b, float t) {
+  return (sf_fvec3_t){
+    a.x + (b.x - a.x) * t,
+    a.y + (b.y - a.y) * t,
+    a.z + (b.z - a.z) * t
+  };
 }
 
 sf_fvec3_t _sf_intersect_near(sf_fvec3_t v0, sf_fvec3_t v1, float near) {
@@ -1428,6 +1633,40 @@ const char* _sf_log_lvl_to_str(sf_log_level_t level) {
         case SF_LOG_ERROR: return "error";
         default:           return "unknown";
     }
+}
+
+bool _sf_resolve_asset(const char* filename, char* out_path, size_t max_len) {
+    char dir_stack[32][512];
+    int stack_head = 0;
+    snprintf(dir_stack[stack_head++], 512, "%s", SF_ASSET_PATH);
+    while (stack_head > 0) {
+        char current_dir[512];
+        snprintf(current_dir, sizeof(current_dir), "%s", dir_stack[--stack_head]);
+        DIR *dir = opendir(current_dir);
+        if (!dir) continue;
+        struct dirent *entry;
+        while ((entry = readdir(dir)) != NULL) {
+            if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
+                continue;
+            }
+            char full_path[512];
+            snprintf(full_path, sizeof(full_path), "%s/%s", current_dir, entry->d_name);
+            struct stat statbuf;
+            if (stat(full_path, &statbuf) == 0) {
+                if (S_ISDIR(statbuf.st_mode)) {
+                    if (stack_head < 32) {
+                        snprintf(dir_stack[stack_head++], 512, "%s", full_path);
+                    }
+                } else if (strcmp(entry->d_name, filename) == 0) {
+                    snprintf(out_path, max_len, "%s", full_path);
+                    closedir(dir);
+                    return true;
+                }
+            }
+        }
+        closedir(dir);
+    }
+    return false;
 }
 
 /* SF_UTILITIES */
