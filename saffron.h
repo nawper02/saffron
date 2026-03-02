@@ -94,7 +94,9 @@ extern "C" {
 typedef struct sf_ctx_t_ sf_ctx_t;
 
 typedef enum {
+  SF_RUN_STATE_INIT,
   SF_RUN_STATE_RUNNING,
+  SF_RUN_STATE_ABORT,
   SF_RUN_STATE_STOPPED
 } sf_run_state_t;
 
