@@ -10,18 +10,14 @@
 #include <SDL2/SDL.h>
 
 /* Global state for the world file */
-sf_world_t* current_world = NULL;
 const char* world_path = SF_ASSET_PATH "/sf_worlds/example_world.sfw";
 
 /* --- CALLBACKS --- */
 
 void on_key_down(sf_ctx_t *ctx, const sf_event_t *ev, void *userdata) {
-    /* Press 'R' to clear the current world and reload it from file */
+    // Press 'R' to do something
     if (ev->key == SF_KEY_R) {
-        if (current_world) {
-            sf_clear_world(ctx, current_world);
-        }
-        current_world = sf_load_world(ctx, world_path, "Example World");
+
     }
 }
 
@@ -69,7 +65,7 @@ int main(int argc, char* argv[]) {
     sf_reg_event(&sf_ctx, SF_EVT_RENDER_START, on_render_start, NULL);
 
     /* Initial Load */
-    current_world = sf_load_world(&sf_ctx, world_path, "Example World");
+    sf_load_world(&sf_ctx, world_path, "Example World");
 
     SDL_Event event;
 
@@ -82,7 +78,7 @@ int main(int argc, char* argv[]) {
         }
 
         if (sf_key_pressed(&sf_ctx, SF_KEY_Q)) sf_stop(&sf_ctx);
-
+        
         sf_time_update(&sf_ctx);
         sf_render_ctx(&sf_ctx);
         sf_draw_debug_axes(&sf_ctx);
