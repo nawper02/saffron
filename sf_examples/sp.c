@@ -80,13 +80,12 @@ int main(int argc, char* argv[]) {
 
     sf_reg_event(&sf_ctx, SF_EVT_RENDER_START, on_render_start, NULL);
 
-    int running = 1;
     SDL_Event event;
 
-    while (running) {
+    while (sf_running(&sf_ctx)) {
         sf_input_cycle_state(&sf_ctx);
         while (SDL_PollEvent(&event)) {
-            if (event.type == SDL_QUIT) running = 0;
+            if (event.type == SDL_QUIT) sf_stop(&sf_ctx);
             sf_sdl_process_event(&sf_ctx, &event);
         }
 

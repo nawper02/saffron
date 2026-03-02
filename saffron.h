@@ -93,6 +93,11 @@ extern "C" {
 /* SF_TYPES */
 typedef struct sf_ctx_t_ sf_ctx_t;
 
+typedef enum {
+  SF_RUN_STATE_RUNNING,
+  SF_RUN_STATE_STOPPED
+} sf_run_state_t;
+
 typedef void (*sf_log_fn)(const char* message, void* userdata);
 typedef enum {
   SF_LOG_DEBUG,
@@ -255,6 +260,7 @@ typedef struct {
 } sf_input_state_t;
 
 struct sf_ctx_t_ {
+  sf_run_state_t                state;
   int                           w;
   int                           h;
   int                           buffer_size;
@@ -294,6 +300,8 @@ struct sf_ctx_t_ {
 /* SF_CORE_FUNCTIONS */
 void        sf_init             (sf_ctx_t *ctx, int w, int h);
 void        sf_destroy          (sf_ctx_t *ctx);
+bool        sf_running          (sf_ctx_t *ctx);
+void        sf_stop             (sf_ctx_t *ctx);
 sf_arena_t  sf_arena_init       (size_t size);
 void*       sf_arena_alloc      (sf_ctx_t *ctx, sf_arena_t *arena, size_t size);
 size_t      sf_arena_save       (sf_arena_t *arena);
@@ -397,6 +405,7 @@ static const uint8_t            _sf_font_8x8[];
 /* SF_CORE_FUNCTIONS */
 void sf_init(sf_ctx_t *ctx, int w, int h) {
   memset(ctx, 0, sizeof(sf_ctx_t));
+  ctx->state                    = SF_RUN_STATE_RUNNING;
   ctx->w                        = w;
   ctx->h                        = h;
   ctx->buffer_size              = w * h;
@@ -442,6 +451,7 @@ void sf_destroy(sf_ctx_t *ctx) {
   free(ctx->buffer);
   free(ctx->z_buffer);
   free(ctx->arena.buffer);
+  ctx->state                    = SF_RUN_STATE_STOPPED;
   ctx->arena.offset             = 0;
   ctx->buffer                   = NULL;
   ctx->buffer_size              = 0;
@@ -456,6 +466,14 @@ void sf_destroy(sf_ctx_t *ctx) {
               SF_LOG_INDENT "memory : %d\n"
               SF_LOG_INDENT "mxobjs : %d\n", 
               ctx->w, ctx->h, SF_ARENA_SIZE, SF_MAX_OBJS);
+}
+
+bool sf_running(sf_ctx_t *ctx) {
+  return (ctx->state == SF_RUN_STATE_RUNNING);
+}
+
+void sf_stop(sf_ctx_t *ctx) {
+  ctx->state = SF_RUN_STATE_STOPPED;
 }
 
 sf_arena_t sf_arena_init(size_t size) {

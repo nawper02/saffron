@@ -71,18 +71,17 @@ int main(int argc, char* argv[]) {
     /* Initial Load */
     current_world = sf_load_world(&sf_ctx, world_path, "Example World");
 
-    int running = 1;
     SDL_Event event;
 
-    while (running) {
+    while (sf_running(&sf_ctx)) {
         sf_input_cycle_state(&sf_ctx);
 
         while (SDL_PollEvent(&event)) {
-            if (event.type == SDL_QUIT) running = 0;
+            if (event.type == SDL_QUIT) sf_stop(&sf_ctx);
             sf_sdl_process_event(&sf_ctx, &event);
         }
 
-        if (sf_key_pressed(&sf_ctx, SF_KEY_Q)) running = 0;
+        if (sf_key_pressed(&sf_ctx, SF_KEY_Q)) sf_stop(&sf_ctx);
 
         sf_time_update(&sf_ctx);
         sf_render_ctx(&sf_ctx);

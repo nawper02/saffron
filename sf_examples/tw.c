@@ -16,10 +16,10 @@
 
 #define ASSET_PATH "/sf_objs/mk2.obj"
 
-volatile int running = 1;
+static sf_ctx_t *g_sf_ctx = NULL;
 
 void handle_sigint(int sig) {
-    running = 0;
+  if (g_sf_ctx) sf_stop(g_sf_ctx);
 }
 
 static const char b64_table[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
@@ -76,7 +76,6 @@ void render_to_terminal_pixels(uint32_t *buffer, int width, int height, int scal
     size_t b64_len;
     char *b64 = base64_encode(rgb, rgb_size, &b64_len);
 
-    /* --- THE FIX: BEGIN SYNCHRONIZED UPDATE --- */
     printf("\x1b[?2026h");
 
     /* Move cursor to top-left */
@@ -102,7 +101,6 @@ void render_to_terminal_pixels(uint32_t *buffer, int width, int height, int scal
         offset += chunk;
     }
     
-    /* --- THE FIX: END SYNCHRONIZED UPDATE --- */
     printf("\x1b[?2026l");
     
     fflush(stdout);
@@ -198,6 +196,7 @@ int main(int argc, char* argv[]) {
 
     sf_ctx_t sf_ctx;
     sf_init(&sf_ctx, render_w, render_h);
+    g_sf_ctx = &sf_ctx;
 
     /* Setup Camera */
     sf_camera_set_psp(&sf_ctx.camera, 60.0f, 0.1f, 100.0f);
@@ -221,7 +220,7 @@ int main(int argc, char* argv[]) {
     /* Clear screen and hide cursor */
     printf("\x1b[2J\x1b[?25l");
 
-    while (running) {
+    while (sf_running(&sf_ctx)) {
         sf_time_update(&sf_ctx);
         sf_render_ctx(&sf_ctx);
 
