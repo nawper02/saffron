@@ -135,17 +135,17 @@ typedef struct {
 } sf_camera_t;
 
 typedef struct {
-  sf_fvec3_t   *px;
-  int           w;
-  int           h;
-  int32_t       id;
-  const char   *name;
+  sf_fvec3_t                   *px;
+  int                           w;
+  int                           h;
+  int32_t                       id;
+  const char                   *name;
 } sf_tex_t;
 
 typedef struct { 
-  int v;
-  int vt;
-  int vn;
+  int                           v;
+  int                           vt;
+  int                           vn;
 } sf_vtx_idx_t;
 
 typedef struct {
@@ -173,7 +173,7 @@ typedef struct {
   sf_fvec3_t                    scale;
   bool                          is_dirty;
   int32_t                       id;
-  sf_tex_t                 *tex;
+  sf_tex_t                     *tex;
   const char                   *name;
 } sf_enti_t;
 
