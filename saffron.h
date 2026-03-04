@@ -80,6 +80,11 @@ typedef struct { int      x, y, z;    } sf_ivec3_t;
 typedef struct { float m[4][4];       } sf_fmat4_t;
 
 typedef struct {
+  int                           w;
+  int                           h;
+  int                           buffer_size;
+  sf_pkd_clr_t                 *buffer;
+  float                        *z_buffer;
   sf_fvec3_t                    pos;
   sf_fvec3_t                    front;
   sf_fvec3_t                    up;
@@ -215,11 +220,6 @@ typedef struct {
 
 struct sf_ctx_t_ {
   sf_run_state_t                state;
-  int                           w;
-  int                           h;
-  int                           buffer_size;
-  sf_pkd_clr_t                 *buffer;
-  float                        *z_buffer;
 
   sf_arena_t                    arena;
   int                           arena_size;
@@ -364,11 +364,20 @@ static const uint8_t            _sf_font_8x8[];
 void sf_init(sf_ctx_t *ctx, int w, int h) {
   memset(ctx, 0, sizeof(sf_ctx_t));
   ctx->state                    = SF_RUN_STATE_RUNNING;
-  ctx->w                        = w;
-  ctx->h                        = h;
-  ctx->buffer_size              = w * h;
-  ctx->buffer                   = (sf_pkd_clr_t*) malloc(w*h*sizeof(sf_pkd_clr_t));
-  ctx->z_buffer                 = (float*)             malloc(w*h*sizeof(float));
+  ctx->camera.w                 = w;
+  ctx->camera.h                 = h;
+  ctx->camera.buffer_size       = w * h;
+  ctx->camera.buffer            = (sf_pkd_clr_t*) malloc(w*h*sizeof(sf_pkd_clr_t));
+  ctx->camera.z_buffer          = (float*)        malloc(w*h*sizeof(float));
+  ctx->camera.pos               = (sf_fvec3_t){0.0f, 0.0f, 0.0f};
+  ctx->camera.world_up          = (sf_fvec3_t){0.0f, 1.0f, 0.0f};
+  ctx->camera.yaw               = -90.0f;
+  ctx->camera.pitch             = 0.0f;
+  ctx->camera.fov               = 60.0f;
+  ctx->camera.near_plane        = 0.1f;
+  ctx->camera.far_plane         = 100.0f;
+  ctx->camera.is_view_dirty     = true;
+  ctx->camera.is_proj_dirty     = true;
   ctx->arena                    = sf_arena_init(ctx, SF_ARENA_SIZE);
   ctx->log_cb                   = sf_logger_console;
   ctx->log_user                 = NULL;
@@ -381,15 +390,6 @@ void sf_init(sf_ctx_t *ctx, int w, int h) {
   ctx->enti_count               = 0;
   ctx->light_count              = 0;
   ctx->tex_count                = 0;
-  ctx->camera.pos               = (sf_fvec3_t){0.0f, 0.0f, 0.0f};
-  ctx->camera.world_up          = (sf_fvec3_t){0.0f, 1.0f, 0.0f};
-  ctx->camera.yaw               = -90.0f;
-  ctx->camera.pitch             = 0.0f;
-  ctx->camera.fov               = 60.0f;
-  ctx->camera.near_plane        = 0.1f;
-  ctx->camera.far_plane         = 100.0f;
-  ctx->camera.is_view_dirty     = true;
-  ctx->camera.is_proj_dirty     = true;
   ctx->_start_ticks             = _sf_get_ticks();
   ctx->_last_ticks              = ctx->_start_ticks;
   ctx->delta_time               = 0.0f;
@@ -402,19 +402,19 @@ void sf_init(sf_ctx_t *ctx, int w, int h) {
               SF_LOG_INDENT "memory : %d\n"
               SF_LOG_INDENT "mxobjs : %d\n" 
               SF_LOG_INDENT "mxents : %d\n", 
-              ctx->w, ctx->h, SF_ARENA_SIZE, SF_MAX_OBJS, SF_MAX_ENTITIES);
+              ctx->camera.w, ctx->camera.h, SF_ARENA_SIZE, SF_MAX_OBJS, SF_MAX_ENTITIES);
 }
 
 void sf_destroy(sf_ctx_t *ctx) {
-  free(ctx->buffer);
-  free(ctx->z_buffer);
+  free(ctx->camera.buffer);
+  free(ctx->camera.z_buffer);
   free(ctx->arena.buffer);
   ctx->state                    = SF_RUN_STATE_STOPPED;
   ctx->arena.offset             = 0;
-  ctx->buffer                   = NULL;
-  ctx->buffer_size              = 0;
-  ctx->w                        = 0;
-  ctx->h                        = 0;
+  ctx->camera.buffer                   = NULL;
+  ctx->camera.buffer_size              = 0;
+  ctx->camera.w                        = 0;
+  ctx->camera.h                        = 0;
   ctx->enti_count               = 0;
   ctx->obj_count                = 0;
   ctx->tex_count                = 0;
@@ -423,7 +423,7 @@ void sf_destroy(sf_ctx_t *ctx) {
               SF_LOG_INDENT "buffer : %dx%d\n"
               SF_LOG_INDENT "memory : %d\n"
               SF_LOG_INDENT "mxobjs : %d\n", 
-              ctx->w, ctx->h, SF_ARENA_SIZE, SF_MAX_OBJS);
+              ctx->camera.w, ctx->camera.h, SF_ARENA_SIZE, SF_MAX_OBJS);
 }
 
 bool sf_running(sf_ctx_t *ctx) {
@@ -557,7 +557,7 @@ void sf_render_ctx(sf_ctx_t *ctx) {
   sf_event_trigger(ctx, &ev_start);
 
   if (ctx->camera.is_proj_dirty) {
-    float aspect = (float)ctx->w / (float)ctx->h;
+    float aspect = (float)ctx->camera.w / (float)ctx->camera.h;
     ctx->camera.P = sf_make_psp_fmat4(ctx->camera.fov, aspect, ctx->camera.near_plane, ctx->camera.far_plane);
     ctx->camera.is_proj_dirty = false;
   }
@@ -1130,20 +1130,20 @@ void sf_camera_add_yp(sf_ctx_t *ctx, sf_camera_t *cam, float yaw_offset, float p
 
 /* SF_DRAWING_FUNCTIONS */
 void sf_fill(sf_ctx_t *ctx, sf_pkd_clr_t c) {
- for(size_t i = 0; i < ctx->buffer_size; ++i) { ctx->buffer[i] = c; }
+ for(size_t i = 0; i < ctx->camera.buffer_size; ++i) { ctx->camera.buffer[i] = c; }
 }
 
 void sf_pixel(sf_ctx_t *ctx, sf_pkd_clr_t c, sf_ivec2_t v0) {
-  if (v0.x >= ctx->w || v0.y >= ctx->h) return;
-  ctx->buffer[_sf_vec_to_index(ctx, v0)] = c;
+  if (v0.x >= ctx->camera.w || v0.y >= ctx->camera.h) return;
+  ctx->camera.buffer[_sf_vec_to_index(ctx, v0)] = c;
 }
 
 void sf_pixel_depth(sf_ctx_t *ctx, sf_pkd_clr_t c, sf_ivec2_t v, float z) {
-  if (v.x >= ctx->w || v.y >= ctx->h) return;
+  if (v.x >= ctx->camera.w || v.y >= ctx->camera.h) return;
   uint32_t idx = _sf_vec_to_index(ctx, v);
-  if (z < ctx->z_buffer[idx]) {
-    ctx->z_buffer[idx] = z;
-    ctx->buffer[idx] = c;
+  if (z < ctx->camera.z_buffer[idx]) {
+    ctx->camera.z_buffer[idx] = z;
+    ctx->camera.buffer[idx] = c;
   }
 }
 
@@ -1186,7 +1186,7 @@ void sf_tri(sf_ctx_t *ctx, sf_pkd_clr_t c, sf_fvec3_t v0, sf_fvec3_t v1, sf_fvec
   if (v1.y < v0.y) { sf_fvec3_t t = v0; v0 = v1; v1 = t; }
   if (v2.y < v0.y) { sf_fvec3_t t = v0; v0 = v2; v2 = t; }
   if (v2.y < v1.y) { sf_fvec3_t t = v1; v1 = v2; v2 = t; }
-  if (v2.y < 0 || v0.y >= ctx->h) return;
+  if (v2.y < 0 || v0.y >= ctx->camera.h) return;
   int h = (int)v2.y - (int)v0.y + 1;
   if (h <= 1 || h > 8192) return;
   int x02[h], x012[h];
@@ -1206,7 +1206,7 @@ void sf_tri(sf_ctx_t *ctx, sf_pkd_clr_t c, sf_fvec3_t v0, sf_fvec3_t v1, sf_fvec
     zl = z012; zr = z02;
   }
   for (int y = (int)v0.y; y <= (int)v2.y; ++y) {
-    if (y < 0 || y >= ctx->h) continue;
+    if (y < 0 || y >= ctx->camera.h) continue;
     int idx = y - (int)v0.y;
     int x_s = xl[idx], x_e = xr[idx];
     float z_s = zl[idx], z_e = zr[idx];
@@ -1214,17 +1214,17 @@ void sf_tri(sf_ctx_t *ctx, sf_pkd_clr_t c, sf_fvec3_t v0, sf_fvec3_t v1, sf_fvec
     float dz = (w <= 0.0f) ? 0.0f : (z_e - z_s) / w;
     int ox = x_s;
     if (x_s < 0) x_s = 0;
-    if (x_e >= ctx->w) x_e = ctx->w - 1;
+    if (x_e >= ctx->camera.w) x_e = ctx->camera.w - 1;
     float cz = z_s + (dz * (float)(x_s - ox));
-    int bi = y * ctx->w + x_s;
+    int bi = y * ctx->camera.w + x_s;
     for (int x = x_s; x <= x_e; ++x) {
       if (use_depth) {
-        if (cz < ctx->z_buffer[bi]) {
-          ctx->z_buffer[bi] = cz;
-          ctx->buffer[bi] = c;
+        if (cz < ctx->camera.z_buffer[bi]) {
+          ctx->camera.z_buffer[bi] = cz;
+          ctx->camera.buffer[bi] = c;
         }
       } else {
-        ctx->buffer[bi] = c;
+        ctx->camera.buffer[bi] = c;
       }
       cz += dz;
       bi++;
@@ -1236,7 +1236,7 @@ void sf_tri_tex(sf_ctx_t *ctx, sf_tex_t *tex, sf_fvec3_t v0, sf_fvec3_t v1, sf_f
   if (v1.y < v0.y) { _sf_swap_fvec3(&v0, &v1); _sf_swap_fvec3(&uvz0, &uvz1); }
   if (v2.y < v0.y) { _sf_swap_fvec3(&v0, &v2); _sf_swap_fvec3(&uvz0, &uvz2); }
   if (v2.y < v1.y) { _sf_swap_fvec3(&v1, &v2); _sf_swap_fvec3(&uvz1, &uvz2); }
-  if (v2.y < 0 || v0.y >= ctx->h) return;
+  if (v2.y < 0 || v0.y >= ctx->camera.h) return;
   int th = (int)v2.y - (int)v0.y + 1;
   if (th <= 1 || th > 1024) return;
 
@@ -1270,17 +1270,17 @@ void sf_tri_tex(sf_ctx_t *ctx, sf_tex_t *tex, sf_fvec3_t v0, sf_fvec3_t v1, sf_f
   }
 
   for (int y = (int)v0.y; y <= (int)v2.y; ++y) {
-    if (y < 0 || y >= ctx->h) continue;
+    if (y < 0 || y >= ctx->camera.h) continue;
     int i = y - (int)v0.y;
     int xs = xl[i], xe = xr[i];
     float scan_w = (float)(xe - xs);
     if (scan_w <= 0) continue;
     for (int x = xs; x <= xe; x++) {
-      if (x < 0 || x >= ctx->w) continue;
+      if (x < 0 || x >= ctx->camera.w) continue;
       float t = (float)(x - xs) / scan_w;
       float cz = zl[i] + (zr[i] - zl[i]) * t;
-      int bi = y * ctx->w + x;
-      if (cz < ctx->z_buffer[bi]) {
+      int bi = y * ctx->camera.w + x;
+      if (cz < ctx->camera.z_buffer[bi]) {
         sf_fvec3_t uvz = _sf_lerp_fvec3(uvzl[i], uvzr[i], t);
         float u = uvz.x / uvz.z, v = uvz.y / uvz.z;
         int tx = (int)(u * (float)tex->w) % tex->w;
@@ -1288,8 +1288,8 @@ void sf_tri_tex(sf_ctx_t *ctx, sf_tex_t *tex, sf_fvec3_t v0, sf_fvec3_t v1, sf_f
         if (tx < 0) tx += tex->w; if (ty < 0) ty += tex->h;
         sf_fvec3_t texel = tex->px[ty * tex->w + tx];
         float r = texel.x * l_int.x, g = texel.y * l_int.y, b = texel.z * l_int.z;
-        ctx->z_buffer[bi] = cz;
-        ctx->buffer[bi] = _sf_pack_color((sf_unpkd_clr_t){
+        ctx->camera.z_buffer[bi] = cz;
+        ctx->camera.buffer[bi] = _sf_pack_color((sf_unpkd_clr_t){
           (uint8_t)(sqrtf(r) * 255.0f), (uint8_t)(sqrtf(g) * 255.0f), (uint8_t)(sqrtf(b) * 255.0f), 255
         });
       }
@@ -1332,14 +1332,14 @@ void sf_put_text(sf_ctx_t *ctx, const char *text, sf_ivec2_t p, sf_pkd_clr_t c, 
 }
 
 void sf_clear_depth(sf_ctx_t *ctx) {
-  for (int i = 0; i < ctx->buffer_size; ++i) {
-    ctx->z_buffer[i] = 1000000.0f;
+  for (int i = 0; i < ctx->camera.buffer_size; ++i) {
+    ctx->camera.z_buffer[i] = 1000000.0f;
   }
 }
 
 void sf_draw_debug_axes(sf_ctx_t *ctx) {
   int cx = 40;
-  int cy = ctx->h - 40;
+  int cy = ctx->camera.h - 40;
   float scale = 30.0f;
 
   sf_fvec3_t x_axis = { ctx->camera.V.m[0][0], ctx->camera.V.m[0][1], ctx->camera.V.m[0][2] };
@@ -1390,7 +1390,7 @@ void sf_logger_console(const char* message, void* userdata) {
 
 /* SF_IMPLEMENTATION_HELPERS */
 uint32_t _sf_vec_to_index(sf_ctx_t *ctx, sf_ivec2_t v) {
-  return v.y * ctx->w + v.x;
+  return v.y * ctx->camera.w + v.x;
 }
 
 void _sf_swap_svec2(sf_ivec2_t *v0, sf_ivec2_t *v1) {
@@ -1465,8 +1465,8 @@ sf_fvec3_t _sf_intersect_near(sf_fvec3_t v0, sf_fvec3_t v1, float near) {
 sf_fvec3_t _sf_project_vertex(sf_ctx_t *ctx, sf_fvec3_t v, sf_fmat4_t P) {
   sf_fvec3_t proj = sf_fmat4_mul_vec3(P, v);
   return (sf_fvec3_t){
-    (proj.x + 1.0f) * 0.5f * (float)ctx->w,
-    (1.0f - (proj.y + 1.0f) * 0.5f) * (float)ctx->h,
+    (proj.x + 1.0f) * 0.5f * (float)ctx->camera.w,
+    (1.0f - (proj.y + 1.0f) * 0.5f) * (float)ctx->camera.h,
     proj.z
   };
 }

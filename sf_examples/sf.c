@@ -85,7 +85,7 @@ int main(int argc, char* argv[]) {
 
         sf_put_text(&sf_ctx, "SAFFRON 3D", (sf_ivec2_t){10, 10}, SF_CLR_WHITE, 1);
 
-        SDL_UpdateTexture(texture, NULL, sf_ctx.buffer, sf_ctx.w * sizeof(sf_pkd_clr_t));
+        SDL_UpdateTexture(texture, NULL, sf_ctx.camera.buffer, sf_ctx.camera.w * sizeof(sf_pkd_clr_t));
         SDL_RenderCopy(renderer, texture, NULL, NULL);
         SDL_RenderPresent(renderer);
     }

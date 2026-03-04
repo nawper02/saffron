@@ -92,7 +92,7 @@ int main(int argc, char* argv[]) {
         sf_time_update(&sf_ctx);
         sf_render_ctx(&sf_ctx);
 
-        SDL_UpdateTexture(texture, NULL, sf_ctx.buffer, render_w * sizeof(sf_pkd_clr_t));
+        SDL_UpdateTexture(texture, NULL, sf_ctx.camera.buffer, render_w * sizeof(sf_pkd_clr_t));
         SDL_RenderClear(renderer);
         SDL_RenderCopy(renderer, texture, NULL, NULL);
         SDL_RenderPresent(renderer);

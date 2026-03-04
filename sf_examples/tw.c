@@ -135,8 +135,8 @@ void on_render_end(sf_ctx_t *ctx, const sf_event_t *ev, void *userdata) {
     int margin_lt = 6;  // Left/Top margin
     int margin_rb = 14; // Right/Bottom margin (extra room for character width)
     
-    int W = ctx->w - (margin_lt + margin_rb);
-    int H = ctx->h - (margin_lt + margin_rb);
+    int W = ctx->camera.w - (margin_lt + margin_rb);
+    int H = ctx->camera.h - (margin_lt + margin_rb);
     int perimeter = 2 * (W + H);
     
     // We subtract the offset to move 'forward' in a clockwise direction
@@ -224,7 +224,7 @@ int main(int argc, char* argv[]) {
         sf_time_update(&sf_ctx);
         sf_render_ctx(&sf_ctx);
 
-        render_to_terminal_pixels((uint32_t*)sf_ctx.buffer, render_w, render_h, 3);
+        render_to_terminal_pixels((uint32_t*)sf_ctx.camera.buffer, render_w, render_h, 3);
 
         /* Cap frame rate to ~30 FPS */
         sleep_ms(33); 
