@@ -113,7 +113,7 @@ void on_render_end(sf_ctx_t *ctx, const sf_event_t *ev, void *userdata) {
     /* 1. Spin the MK2 */
     sf_enti_t *mk2 = sf_get_enti(ctx, "mk2");
     if (mk2) {
-        sf_enti_rotate(mk2, 1.0f * ctx->delta_time, 0.5f * ctx->delta_time, 0.0f);
+        sf_enti_rotate(ctx, mk2, 1.0f * ctx->delta_time, 0.5f * ctx->delta_time, 0.0f);
     }
 
     /* 2. Light Color Prep */
@@ -199,20 +199,20 @@ int main(int argc, char* argv[]) {
     g_sf_ctx = &sf_ctx;
 
     /* Setup Camera */
-    sf_camera_set_psp(&sf_ctx.camera, 60.0f, 0.1f, 100.0f);
-    sf_camera_set_pos(&sf_ctx.camera, 0.0f, 0.0f, 6.0f);
-    sf_camera_look_at(&sf_ctx.camera, (sf_fvec3_t){0.0f, 0.0f, 0.0f});
+    sf_camera_set_psp(&sf_ctx, &sf_ctx.camera, 60.0f, 0.1f, 100.0f);
+    sf_camera_set_pos(&sf_ctx, &sf_ctx.camera, 0.0f, 0.0f, 6.0f);
+    sf_camera_look_at(&sf_ctx, &sf_ctx.camera, (sf_fvec3_t){0.0f, 0.0f, 0.0f});
 
     /* Load mk2 from the defined system path */
     sf_obj_t* mk2_obj = sf_load_obj(&sf_ctx, SF_ASSET_PATH "/sf_objs/mk2.obj", "mk2_mesh");
     if (mk2_obj) {
         sf_enti_t* mk2_enti = sf_add_enti(&sf_ctx, mk2_obj, "mk2");
-        sf_enti_set_scale(mk2_enti, 12.0f, 12.0f, 12.0f);
+        sf_enti_set_scale(&sf_ctx, mk2_enti, 12.0f, 12.0f, 12.0f);
     }
 
     /* Initial light source */
     sf_add_light_dir(&sf_ctx, (sf_fvec3_t){1.0f, -1.0f, -1.0f}, (sf_fvec3_t){1.0f, 1.0f, 1.0f}, 1.2f);
-    sf_reg_event(&sf_ctx, SF_EVT_RENDER_END, on_render_end, NULL);
+    sf_event_reg(&sf_ctx, SF_EVT_RENDER_END, on_render_end, NULL);
 
     /* Increase stdout buffer size to prevent tearing/flickering */
     setvbuf(stdout, NULL, _IOFBF, 65536);

@@ -27,24 +27,24 @@ void on_render_start(sf_ctx_t *ctx, const sf_event_t *ev, void *userdata) {
     float look_speed = 60.0f * ctx->delta_time;
 
     /* Continuous Input */
-    if (sf_key_down(ctx, SF_KEY_W))      sf_camera_move_loc(cam,  move_speed, 0.0f, 0.0f);
-    if (sf_key_down(ctx, SF_KEY_S))      sf_camera_move_loc(cam, -move_speed, 0.0f, 0.0f);
-    if (sf_key_down(ctx, SF_KEY_A))      sf_camera_move_loc(cam, 0.0f, -move_speed, 0.0f);
-    if (sf_key_down(ctx, SF_KEY_D))      sf_camera_move_loc(cam, 0.0f,  move_speed, 0.0f);
-    if (sf_key_down(ctx, SF_KEY_SPACE))  sf_camera_move_loc(cam, 0.0f, 0.0f,  move_speed);
-    if (sf_key_down(ctx, SF_KEY_LSHIFT)) sf_camera_move_loc(cam, 0.0f, 0.0f, -move_speed);
+    if (sf_key_down(ctx, SF_KEY_W))      sf_camera_move_loc(ctx, cam,  move_speed, 0.0f, 0.0f);
+    if (sf_key_down(ctx, SF_KEY_S))      sf_camera_move_loc(ctx, cam, -move_speed, 0.0f, 0.0f);
+    if (sf_key_down(ctx, SF_KEY_A))      sf_camera_move_loc(ctx, cam, 0.0f, -move_speed, 0.0f);
+    if (sf_key_down(ctx, SF_KEY_D))      sf_camera_move_loc(ctx, cam, 0.0f,  move_speed, 0.0f);
+    if (sf_key_down(ctx, SF_KEY_SPACE))  sf_camera_move_loc(ctx, cam, 0.0f, 0.0f,  move_speed);
+    if (sf_key_down(ctx, SF_KEY_LSHIFT)) sf_camera_move_loc(ctx, cam, 0.0f, 0.0f, -move_speed);
 
-    if (sf_key_down(ctx, SF_KEY_UP))    sf_camera_add_yp(cam, 0.0f,  look_speed);
-    if (sf_key_down(ctx, SF_KEY_DOWN))  sf_camera_add_yp(cam, 0.0f, -look_speed);
-    if (sf_key_down(ctx, SF_KEY_LEFT))  sf_camera_add_yp(cam, -look_speed, 0.0f);
-    if (sf_key_down(ctx, SF_KEY_RIGHT)) sf_camera_add_yp(cam,  look_speed, 0.0f);
+    if (sf_key_down(ctx, SF_KEY_UP))    sf_camera_add_yp(ctx, cam, 0.0f,  look_speed);
+    if (sf_key_down(ctx, SF_KEY_DOWN))  sf_camera_add_yp(ctx, cam, 0.0f, -look_speed);
+    if (sf_key_down(ctx, SF_KEY_LEFT))  sf_camera_add_yp(ctx, cam, -look_speed, 0.0f);
+    if (sf_key_down(ctx, SF_KEY_RIGHT)) sf_camera_add_yp(ctx, cam,  look_speed, 0.0f);
 
     /* Update entities by name */
     sf_enti_t *teapot = sf_get_enti(ctx, "teapot");
     sf_enti_t *mk2    = sf_get_enti(ctx, "mk2");
 
-    if (teapot) sf_enti_rotate(teapot, 1.0f * ctx->delta_time, 1.5f * ctx->delta_time, 0.0f);
-    if (mk2)    sf_enti_rotate(mk2,   -2.0f * ctx->delta_time, -0.5f * ctx->delta_time, 0.0f);
+    if (teapot) sf_enti_rotate(ctx, teapot, 1.0f * ctx->delta_time, 1.5f * ctx->delta_time, 0.0f);
+    if (mk2)    sf_enti_rotate(ctx, mk2,   -2.0f * ctx->delta_time, -0.5f * ctx->delta_time, 0.0f);
 }
 
 /* --- MAIN PROGRAM --- */
@@ -61,8 +61,8 @@ int main(int argc, char* argv[]) {
     sf_ctx_t sf_ctx;
     sf_init(&sf_ctx, width, height);
 
-    sf_reg_event(&sf_ctx, SF_EVT_KEY_DOWN, on_key_down, NULL);
-    sf_reg_event(&sf_ctx, SF_EVT_RENDER_START, on_render_start, NULL);
+    sf_event_reg(&sf_ctx, SF_EVT_KEY_DOWN, on_key_down, NULL);
+    sf_event_reg(&sf_ctx, SF_EVT_RENDER_START, on_render_start, NULL);
 
     /* Initial Load */
     sf_load_world(&sf_ctx, world_path, "Example World");
