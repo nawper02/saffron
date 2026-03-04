@@ -320,6 +320,9 @@ void         sf_clear_depth      (sf_ctx_t *ctx, sf_cam_t *cam);
 void         sf_draw_debug_axes  (sf_ctx_t *ctx, sf_cam_t *cam);
 void         sf_draw_cam         (sf_ctx_t *ctx, sf_cam_t *dest, sf_cam_t *src, sf_ivec2_t pos);
 
+/* SF_UI_FUNCTIONS */
+
+
 /* SF_LOG_FUNCTIONS */
 void         sf_log_             (sf_ctx_t *ctx, sf_log_level_t level, const char* func, const char* fmt, ...);
 void         sf_set_logger       (sf_ctx_t *ctx, sf_log_fn log_cb, void* userdata);
@@ -1480,6 +1483,9 @@ void sf_draw_cam(sf_ctx_t *ctx, sf_cam_t *dest, sf_cam_t *src, sf_ivec2_t pos) {
     }
   }
 }
+
+/* SF_UI_FUNCTIONS */
+
 
 /* SF_LOG_FUNCTIONS */
 void sf_log_(sf_ctx_t *ctx, sf_log_level_t level, const char* func, const char* fmt, ...) {
