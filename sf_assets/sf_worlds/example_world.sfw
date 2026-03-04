@@ -1,5 +1,8 @@
-# Camera Setup (Position: 0,0,8 | Target: 0,0,0)
-c 0.0 0.0 8.0  0.0 0.0 0.0
+# Main Camera Setup (Position: 0,0,8 | Target: 0,0,0 | FoV: 60.0)
+M 0.0 0.0 8.0  0.0 0.0 0.0  60.0
+
+# Additional Camera
+c pip_cam 100 100 75.0  0.0 0.0 5.0  0.0 0.0 0.0
 
 # Mesh Definitions
 m mk2      mk2.obj

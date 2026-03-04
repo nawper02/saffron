@@ -60,16 +60,14 @@ int main(int argc, char* argv[]) {
 
     sf_ctx_t sf_ctx;
     sf_init(&sf_ctx, width, height);
-    sf_cam_t* pip_cam = sf_add_cam(&sf_ctx, "pip_cam", 150, 150, 45.0);
-    sf_camera_set_psp(&sf_ctx, pip_cam, 60.0f, 0.1f, 100.0f);
-    sf_camera_set_pos(&sf_ctx, pip_cam, 0.0f, 0.0f, 6.0f);
-    sf_camera_look_at(&sf_ctx, pip_cam, (sf_fvec3_t){0.0f, 0.0f, 0.0f});
 
     sf_event_reg(&sf_ctx, SF_EVT_KEY_DOWN, on_key_down, NULL);
     sf_event_reg(&sf_ctx, SF_EVT_RENDER_START, on_render_start, NULL);
 
     /* Initial Load */
     sf_load_world(&sf_ctx, world_path, "Example World");
+    sf_cam_t* pip_cam = sf_get_cam(&sf_ctx, "pip_cam");
+    sf_camera_look_at(&sf_ctx, pip_cam, (sf_fvec3_t){0.0f, 0.0f, 0.0f});
 
     SDL_Event event;
 
