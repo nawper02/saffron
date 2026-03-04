@@ -780,7 +780,11 @@ sf_tex_t* sf_load_texture_bmp(sf_ctx_t *ctx, const char *filename, const char *t
     fseek(file, padding, SEEK_CUR);
   }
   fclose(file);
-  SF_LOG(ctx, SF_LOG_INFO, SF_LOG_INDENT "loaded texture : %s (%dx%d)\n", texname, w, h_abs);
+  SF_LOG(ctx, SF_LOG_INFO, 
+              SF_LOG_INDENT "tex    : %s\n"
+              SF_LOG_INDENT "w      : %d\n"
+              SF_LOG_INDENT "h      : %d\n",
+              texname, w, h_abs);
   return tex;
 }
 
@@ -1019,7 +1023,7 @@ sf_cam_t* sf_add_cam(sf_ctx_t *ctx, const char *camname, int w, int h, float fov
   _sf_update_cam_vecs(cam);
   SF_LOG(ctx, SF_LOG_INFO, 
               SF_LOG_INDENT "cam    : %s (%dx%d)\n"
-              SF_LOG_INDENT "fov    : %s (id %d)\n",
+              SF_LOG_INDENT "fov    : %.2f\n",
               cam->name, w, h, fov);
   return cam;
 }
