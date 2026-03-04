@@ -45,6 +45,9 @@ void on_render_start(sf_ctx_t *ctx, const sf_event_t *ev, void *userdata) {
 
     if (teapot) sf_enti_rotate(ctx, teapot, 1.0f * ctx->delta_time, 1.5f * ctx->delta_time, 0.0f);
     if (tux)    sf_enti_rotate(ctx, tux,    0.0f, -0.1f * ctx->delta_time, 0.0f);
+    char fps_text[32];
+    snprintf(fps_text, sizeof(fps_text), "FPS: %.2f", ctx->fps);
+    sf_put_text(ctx, &ctx->camera, fps_text, (sf_ivec2_t){ctx->camera.w-93, 10}, SF_CLR_WHITE, 1.0);
 }
 
 /* --- MAIN PROGRAM --- */
