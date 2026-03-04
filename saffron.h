@@ -1022,9 +1022,12 @@ sf_cam_t* sf_add_cam(sf_ctx_t *ctx, const char *camname, int w, int h, float fov
 
   _sf_update_cam_vecs(cam);
   SF_LOG(ctx, SF_LOG_INFO, 
-              SF_LOG_INDENT "cam    : %s (%dx%d)\n"
+              SF_LOG_INDENT "name   : %s\n"
+              SF_LOG_INDENT "id     : %d\n"
+              SF_LOG_INDENT "w      : %d\n"
+              SF_LOG_INDENT "h      : %d\n"
               SF_LOG_INDENT "fov    : %.2f\n",
-              cam->name, w, h, fov);
+              cam->name, cam->id, w, h, fov);
   return cam;
 }
 
