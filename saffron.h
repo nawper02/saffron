@@ -781,10 +781,12 @@ sf_tex_t* sf_load_texture_bmp(sf_ctx_t *ctx, const char *filename, const char *t
   }
   fclose(file);
   SF_LOG(ctx, SF_LOG_INFO, 
-              SF_LOG_INDENT "tex    : %s\n"
+              SF_LOG_INDENT "file   : %s\n"
+              SF_LOG_INDENT "name   : %s\n"
+              SF_LOG_INDENT "id     : %d\n"
               SF_LOG_INDENT "w      : %d\n"
               SF_LOG_INDENT "h      : %d\n",
-              texname, w, h_abs);
+              filename, texname, tex->id, w, h_abs);
   return tex;
 }
 
@@ -861,12 +863,10 @@ sf_obj_t* sf_load_obj(sf_ctx_t *ctx, const char *filename, const char *objname) 
               SF_LOG_INDENT "norms  : %d\n"
               SF_LOG_INDENT "faces  : %d\n"
               SF_LOG_INDENT "size   : %zu\n"
-              SF_LOG_INDENT "mem    : %.2f\n"
-              SF_LOG_INDENT "obj_id : %d\n",
+              SF_LOG_INDENT "mem    : %.2f\n",
               filename, objname, obj->id, v_cnt, vt_cnt, vn_cnt, f_cnt, 
               _sf_obj_memusg(obj), 
-              ((float)ctx->arena.offset / (float)ctx->arena.size) * 100.0f,
-              ctx->obj_count - 1);
+              ((float)ctx->arena.offset / (float)ctx->arena.size) * 100.0f);
 
   rewind(file);
   int v_idx = 0, vt_idx = 0, vn_idx = 0, f_idx = 0;
