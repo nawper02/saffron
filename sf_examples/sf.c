@@ -60,6 +60,10 @@ int main(int argc, char* argv[]) {
 
     sf_ctx_t sf_ctx;
     sf_init(&sf_ctx, width, height);
+    sf_cam_t* pip_cam = sf_add_cam(&sf_ctx, "pip_cam", 150, 150, 45.0);
+    sf_camera_set_psp(&sf_ctx, pip_cam, 60.0f, 0.1f, 100.0f);
+    sf_camera_set_pos(&sf_ctx, pip_cam, 0.0f, 0.0f, 6.0f);
+    sf_camera_look_at(&sf_ctx, pip_cam, (sf_fvec3_t){0.0f, 0.0f, 0.0f});
 
     sf_event_reg(&sf_ctx, SF_EVT_KEY_DOWN, on_key_down, NULL);
     sf_event_reg(&sf_ctx, SF_EVT_RENDER_START, on_render_start, NULL);
@@ -80,7 +84,9 @@ int main(int argc, char* argv[]) {
         if (sf_key_pressed(&sf_ctx, SF_KEY_Q)) sf_stop(&sf_ctx);
         
         sf_time_update(&sf_ctx);
-        sf_render_cam(&sf_ctx, &sf_ctx.camera);
+        sf_render_ctx(&sf_ctx);
+        sf_rect(&sf_ctx, &sf_ctx.camera, SF_CLR_WHITE, (sf_ivec2_t){width-pip_cam->w-22, height-pip_cam->h-22}, (sf_ivec2_t){width-19, height-19});
+        sf_draw_cam(&sf_ctx, &sf_ctx.camera, pip_cam, (sf_ivec2_t){width-pip_cam->w-20,height-pip_cam->h-20}); 
         sf_draw_debug_axes(&sf_ctx, &sf_ctx.camera);
 
         sf_put_text(&sf_ctx, &sf_ctx.camera, "SAFFRON 3D", (sf_ivec2_t){10, 10}, SF_CLR_WHITE, 1);

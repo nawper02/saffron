@@ -33,6 +33,7 @@ extern "C" {
 #define SF_MAX_ENTITIES        100
 #define SF_MAX_LIGHTS          10
 #define SF_MAX_TEXTURES        20
+#define SF_MAX_CAMS            5
 #define SF_MAX_CB_PER_EVT      4
 #define SF_LOG_INDENT          "            "
 #define SF_PI                  3.14159265359f
@@ -45,6 +46,7 @@ extern "C" {
 #define SF_RAD2DEG(r)                 ((r) * (180.0f / SF_PI))
 #define sf_get_obj(ctx, name)         sf_get_obj_(ctx, name, true)
 #define sf_get_enti(ctx, name)        sf_get_enti_(ctx, name, true)
+#define sf_get_cam(ctx, name)         sf_get_cam_(ctx, name, true)
 
 #define SF_CLR_RED                    ((sf_pkd_clr_t)0xFFFF0000)
 #define SF_CLR_GREEN                  ((sf_pkd_clr_t)0xFF00FF00)
@@ -80,6 +82,8 @@ typedef struct { int      x, y, z;    } sf_ivec3_t;
 typedef struct { float m[4][4];       } sf_fmat4_t;
 
 typedef struct {
+  int32_t                       id;
+  const char                   *name;
   int                           w;
   int                           h;
   int                           buffer_size;
@@ -230,6 +234,8 @@ struct sf_ctx_t_ {
   int32_t                       enti_count;
   sf_tex_t                     *textures;
   int32_t                       tex_count;
+  sf_cam_t                     *cameras;
+  int32_t                       cam_count;
 
   sf_light_t                   *lights;
   int32_t                       light_count;
@@ -284,6 +290,8 @@ sf_obj_t*    sf_load_obj         (sf_ctx_t *ctx, const char *filename, const cha
 sf_obj_t*    sf_get_obj_         (sf_ctx_t *ctx, const char *objname, bool should_log_failure);
 sf_enti_t*   sf_add_enti         (sf_ctx_t *ctx, sf_obj_t *obj, const char *entiname);
 sf_enti_t*   sf_get_enti_        (sf_ctx_t *ctx, const char *entiname, bool should_log_failure);
+sf_cam_t*    sf_add_cam          (sf_ctx_t *ctx, const char *camname, int w, int h, float fov);
+sf_cam_t*    sf_get_cam_         (sf_ctx_t *ctx, const char *camname, bool should_log_failure);
 void         sf_enti_set_pos     (sf_ctx_t *ctx, sf_enti_t *enti, float x, float y, float z);
 void         sf_enti_move        (sf_ctx_t *ctx, sf_enti_t *enti, float dx, float dy, float dz);
 void         sf_enti_set_rot     (sf_ctx_t *ctx, sf_enti_t *enti, float rx, float ry, float rz);
@@ -310,6 +318,7 @@ void         sf_tri_tex          (sf_ctx_t *ctx, sf_cam_t *cam, sf_tex_t *tex, s
 void         sf_put_text         (sf_ctx_t *ctx, sf_cam_t *cam, const char *text, sf_ivec2_t p, sf_pkd_clr_t c, int scale);
 void         sf_clear_depth      (sf_ctx_t *ctx, sf_cam_t *cam);
 void         sf_draw_debug_axes  (sf_ctx_t *ctx, sf_cam_t *cam);
+void         sf_draw_cam         (sf_ctx_t *ctx, sf_cam_t *dest, sf_cam_t *src, sf_ivec2_t pos);
 
 /* SF_LOG_FUNCTIONS */
 void         sf_log_             (sf_ctx_t *ctx, sf_log_level_t level, const char* func, const char* fmt, ...);
@@ -387,10 +396,11 @@ void sf_init(sf_ctx_t *ctx, int w, int h) {
   ctx->entities                 = sf_arena_alloc(ctx, &ctx->arena, SF_MAX_ENTITIES * sizeof(sf_enti_t));
   ctx->lights                   = sf_arena_alloc(ctx, &ctx->arena, SF_MAX_LIGHTS   * sizeof(sf_light_t));
   ctx->textures                 = sf_arena_alloc(ctx, &ctx->arena, SF_MAX_TEXTURES * sizeof(sf_tex_t));
-  ctx->obj_count                = 0;
+  ctx->cameras                  = sf_arena_alloc(ctx, &ctx->arena, SF_MAX_CAMS     * sizeof(sf_cam_t));
   ctx->enti_count               = 0;
   ctx->light_count              = 0;
   ctx->tex_count                = 0;
+  ctx->cam_count                = 0;
   ctx->_start_ticks             = _sf_get_ticks();
   ctx->_last_ticks              = ctx->_start_ticks;
   ctx->delta_time               = 0.0f;
@@ -407,6 +417,10 @@ void sf_init(sf_ctx_t *ctx, int w, int h) {
 }
 
 void sf_destroy(sf_ctx_t *ctx) {
+  for (int i = 0; i < ctx->cam_count; ++i) {
+    free(ctx->cameras[i].buffer);
+    free(ctx->cameras[i].z_buffer);
+  }
   free(ctx->camera.buffer);
   free(ctx->camera.z_buffer);
   free(ctx->arena.buffer);
@@ -420,6 +434,7 @@ void sf_destroy(sf_ctx_t *ctx) {
   ctx->obj_count                = 0;
   ctx->tex_count                = 0;
   ctx->light_count              = 0;
+  ctx->cam_count                = 0;
   SF_LOG(ctx, SF_LOG_INFO,
               SF_LOG_INDENT "buffer : %dx%d\n"
               SF_LOG_INDENT "memory : %d\n"
@@ -438,8 +453,8 @@ void sf_stop(sf_ctx_t *ctx) {
 void sf_render_enti(sf_ctx_t *ctx, sf_cam_t *cam, sf_enti_t *enti) {
   size_t mark = sf_arena_save(ctx, &ctx->arena);
   sf_fmat4_t M = enti->M;
-  sf_fmat4_t V = ctx->camera.V;
-  sf_fmat4_t P = ctx->camera.P;
+  sf_fmat4_t V = cam->V;
+  sf_fmat4_t P = cam->P;
   float near = 0.1f;
   sf_fvec3_t* wv = sf_arena_alloc(ctx, &ctx->arena, enti->obj.v_cnt * sizeof(sf_fvec3_t));
   sf_fvec3_t* vv = sf_arena_alloc(ctx, &ctx->arena, enti->obj.v_cnt * sizeof(sf_fvec3_t));
@@ -554,6 +569,9 @@ void sf_render_enti(sf_ctx_t *ctx, sf_cam_t *cam, sf_enti_t *enti) {
 
 void sf_render_ctx(sf_ctx_t *ctx) {
   sf_render_cam(ctx, &ctx->camera);
+  for (int i = 0; i < ctx->cam_count; ++i) {
+    sf_render_cam(ctx, &ctx->cameras[i]);
+  }
 }
 
 void sf_render_cam(sf_ctx_t *ctx, sf_cam_t *cam) {
@@ -959,6 +977,65 @@ sf_enti_t* sf_get_enti_(sf_ctx_t *ctx, const char *entiname, bool should_log_fai
   return NULL;
 }
 
+sf_cam_t* sf_add_cam(sf_ctx_t *ctx, const char *camname, int w, int h, float fov) {
+  char auto_name[32];
+  if (NULL == camname) {
+    snprintf(auto_name, sizeof(auto_name), "cam_%d", ctx->cam_count);
+    camname = auto_name;
+  }
+  if (NULL != sf_get_cam_(ctx, camname, false)) {
+    SF_LOG(ctx, SF_LOG_ERROR, SF_LOG_INDENT "failed to add camera, name in use\n");
+    return NULL;
+  }
+  if (ctx->cam_count >= SF_MAX_CAMS) {
+    SF_LOG(ctx, SF_LOG_ERROR, SF_LOG_INDENT "max cameras (%d) reached\n", SF_MAX_CAMS);
+    return NULL;
+  }
+
+  sf_cam_t *cam = &ctx->cameras[ctx->cam_count++];
+  memset(cam, 0, sizeof(sf_cam_t));
+  cam->w                 = w;
+  cam->h                 = h;
+  cam->buffer_size       = w * h;
+  cam->buffer            = (sf_pkd_clr_t*) malloc(w * h * sizeof(sf_pkd_clr_t));
+  cam->z_buffer          = (float*)        malloc(w * h * sizeof(float));
+  cam->pos               = (sf_fvec3_t){0.0f, 0.0f, 0.0f};
+  cam->world_up          = (sf_fvec3_t){0.0f, 1.0f, 0.0f};
+  cam->yaw               = -90.0f;
+  cam->pitch             = 0.0f;
+  cam->fov               = fov;
+  cam->near_plane        = 0.1f;
+  cam->far_plane         = 100.0f;
+  cam->is_view_dirty     = true;
+  cam->is_proj_dirty     = true;
+  cam->id                = ctx->cam_count - 1;
+
+  size_t name_len = strlen(camname) + 1;
+  cam->name = (const char*)sf_arena_alloc(ctx, &ctx->arena, name_len);
+  if (cam->name) {
+    memcpy((void*)cam->name, camname, name_len);
+  }
+
+  _sf_update_cam_vecs(cam);
+  SF_LOG(ctx, SF_LOG_INFO, 
+              SF_LOG_INDENT "cam    : %s (%dx%d)\n"
+              SF_LOG_INDENT "fov    : %s (id %d)\n",
+              cam->name, w, h, fov);
+  return cam;
+}
+
+sf_cam_t* sf_get_cam_(sf_ctx_t *ctx, const char *camname, bool should_log_failure) {
+  for (int32_t i = 0; i < ctx->cam_count; ++i) {
+    if (ctx->cameras[i].name && strcmp(ctx->cameras[i].name, camname) == 0) {
+      return &ctx->cameras[i];
+    }
+  }
+  if (should_log_failure) {
+    SF_LOG(ctx, SF_LOG_WARN, SF_LOG_INDENT "camera '%s' not found\n", camname);
+  }
+  return NULL;
+}
+
 void sf_enti_set_pos(sf_ctx_t *ctx, sf_enti_t *enti, float x, float y, float z) {
   enti->pos = (sf_fvec3_t){x, y, z};
   enti->is_dirty = true;
@@ -1074,7 +1151,7 @@ void sf_load_world(sf_ctx_t *ctx, const char *filename, const char *worldname) {
         light_count++;
       }
     }
-    else if (cmd == 'c') {
+    else if (cmd == 'c') { // todo init additional cams, add fov field to cam
       float px, py, pz, tx, ty, tz;
       if (sscanf(line, "c %f %f %f %f %f %f", &px, &py, &pz, &tx, &ty, &tz) == 6) {
         sf_camera_set_pos(ctx, &ctx->camera, px, py, pz);
@@ -1364,6 +1441,21 @@ void sf_draw_debug_axes(sf_ctx_t *ctx, sf_cam_t *cam) {
   DRAW_AXIS(z_axis, SF_CLR_BLUE, "Z");
 
   #undef DRAW_AXIS
+}
+
+void sf_draw_cam(sf_ctx_t *ctx, sf_cam_t *dest, sf_cam_t *src, sf_ivec2_t pos) {
+  if (!dest || !dest->buffer || !src || !src->buffer) return;
+  for (int y = 0; y < src->h; ++y) {
+    int dest_y = pos.y + y;
+    if (dest_y < 0 || dest_y >= dest->h) continue; 
+    for (int x = 0; x < src->w; ++x) {
+      int dest_x = pos.x + x;
+      if (dest_x < 0 || dest_x >= dest->w) continue; 
+      sf_pkd_clr_t c = src->buffer[y * src->w + x];
+      if ((c >> 24) == 0) continue; 
+      dest->buffer[dest_y * dest->w + dest_x] = c;
+    }
+  }
 }
 
 /* SF_LOG_FUNCTIONS */
