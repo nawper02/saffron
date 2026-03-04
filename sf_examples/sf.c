@@ -41,10 +41,10 @@ void on_render_start(sf_ctx_t *ctx, const sf_event_t *ev, void *userdata) {
 
     /* Update entities by name */
     sf_enti_t *teapot = sf_get_enti(ctx, "teapot");
-    sf_enti_t *mk2    = sf_get_enti(ctx, "mk2");
+    sf_enti_t *tux    = sf_get_enti(ctx, "tux");
 
     if (teapot) sf_enti_rotate(ctx, teapot, 1.0f * ctx->delta_time, 1.5f * ctx->delta_time, 0.0f);
-    if (mk2)    sf_enti_rotate(ctx, mk2,   -2.0f * ctx->delta_time, -0.5f * ctx->delta_time, 0.0f);
+    if (tux)    sf_enti_rotate(ctx, tux,    0.0f, -0.1f * ctx->delta_time, 0.0f);
 }
 
 /* --- MAIN PROGRAM --- */
