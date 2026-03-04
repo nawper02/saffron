@@ -182,7 +182,7 @@ void on_render_end(sf_ctx_t *ctx, const sf_event_t *ev, void *userdata) {
         // The character at index 'i' in the snake
         char c[2] = { text[i % text_len], '\0' };
         
-        sf_put_text(ctx, c, pos, char_clr, 1);
+        sf_put_text(ctx, &ctx->camera, c, pos, char_clr, 1);
     }
 }
 
@@ -222,7 +222,7 @@ int main(int argc, char* argv[]) {
 
     while (sf_running(&sf_ctx)) {
         sf_time_update(&sf_ctx);
-        sf_render_ctx(&sf_ctx);
+        sf_render_cam(&sf_ctx, &sf_ctx.camera);
 
         render_to_terminal_pixels((uint32_t*)sf_ctx.camera.buffer, render_w, render_h, 3);
 

@@ -22,7 +22,7 @@ void on_key_down(sf_ctx_t *ctx, const sf_event_t *ev, void *userdata) {
 }
 
 void on_render_start(sf_ctx_t *ctx, const sf_event_t *ev, void *userdata) {
-    sf_camera_t *cam = &ctx->camera;
+    sf_cam_t *cam = &ctx->camera;
     float move_speed = 5.0f * ctx->delta_time;
     float look_speed = 60.0f * ctx->delta_time;
 
@@ -80,10 +80,10 @@ int main(int argc, char* argv[]) {
         if (sf_key_pressed(&sf_ctx, SF_KEY_Q)) sf_stop(&sf_ctx);
         
         sf_time_update(&sf_ctx);
-        sf_render_ctx(&sf_ctx);
-        sf_draw_debug_axes(&sf_ctx);
+        sf_render_cam(&sf_ctx, &sf_ctx.camera);
+        sf_draw_debug_axes(&sf_ctx, &sf_ctx.camera);
 
-        sf_put_text(&sf_ctx, "SAFFRON 3D", (sf_ivec2_t){10, 10}, SF_CLR_WHITE, 1);
+        sf_put_text(&sf_ctx, &sf_ctx.camera, "SAFFRON 3D", (sf_ivec2_t){10, 10}, SF_CLR_WHITE, 1);
 
         SDL_UpdateTexture(texture, NULL, sf_ctx.camera.buffer, sf_ctx.camera.w * sizeof(sf_pkd_clr_t));
         SDL_RenderCopy(renderer, texture, NULL, NULL);
