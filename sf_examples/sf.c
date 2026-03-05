@@ -146,11 +146,12 @@ int main(int argc, char* argv[]) {
 
         sf_render_ctx(&sf_ctx);
         sf_rect(&sf_ctx, &sf_ctx.camera, SF_CLR_WHITE, (sf_ivec2_t){width-pip_cam->w-22, height-pip_cam->h-22}, (sf_ivec2_t){width-19, height-19});
-        sf_draw_cam(&sf_ctx, &sf_ctx.camera, pip_cam, (sf_ivec2_t){width-pip_cam->w-20,height-pip_cam->h-20}); 
+        sf_draw_cam_pip(&sf_ctx, &sf_ctx.camera, pip_cam, (sf_ivec2_t){width-pip_cam->w-20,height-pip_cam->h-20}); 
         
         // Tied to Checkbox!
         if (draw_axes) {
             sf_draw_debug_axes(&sf_ctx, &sf_ctx.camera);
+            sf_draw_debug_frames(&sf_ctx, &sf_ctx.camera, 1.0f);
         }
 
         sf_put_text(&sf_ctx, &sf_ctx.camera, "SAFFRON 3D", (sf_ivec2_t){10, 10}, SF_CLR_WHITE, 1);
