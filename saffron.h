@@ -35,6 +35,7 @@ extern "C" {
 #define SF_MAX_TEXTURES               20
 #define SF_MAX_CAMS                   5
 #define SF_MAX_CB_PER_EVT             4
+#define SF_MAX_UI_ELEMENTS            64
 #define SF_LOG_INDENT                 "            "
 #define SF_PI                         3.14159265359f
 #define SF_NANOS_PER_SEC              1000000000ULL
@@ -214,13 +215,68 @@ typedef struct {
 } sf_callback_entry_t;
 
 typedef struct {
-    bool                        keys[SF_KEY_MAX];
-    bool                        keys_prev[SF_KEY_MAX];
-    int                         mouse_x, mouse_y;
-    int                         mouse_dx, mouse_dy;
-    bool                        mouse_btns[SF_MOUSE_MAX];
-    bool                        mouse_btns_prev[SF_MOUSE_MAX];
+  bool                          keys[SF_KEY_MAX];
+  bool                          keys_prev[SF_KEY_MAX];
+  int                           mouse_x, mouse_y;
+  int                           mouse_dx, mouse_dy;
+  bool                          mouse_btns[SF_MOUSE_MAX];
+  bool                          mouse_btns_prev[SF_MOUSE_MAX];
 } sf_input_state_t;
+
+typedef void (*sf_ui_cb)(struct sf_ctx_t_ *ctx, void *userdata);
+
+typedef enum {
+  SF_UI_BUTTON,
+  SF_UI_SLIDER,
+  SF_UI_CHECKBOX
+} sf_ui_type_t;
+
+typedef struct {
+  sf_pkd_clr_t                  color_base;
+  sf_pkd_clr_t                  color_hover;
+  sf_pkd_clr_t                  color_active;
+  sf_pkd_clr_t                  color_text;
+  bool                          draw_outline;
+} sf_ui_style_t;
+
+typedef struct {
+  sf_ui_type_t                  type;
+  sf_ui_style_t                 style;
+
+  sf_ivec2_t                    v0, v1;
+  bool                          is_hovered;
+  bool                          is_pressed;
+  bool                          is_visible;
+  bool                          is_disabled;
+
+  union {
+    struct {
+      const char               *text;
+      sf_ui_cb                  callback;
+      void                     *userdata;
+    } button;
+    struct {
+      float                     value;
+      float                     min_val;
+      float                     max_val;
+      sf_ui_cb                  callback;
+      void                     *userdata;
+    } slider;
+    struct {
+      const char               *text;
+      bool                      is_checked;
+      sf_ui_cb                  callback;
+      void                     *userdata;
+    } checkbox;
+
+  };
+} sf_ui_lmn_t;
+
+typedef struct sf_ui_t_ {
+  sf_ui_lmn_t              *elements;
+  int32_t                       count;
+  sf_ui_style_t                 default_style;
+} sf_ui_t;
 
 struct sf_ctx_t_ {
   sf_run_state_t                state;
@@ -239,6 +295,8 @@ struct sf_ctx_t_ {
 
   sf_light_t                   *lights;
   int32_t                       light_count;
+
+  sf_ui_t                      *ui;
 
   sf_input_state_t              input;
   sf_callback_entry_t           callbacks[SF_EVT_MAX][SF_MAX_CB_PER_EVT];
@@ -321,7 +379,15 @@ void         sf_draw_debug_axes  (sf_ctx_t *ctx, sf_cam_t *cam);
 void         sf_draw_cam         (sf_ctx_t *ctx, sf_cam_t *dest, sf_cam_t *src, sf_ivec2_t pos);
 
 /* SF_UI_FUNCTIONS */
-
+sf_ui_t*     sf_create_ui        (sf_ctx_t *ctx);
+void         sf_update_ui        (sf_ctx_t *ctx, sf_ui_t *ui);
+void         sf_render_ui        (sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_t *ui);
+sf_ui_lmn_t* sf_add_button       (sf_ctx_t *ctx, const char *text, sf_ivec2_t v0, sf_ivec2_t v1, sf_ui_cb cb, void *userdata);
+sf_ui_lmn_t* sf_add_slider       (sf_ctx_t *ctx, sf_ivec2_t v0, sf_ivec2_t v1, float min_val, float max_val, float init_val, sf_ui_cb cb, void *userdata);
+sf_ui_lmn_t* sf_add_checkbox     (sf_ctx_t *ctx, const char *text, sf_ivec2_t v0, sf_ivec2_t v1, bool init_state, sf_ui_cb cb, void *userdata);
+void         draw_button         (sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_lmn_t *el);
+void         draw_slider         (sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_lmn_t *el);
+void         draw_checkbox       (sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_lmn_t *el);
 
 /* SF_LOG_FUNCTIONS */
 void         sf_log_             (sf_ctx_t *ctx, sf_log_level_t level, const char* func, const char* fmt, ...);
@@ -410,7 +476,9 @@ void sf_init(sf_ctx_t *ctx, int w, int h) {
   ctx->elapsed_time             = 0.0f;
   ctx->fps                      = 0.0f;
   ctx->frame_count              = 0;
+  ctx->ui                       = sf_create_ui(ctx);
   _sf_update_cam_vecs(&ctx->camera);
+
   SF_LOG(ctx, SF_LOG_INFO,
               SF_LOG_INDENT "buffer : %dx%d\n"
               SF_LOG_INDENT "memory : %d\n"
@@ -420,6 +488,24 @@ void sf_init(sf_ctx_t *ctx, int w, int h) {
 }
 
 void sf_destroy(sf_ctx_t *ctx) {
+
+  float avg_fps = (ctx->elapsed_time > 0.0f) ? ((float)ctx->frame_count / ctx->elapsed_time) : 0.0f;
+  float mem_pct = ((float)ctx->arena.offset / (float)ctx->arena.size) * 100.0f;
+  int ui_count  = (ctx->ui) ? ctx->ui->count : 0;
+
+  SF_LOG(ctx, SF_LOG_INFO, 
+              SF_LOG_INDENT "runtime : %.2fs\n"
+              SF_LOG_INDENT "frames  : %u (avg %.1f fps)\n"
+              SF_LOG_INDENT "memory  : %zu / %zu bytes (%.1f%%)\n"
+              SF_LOG_INDENT "assets  : %d objs, %d texs\n"
+              SF_LOG_INDENT "active  : %d entis, %d ui_elems\n"
+              SF_LOG_INDENT "thank you .....\n",
+              ctx->elapsed_time,
+              ctx->frame_count, avg_fps,
+              ctx->arena.offset, ctx->arena.size, mem_pct,
+              ctx->obj_count, ctx->tex_count,
+              ctx->enti_count, ui_count);
+
   for (int i = 0; i < ctx->cam_count; ++i) {
     free(ctx->cameras[i].buffer);
     free(ctx->cameras[i].z_buffer);
@@ -427,9 +513,9 @@ void sf_destroy(sf_ctx_t *ctx) {
   free(ctx->camera.buffer);
   free(ctx->camera.z_buffer);
   free(ctx->arena.buffer);
+
   ctx->state                    = SF_RUN_STATE_STOPPED;
   ctx->arena.offset             = 0;
-  ctx->camera.buffer            = NULL;
   ctx->camera.buffer_size       = 0;
   ctx->camera.w                 = 0;
   ctx->camera.h                 = 0;
@@ -438,11 +524,16 @@ void sf_destroy(sf_ctx_t *ctx) {
   ctx->tex_count                = 0;
   ctx->light_count              = 0;
   ctx->cam_count                = 0;
-  SF_LOG(ctx, SF_LOG_INFO,
-              SF_LOG_INDENT "buffer : %dx%d\n"
-              SF_LOG_INDENT "memory : %d\n"
-              SF_LOG_INDENT "mxobjs : %d\n", 
-              ctx->camera.w, ctx->camera.h, SF_ARENA_SIZE, SF_MAX_OBJS);
+
+  ctx->camera.buffer            = NULL;
+  ctx->camera.z_buffer          = NULL;
+  ctx->arena.buffer             = NULL;
+  ctx->objs                     = NULL;
+  ctx->entities                 = NULL;
+  ctx->textures                 = NULL;
+  ctx->cameras                  = NULL;
+  ctx->lights                   = NULL;
+  ctx->ui                       = NULL;
 }
 
 bool sf_running(sf_ctx_t *ctx) {
@@ -1485,7 +1576,282 @@ void sf_draw_cam(sf_ctx_t *ctx, sf_cam_t *dest, sf_cam_t *src, sf_ivec2_t pos) {
 }
 
 /* SF_UI_FUNCTIONS */
+sf_ui_t* sf_create_ui (sf_ctx_t *ctx) {
+  sf_ui_t *ui = (sf_ui_t*)sf_arena_alloc(ctx, &ctx->arena, sizeof(sf_ui_t));
+  ui->elements = sf_arena_alloc(ctx, &ctx->arena, SF_MAX_UI_ELEMENTS * sizeof(sf_ui_lmn_t));
+  ui->count = 0;
+  ui->default_style.color_base   = (sf_pkd_clr_t)0xFF404040;
+  ui->default_style.color_hover  = (sf_pkd_clr_t)0xFF555555;
+  ui->default_style.color_active = (sf_pkd_clr_t)0xFF707070;
+  ui->default_style.color_text   = (sf_pkd_clr_t)0xFFEEEEEE;
+  ui->default_style.draw_outline = false;
+  SF_LOG(ctx, SF_LOG_INFO,
+              SF_LOG_INDENT "ui inited\n"
+              SF_LOG_INDENT "cpcti : %d \n",
+              SF_MAX_UI_ELEMENTS);
+  return ui;
+}
 
+sf_ui_lmn_t* sf_add_button(sf_ctx_t *ctx, const char *text, sf_ivec2_t v0, sf_ivec2_t v1, void (*cb)(sf_ctx_t*, void*), void *userdata) {
+  if (!ctx->ui || ctx->ui->count >= SF_MAX_UI_ELEMENTS) return NULL;
+
+  sf_ui_lmn_t *el = &ctx->ui->elements[ctx->ui->count++];
+  memset(el, 0, sizeof(sf_ui_lmn_t));
+
+  el->type            = SF_UI_BUTTON;
+  el->style           = ctx->ui->default_style;
+
+  el->v0              = v0;
+  el->v1              = v1;
+  el->is_visible      = true;
+
+  el->button.text     = text;
+  el->button.callback = cb;
+  el->button.userdata = userdata;
+
+  SF_LOG(ctx, SF_LOG_INFO,
+              SF_LOG_INDENT "text   : %s\n"
+              SF_LOG_INDENT "cb     : %p\n",
+              text, (void*)cb);
+  return el;
+}
+
+sf_ui_lmn_t* sf_add_slider(sf_ctx_t *ctx, sf_ivec2_t v0, sf_ivec2_t v1, float min_val, float max_val, float init_val, sf_ui_cb cb, void *userdata) {
+  if (!ctx->ui || ctx->ui->count >= SF_MAX_UI_ELEMENTS) return NULL;
+
+  sf_ui_lmn_t *el = &ctx->ui->elements[ctx->ui->count++];
+  memset(el, 0, sizeof(sf_ui_lmn_t));
+
+  el->type            = SF_UI_SLIDER;
+  el->style           = ctx->ui->default_style;
+  el->v0              = v0;
+  el->v1              = v1;
+  el->is_visible      = true;
+
+  el->slider.min_val  = min_val;
+  el->slider.max_val  = max_val;
+  el->slider.value    = init_val;
+  el->slider.callback = cb;
+  el->slider.userdata = userdata;
+
+  return el;
+}
+
+sf_ui_lmn_t* sf_add_checkbox(sf_ctx_t *ctx, const char *text, sf_ivec2_t v0, sf_ivec2_t v1, bool init_state, sf_ui_cb cb, void *userdata) {
+  if (!ctx->ui || ctx->ui->count >= SF_MAX_UI_ELEMENTS) return NULL;
+
+  sf_ui_lmn_t *el = &ctx->ui->elements[ctx->ui->count++];
+  memset(el, 0, sizeof(sf_ui_lmn_t));
+
+  el->type                = SF_UI_CHECKBOX;
+  el->style               = ctx->ui->default_style;
+  el->v0                  = v0;
+  el->v1                  = v1;
+  el->is_visible          = true;
+
+  el->checkbox.text       = text;
+  el->checkbox.is_checked = init_state;
+  el->checkbox.callback   = cb;
+  el->checkbox.userdata   = userdata;
+
+  return el;
+}
+
+void draw_button(sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_lmn_t *btn) {
+  if (!btn->is_visible) return;
+  sf_pkd_clr_t bg_color = btn->style.color_base; 
+
+  if (btn->is_disabled) {
+    bg_color = (sf_pkd_clr_t)0xFF555555;
+  } else if (btn->is_pressed) {
+    bg_color = btn->style.color_active;
+  } else if (btn->is_hovered) {
+    bg_color = btn->style.color_hover;
+  }
+
+  sf_rect(ctx, cam, bg_color, btn->v0, btn->v1);
+
+  if (btn->button.text) {
+    int text_len = strlen(btn->button.text);
+    int text_w = text_len * 8; 
+    int text_h = 8;
+    int box_w = btn->v1.x - btn->v0.x;
+    int box_h = btn->v1.y - btn->v0.y;
+    sf_ivec2_t text_pos = {
+      btn->v0.x + (box_w - text_w) / 2,
+      btn->v0.y + (box_h - text_h) / 2
+    };
+    sf_put_text(ctx, cam, btn->button.text, text_pos, btn->style.color_text, 1);
+  }
+}
+
+void draw_slider(sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_lmn_t *el) {
+  if (!el->is_visible) return;
+
+  sf_pkd_clr_t fill_color = el->style.color_base; 
+  if (el->is_disabled) {
+    fill_color = (sf_pkd_clr_t)0xFF555555;
+  } else if (el->is_pressed) {
+    fill_color = el->style.color_active;
+  } else if (el->is_hovered) {
+    fill_color = el->style.color_hover;
+  }
+
+  sf_pkd_clr_t track_color = (sf_pkd_clr_t)0xFF222222;
+  sf_rect(ctx, cam, track_color, el->v0, el->v1);
+
+  float range = el->slider.max_val - el->slider.min_val;
+  float t = (range > 0.0f) ? (el->slider.value - el->slider.min_val) / range : 0.0f;
+  if (t < 0.0f) t = 0.0f;
+  if (t > 1.0f) t = 1.0f;
+
+  int total_w = el->v1.x - el->v0.x;
+  int fill_w = (int)(total_w * t);
+
+  if (fill_w > 0) {
+    sf_ivec2_t fill_v1 = { el->v0.x + fill_w, el->v1.y };
+    sf_rect(ctx, cam, fill_color, el->v0, fill_v1);
+  }
+
+  char val_str[32];
+  snprintf(val_str, sizeof(val_str), "%.2f", el->slider.value);
+  int text_w = strlen(val_str) * 8;
+  sf_ivec2_t text_pos = {
+    el->v0.x + (total_w - text_w) / 2,
+    el->v0.y + ((el->v1.y - el->v0.y) - 8) / 2
+  };
+  sf_put_text(ctx, cam, val_str, text_pos, el->style.color_text, 1);
+}
+
+void draw_checkbox(sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_lmn_t *el) {
+  if (!el->is_visible) return;
+
+  sf_pkd_clr_t box_color = el->style.color_base; 
+  if (el->is_disabled) {
+    box_color = (sf_pkd_clr_t)0xFF555555;
+  } else if (el->is_pressed) {
+    box_color = el->style.color_active;
+  } else if (el->is_hovered) {
+    box_color = el->style.color_hover;
+  }
+
+  int h = el->v1.y - el->v0.y;
+  int box_size = h < 16 ? h : 16; 
+  sf_ivec2_t box_v0 = { el->v0.x, el->v0.y + (h - box_size)/2 };
+  sf_ivec2_t box_v1 = { box_v0.x + box_size, box_v0.y + box_size };
+
+  sf_rect(ctx, cam, box_color, box_v0, box_v1);
+
+  if (el->checkbox.is_checked) {
+    sf_ivec2_t inner_v0 = { box_v0.x + 3, box_v0.y + 3 };
+    sf_ivec2_t inner_v1 = { box_v1.x - 3, box_v1.y - 3 };
+    sf_rect(ctx, cam, el->style.color_text, inner_v0, inner_v1);
+  }
+
+  if (el->checkbox.text) {
+    sf_ivec2_t text_pos = {
+      box_v1.x + 8,
+      el->v0.y + (h - 8) / 2
+    };
+    sf_put_text(ctx, cam, el->checkbox.text, text_pos, el->style.color_text, 1);
+  }
+}
+
+void sf_render_ui(sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_t *ui) {
+  if (!ui) return;
+  for (int i = 0; i < ui->count; ++i) {
+    sf_ui_lmn_t *el = &ui->elements[i];
+    switch (el->type) {
+      case SF_UI_BUTTON:
+        draw_button(ctx, cam, el);
+        break;
+      case SF_UI_SLIDER:
+        draw_slider(ctx, cam, el);
+        break;
+      case SF_UI_CHECKBOX:
+        draw_checkbox(ctx, cam, el);
+        break;
+    }
+  }
+}
+
+static void _sf_update_button(sf_ctx_t *ctx, sf_ui_lmn_t *el, bool m_down, bool m_pressed, bool m_released) {
+  if (el->is_hovered && el->is_pressed && m_released) {
+    if (el->button.callback) {
+      el->button.callback(ctx, el->button.userdata);
+    }
+  }
+}
+
+static void _sf_update_checkbox(sf_ctx_t *ctx, sf_ui_lmn_t *el, bool m_down, bool m_pressed, bool m_released) {
+  if (el->is_hovered && el->is_pressed && m_released) {
+    el->checkbox.is_checked = !el->checkbox.is_checked;
+    if (el->checkbox.callback) {
+      el->checkbox.callback(ctx, el->checkbox.userdata);
+    }
+  }
+}
+
+static void _sf_update_slider(sf_ctx_t *ctx, sf_ui_lmn_t *el, bool m_down, bool m_pressed, bool m_released) {
+  if (el->is_pressed && m_down) {
+    int mx = ctx->input.mouse_x;
+    float width = (float)(el->v1.x - el->v0.x);
+    float offset = (float)(mx - el->v0.x);
+    float t = offset / width;
+    if (t < 0.0f) t = 0.0f;
+    if (t > 1.0f) t = 1.0f;
+    float new_val = el->slider.min_val + t * (el->slider.max_val - el->slider.min_val);
+    if (new_val != el->slider.value) {
+      el->slider.value = new_val;
+      if (el->slider.callback) {
+        el->slider.callback(ctx, el->slider.userdata);
+      }
+    }
+  }
+}
+
+void sf_update_ui(sf_ctx_t *ctx, sf_ui_t *ui) {
+  if (!ui) return;
+
+  int mx = ctx->input.mouse_x;
+  int my = ctx->input.mouse_y;
+  bool m_down = ctx->input.mouse_btns[SF_MOUSE_LEFT];
+  bool m_pressed = m_down && !ctx->input.mouse_btns_prev[SF_MOUSE_LEFT];
+  bool m_released = !m_down && ctx->input.mouse_btns_prev[SF_MOUSE_LEFT];
+
+  for (int i = 0; i < ui->count; ++i) {
+    sf_ui_lmn_t *el = &ui->elements[i];
+
+    if (!el->is_visible || el->is_disabled) {
+      el->is_hovered = false;
+      el->is_pressed = false;
+      continue;
+    }
+
+    el->is_hovered = (mx >= el->v0.x && mx <= el->v1.x && 
+                      my >= el->v0.y && my <= el->v1.y);
+
+    if (el->is_hovered && m_pressed) {
+      el->is_pressed = true;
+    }
+
+    switch (el->type) {
+      case SF_UI_BUTTON:
+        _sf_update_button(ctx, el, m_down, m_pressed, m_released); 
+        break;
+      case SF_UI_CHECKBOX:
+        _sf_update_checkbox(ctx, el, m_down, m_pressed, m_released); 
+        break;
+      case SF_UI_SLIDER:
+        _sf_update_slider(ctx, el, m_down, m_pressed, m_released); 
+        break;
+    }
+
+    if (!m_down) {
+      el->is_pressed = false;
+    }
+  }
+}
 
 /* SF_LOG_FUNCTIONS */
 void sf_log_(sf_ctx_t *ctx, sf_log_level_t level, const char* func, const char* fmt, ...) {
