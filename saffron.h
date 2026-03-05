@@ -514,11 +514,11 @@ void sf_destroy(sf_ctx_t *ctx) {
   int ui_count  = (ctx->ui) ? ctx->ui->count : 0;
 
   SF_LOG(ctx, SF_LOG_INFO, 
-              SF_LOG_INDENT "runtime : %.2fs\n"
-              SF_LOG_INDENT "frames  : %u (avg %.1f fps)\n"
-              SF_LOG_INDENT "memory  : %zu / %zu bytes (%.1f%%)\n"
-              SF_LOG_INDENT "assets  : %d objs, %d texs\n"
-              SF_LOG_INDENT "active  : %d entis, %d ui_elems\n"
+              SF_LOG_INDENT "time   : %.2fs\n"
+              SF_LOG_INDENT "frames : %u (avg %.1f fps)\n"
+              SF_LOG_INDENT "memory : %zu / %zu bytes (%.1f%%)\n"
+              SF_LOG_INDENT "assets : %d objs, %d texs\n"
+              SF_LOG_INDENT "active : %d entis, %d ui_elems\n"
               SF_LOG_INDENT "thank you .....\n",
               ctx->elapsed_time,
               ctx->frame_count, avg_fps,
