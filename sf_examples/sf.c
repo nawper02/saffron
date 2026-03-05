@@ -123,7 +123,7 @@ int main(int argc, char* argv[]) {
     sf_ui_lmn_t* sldr = sf_add_slider(&sf_ctx, (sf_ivec2_t){10, 90}, (sf_ivec2_t){130, 110}, 0.0f, 5.0f, teapot_speed, slider_test_cb, NULL);
     sldr->slider.userdata = sldr; // Pass itself so the callback can read the value
 
-    sf_ui_lmn_t* chk = sf_add_checkbox(&sf_ctx, "Draw Axes", (sf_ivec2_t){10, 120}, (sf_ivec2_t){130, 140}, draw_axes, checkbox_test_cb, NULL);
+    sf_ui_lmn_t* chk = sf_add_checkbox(&sf_ctx, "Draw Debug Overlay", (sf_ivec2_t){10, 120}, (sf_ivec2_t){130, 140}, draw_axes, checkbox_test_cb, NULL);
     chk->checkbox.userdata = chk; // Pass itself so the callback can read the state
 
 
@@ -150,8 +150,7 @@ int main(int argc, char* argv[]) {
         
         // Tied to Checkbox!
         if (draw_axes) {
-            sf_draw_debug_axes(&sf_ctx, &sf_ctx.camera);
-            sf_draw_debug_frames(&sf_ctx, &sf_ctx.camera, 1.0f);
+            sf_draw_debug_ovrlay(&sf_ctx, &sf_ctx.camera);
         }
 
         sf_put_text(&sf_ctx, &sf_ctx.camera, "SAFFRON 3D", (sf_ivec2_t){10, 10}, SF_CLR_WHITE, 1);

@@ -392,9 +392,12 @@ void         sf_tri              (sf_ctx_t *ctx, sf_cam_t *cam, sf_pkd_clr_t c, 
 void         sf_tri_tex          (sf_ctx_t *ctx, sf_cam_t *cam, sf_tex_t *tex, sf_fvec3_t v0, sf_fvec3_t v1, sf_fvec3_t v2, sf_fvec3_t uvz0, sf_fvec3_t uvz1, sf_fvec3_t uvz2, sf_fvec3_t l_int);
 void         sf_put_text         (sf_ctx_t *ctx, sf_cam_t *cam, const char *text, sf_ivec2_t p, sf_pkd_clr_t c, int scale);
 void         sf_clear_depth      (sf_ctx_t *ctx, sf_cam_t *cam);
-void         sf_draw_debug_axes  (sf_ctx_t *ctx, sf_cam_t *cam);
 void         sf_draw_cam_pip     (sf_ctx_t *ctx, sf_cam_t *dest, sf_cam_t *src, sf_ivec2_t pos);
+void         sf_draw_debug_ovrlay(sf_ctx_t *ctx, sf_cam_t *cam);
+void         sf_draw_debug_axes  (sf_ctx_t *ctx, sf_cam_t *cam);
 void         sf_draw_debug_frames(sf_ctx_t *ctx, sf_cam_t *cam, float axis_size);
+void         sf_draw_debug_lights(sf_ctx_t *ctx, sf_cam_t *cam, float size);
+void         sf_draw_debug_cams  (sf_ctx_t *ctx, sf_cam_t *view_cam, float ray_len);
 
 /* SF_UI_FUNCTIONS */
 sf_ui_t*     sf_create_ui        (sf_ctx_t *ctx);
@@ -1614,6 +1617,29 @@ void sf_clear_depth(sf_ctx_t *ctx, sf_cam_t *cam) {
   }
 }
 
+void sf_draw_cam_pip(sf_ctx_t *ctx, sf_cam_t *dest, sf_cam_t *src, sf_ivec2_t pos) {
+  if (!dest || !dest->buffer || !src || !src->buffer) return;
+  for (int y = 0; y < src->h; ++y) {
+    int dest_y = pos.y + y;
+    if (dest_y < 0 || dest_y >= dest->h) continue; 
+    for (int x = 0; x < src->w; ++x) {
+      int dest_x = pos.x + x;
+      if (dest_x < 0 || dest_x >= dest->w) continue; 
+      sf_pkd_clr_t c = src->buffer[y * src->w + x];
+      if ((c >> 24) == 0) continue; 
+      dest->buffer[dest_y * dest->w + dest_x] = c;
+    }
+  }
+}
+
+void sf_draw_debug_ovrlay(sf_ctx_t *ctx, sf_cam_t *cam) {
+  sf_draw_debug_axes   (ctx, cam);
+  sf_draw_debug_frames (ctx, cam, 1.0f);
+  sf_draw_debug_lights (ctx, cam, 1.0f);
+  sf_draw_debug_cams   (ctx, cam, 1.0f);
+}
+
+
 void sf_draw_debug_axes(sf_ctx_t *ctx, sf_cam_t *cam) {
   int cx = 40;
   int cy = cam->h - 40;
@@ -1636,21 +1662,6 @@ void sf_draw_debug_axes(sf_ctx_t *ctx, sf_cam_t *cam) {
   DRAW_AXIS(z_axis, SF_CLR_BLUE, "Z");
 
   #undef DRAW_AXIS
-}
-
-void sf_draw_cam_pip(sf_ctx_t *ctx, sf_cam_t *dest, sf_cam_t *src, sf_ivec2_t pos) {
-  if (!dest || !dest->buffer || !src || !src->buffer) return;
-  for (int y = 0; y < src->h; ++y) {
-    int dest_y = pos.y + y;
-    if (dest_y < 0 || dest_y >= dest->h) continue; 
-    for (int x = 0; x < src->w; ++x) {
-      int dest_x = pos.x + x;
-      if (dest_x < 0 || dest_x >= dest->w) continue; 
-      sf_pkd_clr_t c = src->buffer[y * src->w + x];
-      if ((c >> 24) == 0) continue; 
-      dest->buffer[dest_y * dest->w + dest_x] = c;
-    }
-  }
 }
 
 void sf_draw_debug_frames(sf_ctx_t *ctx, sf_cam_t *cam, float axis_size) {
@@ -1693,6 +1704,84 @@ void sf_draw_debug_frames(sf_ctx_t *ctx, sf_cam_t *cam, float axis_size) {
       char label[32];
       snprintf(label, sizeof(label), "F:%d", i);
       sf_put_text(ctx, cam, label, (sf_ivec2_t){(int)s_origin.x + 5, (int)s_origin.y + 5}, SF_CLR_WHITE, 1);
+    }
+  }
+}
+
+void sf_draw_debug_lights(sf_ctx_t *ctx, sf_cam_t *cam, float size) {
+  if (!ctx || !cam) return;
+  for (int i = 0; i < ctx->light_count; ++i) {
+    sf_light_t *l = &ctx->lights[i];
+    if (!l->frame) continue;
+    sf_fmat4_t M = l->frame->global_M;
+    sf_fvec3_t pos_w = { M.m[3][0], M.m[3][1], M.m[3][2] };
+    sf_pkd_clr_t clr = _sf_pack_color((sf_unpkd_clr_t){
+      (uint8_t)(l->color.x * 255), (uint8_t)(l->color.y * 255), 
+      (uint8_t)(l->color.z * 255), 255
+    });
+    if (l->type == SF_LIGHT_POINT) {
+      sf_fvec3_t offsets[6] = {
+        {size,0,0}, {-size,0,0}, {0,size,0}, {0,-size,0}, {0,0,size}, {0,0,-size}
+      };
+      for (int j = 0; j < 6; j++) {
+        sf_fvec3_t p_w = sf_fvec3_add(pos_w, offsets[j]);
+        sf_fvec3_t v0 = sf_fmat4_mul_vec3(cam->V, pos_w);
+        sf_fvec3_t v1 = sf_fmat4_mul_vec3(cam->V, p_w);
+        if (v0.z <= -cam->near_plane && v1.z <= -cam->near_plane) {
+          sf_fvec3_t s0 = _sf_project_vertex(ctx, cam, v0, cam->P);
+          sf_fvec3_t s1 = _sf_project_vertex(ctx, cam, v1, cam->P);
+          sf_line(ctx, cam, clr, (sf_ivec2_t){(int)s0.x, (int)s0.y}, (sf_ivec2_t){(int)s1.x, (int)s1.y});
+        }
+      }
+    } else if (l->type == SF_LIGHT_DIR) {
+      sf_fvec3_t dir_w = {-M.m[2][0] * size * 2, -M.m[2][1] * size * 2, -M.m[2][2] * size * 2};
+      sf_fvec3_t end_w = sf_fvec3_add(pos_w, dir_w);
+      sf_fvec3_t v0 = sf_fmat4_mul_vec3(cam->V, pos_w);
+      sf_fvec3_t v1 = sf_fmat4_mul_vec3(cam->V, end_w);
+      if (v0.z <= -cam->near_plane && v1.z <= -cam->near_plane) {
+        sf_fvec3_t s0 = _sf_project_vertex(ctx, cam, v0, cam->P);
+        sf_fvec3_t s1 = _sf_project_vertex(ctx, cam, v1, cam->P);
+        sf_line(ctx, cam, clr, (sf_ivec2_t){(int)s0.x, (int)s0.y}, (sf_ivec2_t){(int)s1.x, (int)s1.y});
+      }
+    }
+  }
+}
+
+void sf_draw_debug_cams(sf_ctx_t *ctx, sf_cam_t *view_cam, float ray_len) {
+  if (!ctx || !view_cam) return;
+  for (int i = 0; i < ctx->cam_count; ++i) {
+    sf_cam_t *c = &ctx->cameras[i];
+    if (!c->frame || c == view_cam) continue;
+    sf_fmat4_t M = c->frame->global_M;
+    sf_fvec3_t origin_w = { M.m[3][0], M.m[3][1], M.m[3][2] };
+    float aspect = (float)c->w / (float)c->h;
+    float h_half = tanf(SF_DEG2RAD(c->fov) * 0.5f) * ray_len;
+    float w_half = h_half * aspect;
+    sf_fvec3_t corners[4] = {
+      { w_half,  h_half, -ray_len},
+      {-w_half,  h_half, -ray_len},
+      {-w_half, -h_half, -ray_len},
+      { w_half, -h_half, -ray_len}
+    };
+    sf_fvec3_t corners_w[4];
+    for (int j = 0; j < 4; j++) {
+      corners_w[j] = sf_fmat4_mul_vec3(M, corners[j]);
+      sf_fvec3_t v0 = sf_fmat4_mul_vec3(view_cam->V, origin_w);
+      sf_fvec3_t v1 = sf_fmat4_mul_vec3(view_cam->V, corners_w[j]);
+      if (v0.z <= -view_cam->near_plane && v1.z <= -view_cam->near_plane) {
+        sf_fvec3_t s0 = _sf_project_vertex(ctx, view_cam, v0, view_cam->P);
+        sf_fvec3_t s1 = _sf_project_vertex(ctx, view_cam, v1, view_cam->P);
+        sf_line(ctx, view_cam, SF_CLR_WHITE, (sf_ivec2_t){(int)s0.x, (int)s0.y}, (sf_ivec2_t){(int)s1.x, (int)s1.y});
+      }
+    }
+    for (int j = 0; j < 4; j++) {
+      sf_fvec3_t v0 = sf_fmat4_mul_vec3(view_cam->V, corners_w[j]);
+      sf_fvec3_t v1 = sf_fmat4_mul_vec3(view_cam->V, corners_w[(j+1)%4]);
+      if (v0.z <= -view_cam->near_plane && v1.z <= -view_cam->near_plane) {
+        sf_fvec3_t s0 = _sf_project_vertex(ctx, view_cam, v0, view_cam->P);
+        sf_fvec3_t s1 = _sf_project_vertex(ctx, view_cam, v1, view_cam->P);
+        sf_line(ctx, view_cam, SF_CLR_GREEN, (sf_ivec2_t){(int)s0.x, (int)s0.y}, (sf_ivec2_t){(int)s1.x, (int)s1.y});
+      }
     }
   }
 }
