@@ -12,11 +12,13 @@ m cube     cube.obj
 # Textures
 t brick_tex Brick_01-128x128.bmp
 t elements  Elements_09-128x128.bmp
+t elements2  Elements_01-128x128.bmp
 
 # Entity Instances (mesh, name, pos, rot, scale, optional_texture)
-e tux    tux     3.0 0.0 -10.0 0.0 0.0 0.0   0.1 0.1 0.1    elements
+e tux    tux     3.0 0.0 -10.0 0.0 0.0 0.0   0.1 0.1 0.1       elements
+e tux    tux2    8.0 0.0 -10.0 0.0 0.0 0.0   0.05 0.05 0.05    elements2
 e teapot teapot -3.0 1.0   0.0 0.0 0.0 0.0   0.8 0.8 0.8
-e cube   cube    0.0 1.0   0.0 0.0 0.0 0.0   1.0 1.0 1.0    brick_tex
+e cube   cube    0.0 1.0   0.0 0.0 0.0 0.0   1.0 1.0 1.0       brick_tex
 
 # Lighting (type, pos_xyz, color_rgb, intensity)
 l point  2.0 5.0 2.0   1.0 0.8 0.8   2.0

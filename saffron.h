@@ -82,6 +82,28 @@ typedef struct { float    x, y, z;    } sf_fvec3_t;
 typedef struct { int      x, y, z;    } sf_ivec3_t;
 typedef struct { float m[4][4];       } sf_fmat4_t;
 
+typedef enum {
+  SF_CONV_DEFAULT = 0,
+  SF_CONV_NED,
+  SF_CONV_FLU,
+  SF_CONV_MAX
+} sf_convention_t;
+
+typedef struct sf_frame_t_ sf_frame_t;
+struct sf_frame_t_ {
+  sf_fvec3_t                    pos;
+  sf_fvec3_t                    rot;
+  sf_fvec3_t                    scale;
+
+  sf_fmat4_t                    local_M;
+  sf_fmat4_t                    global_M;
+  bool                          is_dirty;
+
+  sf_frame_t                   *parent;
+  sf_frame_t                   *first_child;
+  sf_frame_t                   *next_sibling;
+};
+
 typedef struct {
   int32_t                       id;
   const char                   *name;
