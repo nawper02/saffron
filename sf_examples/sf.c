@@ -104,6 +104,19 @@ int main(int argc, char* argv[]) {
     sf_cam_t* pip_cam = sf_get_cam(&sf_ctx, "pip_cam");
     sf_camera_look_at(&sf_ctx, pip_cam, (sf_fvec3_t){0.0f, 0.0f, 0.0f});
 
+    sf_enti_t *tux1 = sf_get_enti(&sf_ctx, "tux");
+    sf_enti_t *tux2 = sf_get_enti(&sf_ctx, "tux2");
+
+    if (tux1 && tux2) {
+      // tux2 now "lives" inside tux1's coordinate system
+      sf_frame_set_parent(tux2->frame, tux1->frame);
+      
+      // Position tux2 2 units to the right of tux1 locally.
+      // No matter how tux1 rotates, tux2 will stay stuck to its side!
+      tux2->frame->pos = (sf_fvec3_t){ 20.0f, 10.0f, 0.0f };
+      tux2->frame->is_dirty = true;
+    }
+
     /* --- INITIALIZE UI ELEMENTS --- */
     sf_add_button(&sf_ctx, "Random Theme", (sf_ivec2_t){10, 50}, (sf_ivec2_t){130, 80}, btn_test_cb, NULL);
     

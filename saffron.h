@@ -36,6 +36,7 @@ extern "C" {
 #define SF_MAX_CAMS                   5
 #define SF_MAX_CB_PER_EVT             4
 #define SF_MAX_UI_ELEMENTS            64
+#define SF_MAX_FRAMES                 512
 #define SF_LOG_INDENT                 "            "
 #define SF_PI                         3.14159265359f
 #define SF_NANOS_PER_SEC              1000000000ULL
@@ -91,84 +92,69 @@ typedef enum {
 
 typedef struct sf_frame_t_ sf_frame_t;
 struct sf_frame_t_ {
-  sf_fvec3_t                    pos;
-  sf_fvec3_t                    rot;
-  sf_fvec3_t                    scale;
+  sf_fvec3_t                     pos;
+  sf_fvec3_t                     rot;
+  sf_fvec3_t                     scale;
 
-  sf_fmat4_t                    local_M;
-  sf_fmat4_t                    global_M;
-  bool                          is_dirty;
+  sf_fmat4_t                     local_M;
+  sf_fmat4_t                     global_M;
+  bool                           is_dirty;
+  bool                           is_root;
 
-  sf_frame_t                   *parent;
-  sf_frame_t                   *first_child;
-  sf_frame_t                   *next_sibling;
+  sf_frame_t                    *parent;
+  sf_frame_t                    *first_child;
+  sf_frame_t                    *next_sibling;
 };
 
 typedef struct {
-  int32_t                       id;
-  const char                   *name;
-  int                           w;
-  int                           h;
-  int                           buffer_size;
-  sf_pkd_clr_t                 *buffer;
-  float                        *z_buffer;
-  sf_fvec3_t                    pos;
-  sf_fvec3_t                    front;
-  sf_fvec3_t                    up;
-  sf_fvec3_t                    right;
-  sf_fvec3_t                    world_up;
-  float                         yaw;
-  float                         pitch;
-  float                         fov;
-  float                         near_plane;
-  float                         far_plane;
-  bool                          is_view_dirty;
-  bool                          is_proj_dirty;
-  sf_fmat4_t                    V;
-  sf_fmat4_t                    P;
+  int32_t                        id;
+  const char                    *name;
+  int                            w, h, buffer_size;
+  sf_pkd_clr_t                  *buffer;
+  float                         *z_buffer;
+  float                          fov, near_plane, far_plane;
+  bool                           is_proj_dirty;
+  sf_fmat4_t                     V, P;
+  sf_frame_t                    *frame;
 } sf_cam_t;
 
 typedef struct {
-  sf_fvec3_t                   *px;
-  int                           w;
-  int                           h;
-  int32_t                       id;
-  const char                   *name;
+  sf_fvec3_t                    *px;
+  int                            w;
+  int                            h;
+  int32_t                        id;
+  const char                    *name;
 } sf_tex_t;
 
-typedef struct { 
-  int                           v;
-  int                           vt;
-  int                           vn;
+typedef struct {
+  int                            v;
+  int                            vt;
+  int                            vn;
 } sf_vtx_idx_t;
 
 typedef struct {
-  sf_vtx_idx_t                  idx[3];
+  sf_vtx_idx_t                   idx[3];
 } sf_face_t;
 
 typedef struct {
-  sf_fvec3_t                   *v;
-  sf_fvec2_t                   *vt;
-  sf_fvec3_t                   *vn;
-  sf_face_t                    *f;
-  int32_t                       v_cnt;
-  int32_t                       vt_cnt;
-  int32_t                       vn_cnt;
-  int32_t                       f_cnt;
-  int32_t                       id;
-  const char                   *name;
+  sf_fvec3_t                    *v;
+  sf_fvec2_t                    *vt;
+  sf_fvec3_t                    *vn;
+  sf_face_t                     *f;
+  int32_t                        v_cnt;
+  int32_t                        vt_cnt;
+  int32_t                        vn_cnt;
+  int32_t                        f_cnt;
+  int32_t                        id;
+  const char                    *name;
 } sf_obj_t;
 
 typedef struct {
-  sf_obj_t                      obj;
-  sf_fmat4_t                    M;
-  sf_fvec3_t                    pos;
-  sf_fvec3_t                    rot;
-  sf_fvec3_t                    scale;
-  bool                          is_dirty;
-  int32_t                       id;
-  sf_tex_t                     *tex;
-  const char                   *name;
+  sf_obj_t                       obj;
+  int32_t                        id;
+  sf_tex_t                      *tex;
+  const char                    *name;
+  sf_frame_t                    *frame;
 } sf_enti_t;
 
 typedef enum {
@@ -177,16 +163,16 @@ typedef enum {
 } sf_light_type_t;
 
 typedef struct {
-  sf_light_type_t               type;
-  sf_fvec3_t                    pos_dir;
-  sf_fvec3_t                    color;
-  float                         intensity;
+  sf_light_type_t                type;
+  sf_fvec3_t                     color;
+  float                          intensity;
+  sf_frame_t                    *frame;
 } sf_light_t;
 
 typedef struct {
-  size_t                        size;
-  size_t                        offset;
-  uint8_t                      *buffer;
+  size_t                         size;
+  size_t                         offset;
+  uint8_t                       *buffer;
 } sf_arena_t;
 
 typedef enum {
@@ -232,17 +218,17 @@ typedef struct {
 typedef void (*sf_event_cb)(struct sf_ctx_t_ *ctx, const sf_event_t *event, void *userdata);
 
 typedef struct {
-  sf_event_cb                   cb;
-  void                         *userdata;
+  sf_event_cb                    cb;
+  void                          *userdata;
 } sf_callback_entry_t;
 
 typedef struct {
-  bool                          keys[SF_KEY_MAX];
-  bool                          keys_prev[SF_KEY_MAX];
-  int                           mouse_x, mouse_y;
-  int                           mouse_dx, mouse_dy;
-  bool                          mouse_btns[SF_MOUSE_MAX];
-  bool                          mouse_btns_prev[SF_MOUSE_MAX];
+  bool                           keys[SF_KEY_MAX];
+  bool                           keys_prev[SF_KEY_MAX];
+  int                            mouse_x, mouse_y;
+  int                            mouse_dx, mouse_dy;
+  bool                           mouse_btns[SF_MOUSE_MAX];
+  bool                           mouse_btns_prev[SF_MOUSE_MAX];
 } sf_input_state_t;
 
 typedef void (*sf_ui_cb)(struct sf_ctx_t_ *ctx, void *userdata);
@@ -254,87 +240,90 @@ typedef enum {
 } sf_ui_type_t;
 
 typedef struct {
-  sf_pkd_clr_t                  color_base;
-  sf_pkd_clr_t                  color_hover;
-  sf_pkd_clr_t                  color_active;
-  sf_pkd_clr_t                  color_text;
-  bool                          draw_outline;
+  sf_pkd_clr_t                   color_base;
+  sf_pkd_clr_t                   color_hover;
+  sf_pkd_clr_t                   color_active;
+  sf_pkd_clr_t                   color_text;
+  bool                           draw_outline;
 } sf_ui_style_t;
 
 typedef struct {
-  sf_ui_type_t                  type;
-  sf_ui_style_t                 style;
+  sf_ui_type_t                   type;
+  sf_ui_style_t                  style;
 
-  sf_ivec2_t                    v0, v1;
-  bool                          is_hovered;
-  bool                          is_pressed;
-  bool                          is_visible;
-  bool                          is_disabled;
+  sf_ivec2_t                     v0, v1;
+  bool                           is_hovered;
+  bool                           is_pressed;
+  bool                           is_visible;
+  bool                           is_disabled;
 
   union {
     struct {
-      const char               *text;
-      sf_ui_cb                  callback;
-      void                     *userdata;
+      const char                *text;
+      sf_ui_cb                   callback;
+      void                      *userdata;
     } button;
     struct {
-      float                     value;
-      float                     min_val;
-      float                     max_val;
-      sf_ui_cb                  callback;
-      void                     *userdata;
+      float                      value;
+      float                      min_val;
+      float                      max_val;
+      sf_ui_cb                   callback;
+      void                      *userdata;
     } slider;
     struct {
-      const char               *text;
-      bool                      is_checked;
-      sf_ui_cb                  callback;
-      void                     *userdata;
+      const char                *text;
+      bool                       is_checked;
+      sf_ui_cb                   callback;
+      void                      *userdata;
     } checkbox;
 
   };
 } sf_ui_lmn_t;
 
 typedef struct sf_ui_t_ {
-  sf_ui_lmn_t              *elements;
-  int32_t                       count;
-  sf_ui_style_t                 default_style;
+  sf_ui_lmn_t                   *elements;
+  int32_t                        count;
+  sf_ui_style_t                  default_style;
 } sf_ui_t;
 
 struct sf_ctx_t_ {
-  sf_run_state_t                state;
+  sf_run_state_t                 state;
 
-  sf_arena_t                    arena;
-  int                           arena_size;
+  sf_arena_t                     arena;
+  int                            arena_size;
 
-  sf_obj_t                     *objs;
-  int32_t                       obj_count;
-  sf_enti_t                    *entities;
-  int32_t                       enti_count;
-  sf_tex_t                     *textures;
-  int32_t                       tex_count;
-  sf_cam_t                     *cameras;
-  int32_t                       cam_count;
+  sf_frame_t                    *roots[SF_CONV_MAX];
+  sf_frame_t                    *frames;
+  int32_t                        frames_count;
+  sf_obj_t                      *objs;
+  int32_t                        obj_count;
+  sf_enti_t                     *entities;
+  int32_t                        enti_count;
+  sf_tex_t                      *textures;
+  int32_t                        tex_count;
+  sf_cam_t                      *cameras;
+  int32_t                        cam_count;
 
-  sf_light_t                   *lights;
-  int32_t                       light_count;
+  sf_light_t                    *lights;
+  int32_t                        light_count;
 
-  sf_ui_t                      *ui;
+  sf_ui_t                       *ui;
 
-  sf_input_state_t              input;
-  sf_callback_entry_t           callbacks[SF_EVT_MAX][SF_MAX_CB_PER_EVT];
+  sf_input_state_t               input;
+  sf_callback_entry_t            callbacks[SF_EVT_MAX][SF_MAX_CB_PER_EVT];
 
-  sf_cam_t                      camera;
+  sf_cam_t                       camera;
 
-  float                         delta_time;
-  float                         elapsed_time;
-  float                         fps;
-  uint32_t                      frame_count;
-  uint64_t                      _start_ticks;
-  uint64_t                      _last_ticks;
+  float                          delta_time;
+  float                          elapsed_time;
+  float                          fps;
+  uint32_t                       frame_count;
+  uint64_t                       _start_ticks;
+  uint64_t                       _last_ticks;
 
-  sf_log_fn                     log_cb;
-  void*                         log_user;
-  sf_log_level_t                log_min;
+  sf_log_fn                      log_cb;
+  void*                          log_user;
+  sf_log_level_t                 log_min;
 };
 
 /* SF_CORE_FUNCTIONS */
@@ -378,14 +367,20 @@ void         sf_enti_set_rot     (sf_ctx_t *ctx, sf_enti_t *enti, float rx, floa
 void         sf_enti_rotate      (sf_ctx_t *ctx, sf_enti_t *enti, float drx, float dry, float drz);
 void         sf_enti_set_scale   (sf_ctx_t *ctx, sf_enti_t *enti, float sx, float sy, float sz);
 void         sf_enti_set_tex     (sf_ctx_t *ctx, const char *entiname, const char *texname);
-sf_light_t*  sf_add_light_dir    (sf_ctx_t *ctx, sf_fvec3_t dir, sf_fvec3_t color, float intensity);
-sf_light_t*  sf_add_light_point  (sf_ctx_t *ctx, sf_fvec3_t pos, sf_fvec3_t color, float intensity);
+sf_light_t*  sf_add_light        (sf_ctx_t *ctx, sf_light_type_t type, sf_fvec3_t color, float intensity);
 void         sf_load_world       (sf_ctx_t *ctx, const char *filename, const char *worldname);
 void         sf_camera_set_psp   (sf_ctx_t *ctx, sf_cam_t *cam, float fov, float near_plane, float far_plane);
 void         sf_camera_set_pos   (sf_ctx_t *ctx, sf_cam_t *cam, float x, float y, float z);
 void         sf_camera_move_loc  (sf_ctx_t *ctx, sf_cam_t *cam, float fwd, float right, float up);
 void         sf_camera_look_at   (sf_ctx_t *ctx, sf_cam_t *cam, sf_fvec3_t target);
 void         sf_camera_add_yp    (sf_ctx_t *ctx, sf_cam_t *cam, float yaw_offset, float pitch_offset);
+
+/* SF_FRAME_FUNCTIONS */
+sf_frame_t*  sf_get_root         (sf_ctx_t *ctx, sf_convention_t conv);
+sf_frame_t*  sf_add_frame        (sf_ctx_t *ctx, sf_frame_t *parent);
+void         sf_update_frames    (sf_ctx_t *ctx);
+void         sf_frame_look_at    (sf_frame_t *f, sf_fvec3_t target);
+void         sf_frame_set_parent (sf_frame_t *child, sf_frame_t *new_parent);
 
 /* SF_DRAWING_FUNCTIONS */
 void         sf_fill             (sf_ctx_t *ctx, sf_cam_t *cam, sf_pkd_clr_t c);
@@ -430,10 +425,11 @@ sf_fvec3_t   _sf_intersect_near  (sf_fvec3_t v0, sf_fvec3_t v1, float near);
 sf_fvec3_t   _sf_project_vertex  (sf_ctx_t *ctx, sf_cam_t *cam, sf_fvec3_t v, sf_fmat4_t P);
 const char*  _sf_log_lvl_to_str  (sf_log_level_t level);
 bool         _sf_resolve_asset   (const char* filename, char* out_path, size_t max_len);
-void         _sf_update_cam_vecs (sf_cam_t *cam);
 uint64_t     _sf_get_ticks       (void);
 sf_pkd_clr_t _sf_pack_color      (sf_unpkd_clr_t);
 size_t       _sf_obj_memusg      (sf_obj_t *obj);
+void         _sf_set_up_frames   (sf_ctx_t *ctx);
+void         _sf_calc_frame_tree (sf_frame_t *f, sf_fmat4_t parent_global_M, bool force_dirty);
 
 /* SF_LA_FUNCTIONS */
 sf_fmat4_t   sf_fmat4_mul_fmat4  (sf_fmat4_t m0, sf_fmat4_t m1);
@@ -470,14 +466,9 @@ void sf_init(sf_ctx_t *ctx, int w, int h) {
   ctx->camera.buffer_size       = w * h;
   ctx->camera.buffer            = (sf_pkd_clr_t*) malloc(w*h*sizeof(sf_pkd_clr_t));
   ctx->camera.z_buffer          = (float*)        malloc(w*h*sizeof(float));
-  ctx->camera.pos               = (sf_fvec3_t){0.0f, 0.0f, 0.0f};
-  ctx->camera.world_up          = (sf_fvec3_t){0.0f, 1.0f, 0.0f};
-  ctx->camera.yaw               = -90.0f;
-  ctx->camera.pitch             = 0.0f;
   ctx->camera.fov               = 60.0f;
   ctx->camera.near_plane        = 0.1f;
   ctx->camera.far_plane         = 100.0f;
-  ctx->camera.is_view_dirty     = true;
   ctx->camera.is_proj_dirty     = true;
   ctx->arena                    = sf_arena_init(ctx, SF_ARENA_SIZE);
   ctx->log_cb                   = sf_logger_console;
@@ -488,10 +479,12 @@ void sf_init(sf_ctx_t *ctx, int w, int h) {
   ctx->lights                   = sf_arena_alloc(ctx, &ctx->arena, SF_MAX_LIGHTS   * sizeof(sf_light_t));
   ctx->textures                 = sf_arena_alloc(ctx, &ctx->arena, SF_MAX_TEXTURES * sizeof(sf_tex_t));
   ctx->cameras                  = sf_arena_alloc(ctx, &ctx->arena, SF_MAX_CAMS     * sizeof(sf_cam_t));
+  ctx->frames                   = sf_arena_alloc(ctx, &ctx->arena, SF_MAX_FRAMES   * sizeof(sf_frame_t));
   ctx->enti_count               = 0;
   ctx->light_count              = 0;
   ctx->tex_count                = 0;
   ctx->cam_count                = 0;
+  ctx->frames_count             = 0;
   ctx->_start_ticks             = _sf_get_ticks();
   ctx->_last_ticks              = ctx->_start_ticks;
   ctx->delta_time               = 0.0f;
@@ -499,7 +492,8 @@ void sf_init(sf_ctx_t *ctx, int w, int h) {
   ctx->fps                      = 0.0f;
   ctx->frame_count              = 0;
   ctx->ui                       = sf_create_ui(ctx);
-  _sf_update_cam_vecs(&ctx->camera);
+  _sf_set_up_frames(ctx);
+  ctx->camera.frame             = sf_add_frame(ctx, NULL);
 
   SF_LOG(ctx, SF_LOG_INFO,
               SF_LOG_INDENT "buffer : %dx%d\n"
@@ -541,6 +535,7 @@ void sf_destroy(sf_ctx_t *ctx) {
   ctx->camera.buffer_size       = 0;
   ctx->camera.w                 = 0;
   ctx->camera.h                 = 0;
+  ctx->ui->count                = 0;
   ctx->enti_count               = 0;
   ctx->obj_count                = 0;
   ctx->tex_count                = 0;
@@ -555,6 +550,7 @@ void sf_destroy(sf_ctx_t *ctx) {
   ctx->textures                 = NULL;
   ctx->cameras                  = NULL;
   ctx->lights                   = NULL;
+  ctx->ui->elements             = NULL;
   ctx->ui                       = NULL;
 }
 
@@ -567,18 +563,22 @@ void sf_stop(sf_ctx_t *ctx) {
 }
 
 void sf_render_enti(sf_ctx_t *ctx, sf_cam_t *cam, sf_enti_t *enti) {
+  if (!enti || !enti->frame) return;
+
   size_t mark = sf_arena_save(ctx, &ctx->arena);
-  sf_fmat4_t M = enti->M;
+  sf_fmat4_t M = enti->frame->global_M;
   sf_fmat4_t V = cam->V;
   sf_fmat4_t P = cam->P;
   float near = 0.1f;
   sf_fvec3_t* wv = sf_arena_alloc(ctx, &ctx->arena, enti->obj.v_cnt * sizeof(sf_fvec3_t));
   sf_fvec3_t* vv = sf_arena_alloc(ctx, &ctx->arena, enti->obj.v_cnt * sizeof(sf_fvec3_t));
   if (!wv || !vv) return;
+
   for (int i = 0; i < enti->obj.v_cnt; i++) {
     wv[i] = sf_fmat4_mul_vec3(M, enti->obj.v[i]);
     vv[i] = sf_fmat4_mul_vec3(V, wv[i]);
   }
+
   for (int i = 0; i < enti->obj.f_cnt; i++) {
     sf_face_t face = enti->obj.f[i];
     sf_fvec3_t v_world[3] = { wv[face.idx[0].v], wv[face.idx[1].v], wv[face.idx[2].v] };
@@ -586,7 +586,9 @@ void sf_render_enti(sf_ctx_t *ctx, sf_cam_t *cam, sf_enti_t *enti) {
     sf_fvec3_t a_v = sf_fvec3_sub(v_view[1], v_view[0]);
     sf_fvec3_t b_v = sf_fvec3_sub(v_view[2], v_view[0]);
     sf_fvec3_t n_v = sf_fvec3_cross(a_v, b_v);
+
     if (sf_fvec3_dot(n_v, v_view[0]) >= 0) continue;
+
     sf_fvec3_t a_w = sf_fvec3_sub(v_world[1], v_world[0]);
     sf_fvec3_t b_w = sf_fvec3_sub(v_world[2], v_world[0]);
     sf_fvec3_t n_w = sf_fvec3_norm(sf_fvec3_cross(a_w, b_w));
@@ -595,19 +597,27 @@ void sf_render_enti(sf_ctx_t *ctx, sf_cam_t *cam, sf_enti_t *enti) {
       (v_world[0].y + v_world[1].y + v_world[2].y) / 3.0f,
       (v_world[0].z + v_world[1].z + v_world[2].z) / 3.0f
     };
+
     sf_fvec3_t l_int = {0.1f, 0.1f, 0.1f};
+
     for (int l = 0; l < ctx->light_count; l++) {
       sf_light_t *light = &ctx->lights[l];
+      if (!light->frame) continue;
+
+      sf_fmat4_t lM = light->frame->global_M;
+      sf_fvec3_t l_pos = {lM.m[3][0], lM.m[3][1], lM.m[3][2]};
       sf_fvec3_t light_dir;
       float atten = 1.0f;
+
       if (light->type == SF_LIGHT_DIR) {
-        light_dir = sf_fvec3_norm((sf_fvec3_t){-light->pos_dir.x, -light->pos_dir.y, -light->pos_dir.z});
+        light_dir = sf_fvec3_norm((sf_fvec3_t){-lM.m[2][0], -lM.m[2][1], -lM.m[2][2]});
       } else {
-        sf_fvec3_t diff = sf_fvec3_sub(light->pos_dir, centroid);
+        sf_fvec3_t diff = sf_fvec3_sub(l_pos, centroid);
         float dist = sqrtf(diff.x*diff.x + diff.y*diff.y + diff.z*diff.z);
         light_dir = sf_fvec3_norm(diff);
         atten = 1.0f / (1.0f + 0.09f * dist + 0.032f * (dist * dist));
       }
+ 
       float diff_factor = sf_fvec3_dot(n_w, light_dir);
       if (diff_factor > 0.0f) {
         l_int.x += light->color.x * light->intensity * diff_factor * atten;
@@ -615,6 +625,7 @@ void sf_render_enti(sf_ctx_t *ctx, sf_cam_t *cam, sf_enti_t *enti) {
         l_int.z += light->color.z * light->intensity * diff_factor * atten;
       }
     }
+
     l_int.x = l_int.x > 1.0f ? 1.0f : l_int.x;
     l_int.y = l_int.y > 1.0f ? 1.0f : l_int.y;
     l_int.z = l_int.z > 1.0f ? 1.0f : l_int.z;
@@ -684,6 +695,7 @@ void sf_render_enti(sf_ctx_t *ctx, sf_cam_t *cam, sf_enti_t *enti) {
 }
 
 void sf_render_ctx(sf_ctx_t *ctx) {
+  sf_update_frames(ctx);
   sf_render_cam(ctx, &ctx->camera);
   for (int i = 0; i < ctx->cam_count; ++i) {
     sf_render_cam(ctx, &ctx->cameras[i]);
@@ -700,24 +712,23 @@ void sf_render_cam(sf_ctx_t *ctx, sf_cam_t *cam) {
     cam->P = sf_make_psp_fmat4(cam->fov, aspect, cam->near_plane, cam->far_plane);
     cam->is_proj_dirty = false;
   }
-  if (cam->is_view_dirty) {
-    sf_fvec3_t target = sf_fvec3_add(cam->pos, cam->front);
-    cam->V = sf_make_view_fmat4(cam->pos, target, cam->up);
-    cam->is_view_dirty = false;
+
+  if (cam->frame) {
+    sf_fmat4_t gM = cam->frame->global_M;
+
+    sf_fvec3_t eye    = { gM.m[3][0],  gM.m[3][1],  gM.m[3][2] };
+    sf_fvec3_t fwd    = {-gM.m[2][0], -gM.m[2][1], -gM.m[2][2] };
+    sf_fvec3_t up     = { gM.m[1][0],  gM.m[1][1],  gM.m[1][2] };
+
+    sf_fvec3_t target = sf_fvec3_add(eye, fwd);
+    cam->V = sf_make_view_fmat4(eye, target, up);
   }
+
   sf_fill(ctx, cam, SF_CLR_BLACK);
   sf_clear_depth(ctx, cam); 
+
   for (int i = 0; i < ctx->enti_count; i++) {
-    sf_enti_t *enti = &ctx->entities[i];
-    if (enti->is_dirty) {
-      sf_fmat4_t t_mat  = sf_make_tsl_fmat4(enti->pos.x, enti->pos.y, enti->pos.z);
-      sf_fmat4_t r_mat  = sf_make_rot_fmat4(enti->rot);
-      sf_fmat4_t s_mat  = sf_make_scale_fmat4(enti->scale);
-      sf_fmat4_t rs_mat = sf_fmat4_mul_fmat4(r_mat, s_mat);
-      enti->M           = sf_fmat4_mul_fmat4(rs_mat, t_mat);
-      enti->is_dirty = false;
-    }
-    sf_render_enti(ctx, cam, enti);
+    sf_render_enti(ctx, cam, &ctx->entities[i]);
   }
 
   sf_event_t ev_end;
@@ -1061,12 +1072,9 @@ sf_enti_t* sf_add_enti(sf_ctx_t *ctx, sf_obj_t *obj, const char *entiname) {
 
   sf_enti_t *enti = &ctx->entities[ctx->enti_count++];
   enti->obj       = *obj;
-  enti->M         = sf_make_idn_fmat4();
-  enti->pos       = (sf_fvec3_t){0.0f, 0.0f, 0.0f};
-  enti->rot       = (sf_fvec3_t){0.0f, 0.0f, 0.0f};
-  enti->scale     = (sf_fvec3_t){1.0f, 1.0f, 1.0f};
-  enti->is_dirty  = true;
   enti->id        = ctx->enti_count - 1;
+  enti->tex       = NULL;
+  enti->frame     = sf_add_frame(ctx, NULL);
 
   size_t name_len = strlen(entiname) + 1;
   enti->name = (const char*)sf_arena_alloc(ctx, &ctx->arena, name_len);
@@ -1119,16 +1127,12 @@ sf_cam_t* sf_add_cam(sf_ctx_t *ctx, const char *camname, int w, int h, float fov
   cam->buffer_size       = w * h;
   cam->buffer            = (sf_pkd_clr_t*) malloc(w * h * sizeof(sf_pkd_clr_t));
   cam->z_buffer          = (float*)        malloc(w * h * sizeof(float));
-  cam->pos               = (sf_fvec3_t){0.0f, 0.0f, 0.0f};
-  cam->world_up          = (sf_fvec3_t){0.0f, 1.0f, 0.0f};
-  cam->yaw               = -90.0f;
-  cam->pitch             = 0.0f;
   cam->fov               = fov;
   cam->near_plane        = 0.1f;
   cam->far_plane         = 100.0f;
-  cam->is_view_dirty     = true;
   cam->is_proj_dirty     = true;
   cam->id                = ctx->cam_count - 1;
+  cam->frame             = sf_add_frame(ctx, NULL);
 
   size_t name_len = strlen(camname) + 1;
   cam->name = (const char*)sf_arena_alloc(ctx, &ctx->arena, name_len);
@@ -1136,7 +1140,6 @@ sf_cam_t* sf_add_cam(sf_ctx_t *ctx, const char *camname, int w, int h, float fov
     memcpy((void*)cam->name, camname, name_len);
   }
 
-  _sf_update_cam_vecs(cam);
   SF_LOG(ctx, SF_LOG_INFO, 
               SF_LOG_INDENT "name   : %s\n"
               SF_LOG_INDENT "id     : %d\n"
@@ -1160,32 +1163,42 @@ sf_cam_t* sf_get_cam_(sf_ctx_t *ctx, const char *camname, bool should_log_failur
 }
 
 void sf_enti_set_pos(sf_ctx_t *ctx, sf_enti_t *enti, float x, float y, float z) {
-  enti->pos = (sf_fvec3_t){x, y, z};
-  enti->is_dirty = true;
+  if (enti && enti->frame) {
+      enti->frame->pos = (sf_fvec3_t){x, y, z};
+      enti->frame->is_dirty = true;
+  }
 }
 
 void sf_enti_move(sf_ctx_t *ctx, sf_enti_t *enti, float dx, float dy, float dz) {
-  enti->pos.x += dx;
-  enti->pos.y += dy;
-  enti->pos.z += dz;
-  enti->is_dirty = true;
+  if (enti && enti->frame) {
+      enti->frame->pos.x += dx;
+      enti->frame->pos.y += dy;
+      enti->frame->pos.z += dz;
+      enti->frame->is_dirty = true;
+  }
 }
 
 void sf_enti_set_rot(sf_ctx_t *ctx, sf_enti_t *enti, float rx, float ry, float rz) {
-  enti->rot = (sf_fvec3_t){rx, ry, rz};
-  enti->is_dirty = true;
+  if (enti && enti->frame) {
+      enti->frame->rot = (sf_fvec3_t){rx, ry, rz};
+      enti->frame->is_dirty = true;
+  }
 }
 
 void sf_enti_rotate(sf_ctx_t *ctx, sf_enti_t *enti, float drx, float dry, float drz) {
-  enti->rot.x += drx;
-  enti->rot.y += dry;
-  enti->rot.z += drz;
-  enti->is_dirty = true;
+  if (enti && enti->frame) {
+      enti->frame->rot.x += drx;
+      enti->frame->rot.y += dry;
+      enti->frame->rot.z += drz;
+      enti->frame->is_dirty = true;
+  }
 }
 
 void sf_enti_set_scale(sf_ctx_t *ctx, sf_enti_t *enti, float sx, float sy, float sz) {
-  enti->scale = (sf_fvec3_t){sx, sy, sz};
-  enti->is_dirty = true;
+  if (enti && enti->frame) {
+      enti->frame->scale = (sf_fvec3_t){sx, sy, sz};
+      enti->frame->is_dirty = true;
+  }
 }
 
 void sf_enti_set_tex(sf_ctx_t *ctx, const char *entiname, const char *texname) {
@@ -1196,23 +1209,16 @@ void sf_enti_set_tex(sf_ctx_t *ctx, const char *entiname, const char *texname) {
   }
 }
 
-sf_light_t* sf_add_light_dir(sf_ctx_t *ctx, sf_fvec3_t dir, sf_fvec3_t color, float intensity) {
+sf_light_t* sf_add_light(sf_ctx_t *ctx, sf_light_type_t type, sf_fvec3_t color, float intensity) {
   if (ctx->light_count >= SF_MAX_LIGHTS) return NULL;
-  sf_light_t *l = &ctx->lights[ctx->light_count++];
-  l->type      = SF_LIGHT_DIR;
-  l->pos_dir   = sf_fvec3_norm(dir);
-  l->color     = color;
-  l->intensity = intensity;
-  return l;
-}
 
-sf_light_t* sf_add_light_point(sf_ctx_t *ctx, sf_fvec3_t pos, sf_fvec3_t color, float intensity) {
-  if (ctx->light_count >= SF_MAX_LIGHTS) return NULL;
   sf_light_t *l = &ctx->lights[ctx->light_count++];
-  l->type      = SF_LIGHT_POINT;
-  l->pos_dir   = pos;
+  l->type      = type;
   l->color     = color;
   l->intensity = intensity;
+
+  l->frame     = sf_add_frame(ctx, NULL);
+
   return l;
 }
 
@@ -1268,11 +1274,11 @@ void sf_load_world(sf_ctx_t *ctx, const char *filename, const char *worldname) {
       float x, y, z, r, g, b, i;
       sscanf(line, "l %15s %f %f %f %f %f %f %f", l_type, &x, &y, &z, &r, &g, &b, &i);
       if (strcmp(l_type, "dir") == 0) {
-        sf_add_light_dir(ctx, (sf_fvec3_t){x, y, z}, (sf_fvec3_t){r, g, b}, i);
-        light_count++;
+        sf_light_t *l = sf_add_light(ctx, SF_LIGHT_DIR, (sf_fvec3_t){r, g, b}, i);
+        sf_frame_look_at(l->frame, (sf_fvec3_t){x, y, z});
       } else if (strcmp(l_type, "point") == 0) {
-        sf_add_light_point(ctx, (sf_fvec3_t){x, y, z}, (sf_fvec3_t){r, g, b}, i);
-        light_count++;
+        sf_light_t *l = sf_add_light(ctx, SF_LIGHT_POINT, (sf_fvec3_t){r, g, b}, i);
+        l->frame->pos = (sf_fvec3_t){x, y, z};
       }
     }
     else if (cmd == 'M') { 
@@ -1318,35 +1324,96 @@ void sf_camera_set_psp(sf_ctx_t *ctx, sf_cam_t *cam, float fov, float near_plane
 }
 
 void sf_camera_set_pos(sf_ctx_t *ctx, sf_cam_t *cam, float x, float y, float z) {
-  cam->pos = (sf_fvec3_t){x, y, z};
-  cam->is_view_dirty = true;
+  cam->frame->pos = (sf_fvec3_t){x, y, z};
+  cam->frame->is_dirty = true;
 }
 
 void sf_camera_move_loc(sf_ctx_t *ctx, sf_cam_t *cam, float fwd, float right, float up) {
-  sf_fvec3_t m_fwd = {cam->front.x * fwd, cam->front.y * fwd, cam->front.z * fwd};
-  sf_fvec3_t m_rgt = {cam->right.x * right, cam->right.y * right, cam->right.z * right};
-  sf_fvec3_t m_up  = {cam->up.x * up, cam->up.y * up, cam->up.z * up};
-  cam->pos = sf_fvec3_add(cam->pos, m_fwd);
-  cam->pos = sf_fvec3_add(cam->pos, m_rgt);
-  cam->pos = sf_fvec3_add(cam->pos, m_up);
-  cam->is_view_dirty = true;
+  if (!cam || !cam->frame) return;
+  sf_fmat4_t m = cam->frame->global_M;
+  sf_fvec3_t m_fwd = {-m.m[2][0] * fwd, -m.m[2][1] * fwd, -m.m[2][2] * fwd};
+  sf_fvec3_t m_rgt = { m.m[0][0] * right, m.m[0][1] * right, m.m[0][2] * right};
+  sf_fvec3_t m_up  = { m.m[1][0] * up,  m.m[1][1] * up,  m.m[1][2] * up};
+  cam->frame->pos = sf_fvec3_add(cam->frame->pos, m_fwd);
+  cam->frame->pos = sf_fvec3_add(cam->frame->pos, m_rgt);
+  cam->frame->pos = sf_fvec3_add(cam->frame->pos, m_up);
+  cam->frame->is_dirty = true;
 }
 
 void sf_camera_look_at(sf_ctx_t *ctx, sf_cam_t *cam, sf_fvec3_t target) {
-  cam->front = sf_fvec3_norm(sf_fvec3_sub(target, cam->pos));
-  cam->right = sf_fvec3_norm(sf_fvec3_cross(cam->front, cam->world_up));
-  cam->up    = sf_fvec3_norm(sf_fvec3_cross(cam->right, cam->front));
-  cam->pitch = SF_RAD2DEG(asinf(cam->front.y));
-  cam->yaw   = SF_RAD2DEG(atan2f(cam->front.z, cam->front.x));
-  cam->is_view_dirty = true;
+  if (cam && cam->frame) sf_frame_look_at(cam->frame, target);
 }
 
 void sf_camera_add_yp(sf_ctx_t *ctx, sf_cam_t *cam, float yaw_offset, float pitch_offset) {
-  cam->yaw   += yaw_offset;
-  cam->pitch += pitch_offset;
-  if (cam->pitch > 89.0f)  cam->pitch = 89.0f;
-  if (cam->pitch < -89.0f) cam->pitch = -89.0f;
-  _sf_update_cam_vecs(cam);
+  if (!cam || !cam->frame) return;
+  cam->frame->rot.y -= SF_DEG2RAD(yaw_offset);
+  cam->frame->rot.x += SF_DEG2RAD(pitch_offset);
+  if (cam->frame->rot.x >  SF_DEG2RAD(89.0f)) cam->frame->rot.x =  SF_DEG2RAD(89.0f);
+  if (cam->frame->rot.x < -SF_DEG2RAD(89.0f)) cam->frame->rot.x = -SF_DEG2RAD(89.0f);
+  cam->frame->is_dirty = true;
+}
+
+/* SF_FRAME_FUNCTIONS */
+sf_frame_t* sf_get_root(sf_ctx_t *ctx, sf_convention_t conv) {
+  if (conv < 0 || conv >= SF_CONV_MAX) return NULL;
+  return ctx->roots[conv];
+}
+
+sf_frame_t* sf_add_frame(sf_ctx_t *ctx, sf_frame_t *parent) {
+  if (ctx->frame_count >= SF_MAX_FRAMES) return NULL;
+  sf_frame_t *f = &ctx->frames[ctx->frames_count++];
+  memset(f, 0, sizeof(sf_frame_t));
+  f->scale = (sf_fvec3_t){1.0f, 1.0f, 1.0f};
+  f->local_M = sf_make_idn_fmat4();
+  f->global_M = sf_make_idn_fmat4();
+  f->is_dirty = true;
+  f->is_root = false;
+
+  if (!parent) parent = ctx->roots[SF_CONV_DEFAULT];
+
+  f->parent = parent;
+  f->next_sibling = parent->first_child;
+  parent->first_child = f;
+
+  return f;
+}
+
+void sf_update_frames(sf_ctx_t *ctx) {
+  for (int i = 0; i < SF_CONV_MAX; i++) {
+    if (ctx->roots[i]) {
+      _sf_calc_frame_tree(ctx->roots[i], sf_make_idn_fmat4(), false);
+    }
+  }
+}
+
+void sf_frame_look_at(sf_frame_t *f, sf_fvec3_t target) {
+  if (!f) return;
+  sf_fvec3_t diff = sf_fvec3_sub(target, f->pos);
+  f->rot.y = atan2f(-diff.x, -diff.z);
+  float xz_dist = sqrtf(diff.x*diff.x + diff.z*diff.z);
+  f->rot.x = atan2f(diff.y, xz_dist);
+  f->rot.z = 0.0f;
+  f->is_dirty = true;
+}
+
+void sf_frame_set_parent(sf_frame_t *child, sf_frame_t *new_parent) {
+  if (!child || child->parent == new_parent) return;
+
+  if (child->parent) {
+    sf_frame_t **curr = &child->parent->first_child;
+    while (*curr) {
+      if (*curr == child) {
+        *curr = child->next_sibling;
+        break;
+      }
+      curr = &((*curr)->next_sibling);
+    }
+  }
+
+  child->parent = new_parent;
+  child->next_sibling = new_parent->first_child;
+  new_parent->first_child = child;
+  child->is_dirty = true;
 }
 
 /* SF_DRAWING_FUNCTIONS */
@@ -2029,17 +2096,6 @@ bool _sf_resolve_asset(const char* filename, char* out_path, size_t max_len) {
   return false;
 }
 
-void _sf_update_cam_vecs(sf_cam_t *cam) {
-  sf_fvec3_t front;
-  front.x = cosf(SF_DEG2RAD(cam->yaw)) * cosf(SF_DEG2RAD(cam->pitch));
-  front.y = sinf(SF_DEG2RAD(cam->pitch));
-  front.z = sinf(SF_DEG2RAD(cam->yaw)) * cosf(SF_DEG2RAD(cam->pitch));
-  cam->front = sf_fvec3_norm(front);
-  cam->right = sf_fvec3_norm(sf_fvec3_cross(cam->front, cam->world_up));
-  cam->up    = sf_fvec3_norm(sf_fvec3_cross(cam->right, cam->front));
-  cam->is_view_dirty = true;
-}
-
 uint64_t _sf_get_ticks(void) {
   struct timespec ts;
   clock_gettime(CLOCK_MONOTONIC, &ts);
@@ -2060,6 +2116,54 @@ size_t _sf_obj_memusg(sf_obj_t *obj) {
   size_t vn_size = obj->vn_cnt * sizeof(sf_fvec3_t);
   size_t f_size  = obj->f_cnt * sizeof(sf_face_t);
   return v_size + vt_size + vn_size + f_size;
+}
+
+void _sf_set_up_frames(sf_ctx_t *ctx) {
+  ctx->roots[SF_CONV_DEFAULT] = &ctx->frames[ctx->frames_count++];
+  memset(ctx->roots[SF_CONV_DEFAULT], 0, sizeof(sf_frame_t));
+  ctx->roots[SF_CONV_DEFAULT]->local_M  = sf_make_idn_fmat4();
+  ctx->roots[SF_CONV_DEFAULT]->global_M = sf_make_idn_fmat4();
+  ctx->roots[SF_CONV_DEFAULT]->is_root  = true;
+
+  ctx->roots[SF_CONV_NED] = &ctx->frames[ctx->frames_count++];
+  memset(ctx->roots[SF_CONV_NED], 0, sizeof(sf_frame_t));
+  sf_fmat4_t ned_M = sf_make_idn_fmat4();
+  ned_M.m[0][0]= 0; ned_M.m[0][1]= 1; ned_M.m[0][2]= 0; 
+  ned_M.m[1][0]= 0; ned_M.m[1][1]= 0; ned_M.m[1][2]=-1; 
+  ned_M.m[2][0]=-1; ned_M.m[2][1]= 0; ned_M.m[2][2]= 0; 
+  ctx->roots[SF_CONV_NED]->local_M  = ned_M;
+  ctx->roots[SF_CONV_NED]->global_M = ned_M;
+  ctx->roots[SF_CONV_NED]->is_root  = true;
+
+  ctx->roots[SF_CONV_FLU] = &ctx->frames[ctx->frames_count++];
+  memset(ctx->roots[SF_CONV_FLU], 0, sizeof(sf_frame_t));
+  sf_fmat4_t flu_M = sf_make_idn_fmat4();
+  flu_M.m[0][0]= 0; flu_M.m[0][1]=-1; flu_M.m[0][2]= 0; 
+  flu_M.m[1][0]= 0; flu_M.m[1][1]= 0; flu_M.m[1][2]= 1; 
+  flu_M.m[2][0]=-1; flu_M.m[2][1]= 0; flu_M.m[2][2]= 0; 
+  ctx->roots[SF_CONV_FLU]->local_M  = flu_M;
+  ctx->roots[SF_CONV_FLU]->global_M = flu_M;
+  ctx->roots[SF_CONV_FLU]->is_root  = true;
+}
+
+void _sf_calc_frame_tree(sf_frame_t *f, sf_fmat4_t parent_global_M, bool force_dirty) {
+  if (!f) return;
+  bool current_dirty = f->is_dirty || force_dirty;
+
+  if (current_dirty) {
+    if (!f->is_root) {
+      sf_fmat4_t t_mat  = sf_make_tsl_fmat4(f->pos.x, f->pos.y, f->pos.z);
+      sf_fmat4_t r_mat  = sf_make_rot_fmat4(f->rot);
+      sf_fmat4_t s_mat  = sf_make_scale_fmat4(f->scale);
+      sf_fmat4_t rs_mat = sf_fmat4_mul_fmat4(r_mat, s_mat);
+      f->local_M = sf_fmat4_mul_fmat4(rs_mat, t_mat);
+    }
+    f->global_M = sf_fmat4_mul_fmat4(f->local_M, parent_global_M);
+    f->is_dirty = false;
+  }
+ 
+  _sf_calc_frame_tree(f->first_child, f->global_M, current_dirty);
+  _sf_calc_frame_tree(f->next_sibling, parent_global_M, force_dirty);
 }
 
 /* SF_LA_FUNCTIONS */
