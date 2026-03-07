@@ -38,7 +38,7 @@ extern "C" {
 #define SF_MAX_UI_ELEMENTS            64
 #define SF_MAX_FRAMES                 512
 #define SF_MAX_SPRITES                20
-#define SF_MAX_EMITRS               10
+#define SF_MAX_EMITRS                 10
 #define SF_MAX_SPRITE_FRAMES          16
 #define SF_LOG_INDENT                 "            "
 #define SF_PI                         3.14159265359f
@@ -52,7 +52,7 @@ extern "C" {
 #define sf_get_obj(ctx, name)         sf_get_obj_(ctx, name, true)
 #define sf_get_enti(ctx, name)        sf_get_enti_(ctx, name, true)
 #define sf_get_cam(ctx, name)         sf_get_cam_(ctx, name, true)
-#define sf_get_emitr(ctx, name)     sf_get_emitr_(ctx, name, true)
+#define sf_get_emitr(ctx, name)       sf_get_emitr_(ctx, name, true)
 #define sf_get_sprite(ctx, name)      sf_get_sprite_(ctx, name, true)
 
 #define SF_CLR_RED                    ((sf_pkd_clr_t)0xFFFF0000)
