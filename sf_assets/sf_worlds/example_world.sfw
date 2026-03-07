@@ -15,6 +15,7 @@ t elements  Elements_09-128x128.bmp
 t elements2  Elements_01-128x128.bmp
 t elements3  Elements_02-128x128.bmp
 t elements4  Elements_03-128x128.bmp
+t stars  Stars.bmp
 
 # Entity Instances (mesh, name, pos, rot, scale, optional_texture)
 e tux    tux     3.0 0.0 -10.0 0.0 0.0 0.0   0.1 0.1 0.1       elements
@@ -24,7 +25,7 @@ e cube   cube    0.0 1.0   0.0 0.0 0.0 0.0   1.0 1.0 1.0       brick_tex
 
 # Sprites (name, duration, scale, num_frames, tex1, tex2...)
 s spr_fire  0.15 0.3 3 elements2 elements3 elements4
-s spr_smoke 1.0  0.1 1 elements
+s spr_smoke 1.0  0.5 1 stars
 s spr_spark 1.0  0.1 1 elements2
 
 # Lighting (type, pos_xyz, color_rgb, intensity)

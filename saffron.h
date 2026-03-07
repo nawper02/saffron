@@ -1039,10 +1039,14 @@ sf_tex_t* sf_load_texture_bmp(sf_ctx_t *ctx, const char *filename, const char *t
     int dest_y = (h > 0) ? (h_abs - 1 - y) : y; 
     for (int x = 0; x < w; x++) {
       fread(bgr, 1, 3, file);
-      float r = bgr[2] / 255.0f;
-      float g = bgr[1] / 255.0f;
-      float b = bgr[0] / 255.0f;
-      tex->px[dest_y * w + x] = (sf_fvec3_t){ powf(r, 2.2f), powf(g, 2.2f), powf(b, 2.2f) };
+      if (bgr[2] == 255 && bgr[1] == 0 && bgr[0] == 255) {
+        tex->px[dest_y * w + x] = (sf_fvec3_t){ -1.0f, -1.0f, -1.0f };
+      } else {
+        float r = bgr[2] / 255.0f;
+        float g = bgr[1] / 255.0f;
+        float b = bgr[0] / 255.0f;
+        tex->px[dest_y * w + x] = (sf_fvec3_t){ powf(r, 2.2f), powf(g, 2.2f), powf(b, 2.2f) };
+      }
     }
     fseek(file, padding, SEEK_CUR);
   }
@@ -1883,6 +1887,7 @@ void sf_tri_tex(sf_ctx_t *ctx, sf_cam_t *cam, sf_tex_t *tex, sf_fvec3_t v0, sf_f
         int ty = (int)(v * (float)tex->h) % tex->h;
         if (tx < 0) tx += tex->w; if (ty < 0) ty += tex->h;
         sf_fvec3_t texel = tex->px[ty * tex->w + tx];
+        if (texel.x < 0.0f) continue; 
         float r = texel.x * l_int.x, g = texel.y * l_int.y, b = texel.z * l_int.z;
         cam->z_buffer[bi] = cz;
         cam->buffer[bi] = _sf_pack_color((sf_unpkd_clr_t){
@@ -2133,22 +2138,27 @@ void sf_draw_sprite(sf_ctx_t *ctx, sf_cam_t *cam, sf_sprite_t *spr, sf_fvec3_t p
         float u = (float)(x - x_start) / (float)(x_end - x_start);
         int tx = (int)(u * tex->w) % tex->w;
         sf_fvec3_t texel = tex->px[ty * tex->w + tx];
-        float r_add = texel.x * scale_mult;
-        float g_add = texel.y * scale_mult;
-        float b_add = texel.z * scale_mult;
-        if (r_add > 0.02f || g_add > 0.02f || b_add > 0.02f) {
+        if (texel.x < 0.0f) continue;
+        float alpha = scale_mult;
+        if (alpha >= 0.99f) {
+          cam->z_buffer[bi] = cz;
+          cam->buffer[bi] = _sf_pack_color((sf_unpkd_clr_t){
+            (uint8_t)(sqrtf(texel.x) * 255.0f), 
+            (uint8_t)(sqrtf(texel.y) * 255.0f), 
+            (uint8_t)(sqrtf(texel.z) * 255.0f), 255
+          });
+        } else {
           sf_unpkd_clr_t bg = _sf_unpack_color(cam->buffer[bi]);
           float bg_r = (bg.r / 255.0f); bg_r *= bg_r;
           float bg_g = (bg.g / 255.0f); bg_g *= bg_g;
           float bg_b = (bg.b / 255.0f); bg_b *= bg_b;
-          float out_r = bg_r + r_add;
-          float out_g = bg_g + g_add;
-          float out_b = bg_b + b_add;
+          float out_r = (texel.x * alpha) + (bg_r * (1.0f - alpha));
+          float out_g = (texel.y * alpha) + (bg_g * (1.0f - alpha));
+          float out_b = (texel.z * alpha) + (bg_b * (1.0f - alpha));
           cam->buffer[bi] = _sf_pack_color((sf_unpkd_clr_t){
             (uint8_t)(sqrtf(out_r > 1.0f ? 1.0f : out_r) * 255.0f), 
             (uint8_t)(sqrtf(out_g > 1.0f ? 1.0f : out_g) * 255.0f), 
-            (uint8_t)(sqrtf(out_b > 1.0f ? 1.0f : out_b) * 255.0f), 
-            255
+            (uint8_t)(sqrtf(out_b > 1.0f ? 1.0f : out_b) * 255.0f), 255
           });
         }
       }
