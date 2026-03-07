@@ -75,7 +75,7 @@ void on_render_start(sf_ctx_t *ctx, const sf_event_t *ev, void *userdata) {
     // Applied teapot_speed from the UI slider here!
     if (teapot) sf_enti_rotate(ctx, teapot, teapot_speed * ctx->delta_time, (teapot_speed * 1.5f) * ctx->delta_time, 0.0f);
     if (tux)    sf_enti_rotate(ctx, tux,    0.0f, -0.1f * ctx->delta_time, 0.0f);
-    
+
     char fps_text[32];
     snprintf(fps_text, sizeof(fps_text), "FPS: %.2f", ctx->fps);
     sf_put_text(ctx, &ctx->camera, fps_text, (sf_ivec2_t){ctx->camera.w-93, 10}, SF_CLR_WHITE, 1.0);
@@ -106,10 +106,14 @@ int main(int argc, char* argv[]) {
 
     sf_enti_t *tux1 = sf_get_enti(&sf_ctx, "tux");
     sf_enti_t *tux2 = sf_get_enti(&sf_ctx, "tux2");
+    sf_emitr_t *spray = sf_get_emitr(&sf_ctx, "em_fire");
+    sf_enti_t *teapot = sf_get_enti(&sf_ctx, "teapot");
 
     if (tux1 && tux2) {
       // tux2 now "lives" inside tux1's coordinate system
       sf_frame_set_parent(tux2->frame, tux1->frame);
+      
+      sf_frame_set_parent(spray->frame, teapot->frame);
       
       // Position tux2 2 units to the right of tux1 locally.
       // No matter how tux1 rotates, tux2 will stay stuck to its side!
