@@ -511,11 +511,11 @@ sf_fmat4_t     sf_make_view_fmat4  (sf_fvec3_t eye, sf_fvec3_t target, sf_fvec3_
 sf_fmat4_t     sf_make_scale_fmat4 (sf_fvec3_t scale);
 
 /* SF_GAMMA_LUT */
-static const uint8_t _sf_gamma_lut[256];
-static const uint8_t _sf_degamma_lut[256];
+static const uint8_t               _sf_gamma_lut[256];
+static const uint8_t               _sf_degamma_lut[256];
 
 /* SF_FONT_DATA */
-static const uint8_t            _sf_font_8x8[];
+static const uint8_t               _sf_font_8x8[];
 
 #ifdef __cplusplus
 }
@@ -640,7 +640,6 @@ void sf_render_enti(sf_ctx_t *ctx, sf_cam_t *cam, sf_enti_t *enti) {
     vv[i] = sf_fmat4_mul_vec3(MV, enti->obj.v[i]);
   }
 
-  /* Pre-transform lights into view space (once per entity) */
   struct { sf_fvec3_t pos_v, dir_v, color; float intensity; sf_light_type_t type; } lv[SF_MAX_LIGHTS];
   int lv_cnt = 0;
   for (int l = 0; l < ctx->light_count && l < SF_MAX_LIGHTS; l++) {
@@ -1973,7 +1972,6 @@ void sf_put_text(sf_ctx_t *ctx, sf_cam_t *cam, const char *text, sf_ivec2_t p, s
 }
 
 void sf_clear_depth(sf_ctx_t *ctx, sf_cam_t *cam) {
-  /* 0x7F800000 = +inf in IEEE754, works perfectly as initial z */
   memset(cam->z_buffer, 0x7F, cam->buffer_size * sizeof(float));
 }
 
