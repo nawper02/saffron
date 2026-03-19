@@ -211,7 +211,7 @@ int main(int argc, char* argv[]) {
     }
 
     /* Initial light source */
-    sf_light_t *main_light = sf_add_light(&sf_ctx, SF_LIGHT_DIR, (sf_fvec3_t){1.0f, 1.0f, 1.0f}, 1.2f);
+    sf_light_t *main_light = sf_add_light(&sf_ctx, "main_light", SF_LIGHT_DIR, (sf_fvec3_t){1.0f, 1.0f, 1.0f}, 1.2f);
     sf_frame_look_at(main_light->frame, (sf_fvec3_t){1.0f, -1.0f, -1.0f});
     sf_event_reg(&sf_ctx, SF_EVT_RENDER_END, on_render_end, NULL);
 
