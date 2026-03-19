@@ -7,6 +7,12 @@
 #include "sf_extras/sf_sdl.h"
 #undef SAFFRON_SDL_IMPLEMENTATION
 
+#ifdef SF_GPU
+#define SAFFRON_GPU_IMPLEMENTATION
+#include "sf_extras/sf_gpu.h"
+#undef SAFFRON_GPU_IMPLEMENTATION
+#endif
+
 #include <SDL2/SDL.h>
 
 /* --- CALLBACKS --- */
@@ -81,6 +87,12 @@ int main(int argc, char* argv[]) {
 
     sf_event_reg(&sf_ctx, SF_EVT_RENDER_START, on_render_start, NULL);
 
+#ifdef SF_GPU
+    sf_gpu_t gpu;
+    sf_gpu_init(&gpu);
+    if (mk2_obj) sf_gpu_upload_obj(&gpu, mk2_obj);
+#endif
+
     SDL_Event event;
 
     while (sf_running(&sf_ctx)) {
@@ -91,7 +103,11 @@ int main(int argc, char* argv[]) {
         }
 
         sf_time_update(&sf_ctx);
+#ifdef SF_GPU
+        sf_gpu_render_ctx(&gpu, &sf_ctx);
+#else
         sf_render_ctx(&sf_ctx);
+#endif
 
         SDL_UpdateTexture(texture, NULL, sf_ctx.camera.buffer, render_w * sizeof(sf_pkd_clr_t));
         SDL_RenderClear(renderer);
@@ -99,6 +115,9 @@ int main(int argc, char* argv[]) {
         SDL_RenderPresent(renderer);
     }
 
+#ifdef SF_GPU
+    sf_gpu_destroy(&gpu);
+#endif
     sf_destroy(&sf_ctx);
     SDL_DestroyTexture(texture);
     SDL_DestroyRenderer(renderer);

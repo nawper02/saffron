@@ -4,8 +4,14 @@ set(CMAKE_C_STANDARD 11)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O2 -ffast-math")
 include(GNUInstallDirs)
+option(SF_GPU "Enable GPU-accelerated rendering via EGL/GLES3" OFF)
 find_package(SDL2 REQUIRED)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR} ${SDL2_INCLUDE_DIRS})
+
+if(SF_GPU)
+    find_library(EGL_LIBRARY EGL REQUIRED)
+    find_library(GLES_LIBRARY GLESv2 REQUIRED)
+endif()
 
 # Build executables
 file(GLOB EXAMPLE_SOURCES "sf_examples/*.c")
@@ -14,10 +20,14 @@ foreach(EXAMPLE_SRC ${EXAMPLE_SOURCES} ${EXTRAS_SOURCES})
     get_filename_component(TARGET_NAME ${EXAMPLE_SRC} NAME_WE)
     add_executable(${TARGET_NAME} ${EXAMPLE_SRC})
     target_link_libraries(${TARGET_NAME} ${SDL2_LIBRARIES} m)
-    target_compile_definitions(${TARGET_NAME} PRIVATE 
+    target_compile_definitions(${TARGET_NAME} PRIVATE
         SAFFRON_ASSET_DIR="${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_DATADIR}/saffron/sf_assets/"
     )
-    install(TARGETS ${TARGET_NAME} 
+    if(SF_GPU)
+        target_link_libraries(${TARGET_NAME} ${EGL_LIBRARY} ${GLES_LIBRARY})
+        target_compile_definitions(${TARGET_NAME} PRIVATE SF_GPU=1)
+    endif()
+    install(TARGETS ${TARGET_NAME}
             DESTINATION ${CMAKE_INSTALL_BINDIR})
 endforeach()
 

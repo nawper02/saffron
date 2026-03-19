@@ -11,6 +11,12 @@
 #include <math.h>
 #include <signal.h>
 
+#ifdef SF_GPU
+#define SAFFRON_GPU_IMPLEMENTATION
+#include "sf_extras/sf_gpu.h"
+#undef SAFFRON_GPU_IMPLEMENTATION
+#endif
+
 #include <unistd.h>
 #define sleep_ms(x) usleep((x) * 1000)
 
@@ -215,6 +221,12 @@ int main(int argc, char* argv[]) {
     sf_frame_look_at(main_light->frame, (sf_fvec3_t){1.0f, -1.0f, -1.0f});
     sf_event_reg(&sf_ctx, SF_EVT_RENDER_END, on_render_end, NULL);
 
+#ifdef SF_GPU
+    sf_gpu_t gpu;
+    sf_gpu_init(&gpu);
+    if (mk2_obj) sf_gpu_upload_obj(&gpu, mk2_obj);
+#endif
+
     /* Increase stdout buffer size to prevent tearing/flickering */
     setvbuf(stdout, NULL, _IOFBF, 65536);
 
@@ -223,17 +235,26 @@ int main(int argc, char* argv[]) {
 
     while (sf_running(&sf_ctx)) {
         sf_time_update(&sf_ctx);
+#ifdef SF_GPU
+        sf_update_frames(&sf_ctx);
+        sf_gpu_render_cam(&gpu, &sf_ctx, &sf_ctx.camera);
+#else
         sf_render_cam(&sf_ctx, &sf_ctx.camera);
+#endif
 
         render_to_terminal_pixels((uint32_t*)sf_ctx.camera.buffer, render_w, render_h, 3);
 
         /* Cap frame rate to ~30 FPS */
-        sleep_ms(33); 
+        sleep_ms(33);
     }
+
+#ifdef SF_GPU
+    sf_gpu_destroy(&gpu);
+#endif
 
     /* Restore terminal on exit: clear screen, show cursor */
     printf("\x1b[2J\x1b[?25h");
-    
+
     sf_destroy(&sf_ctx);
     return 0;
 }
