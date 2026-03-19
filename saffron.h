@@ -155,6 +155,8 @@ typedef struct {
   int32_t                          f_cnt;
   int32_t                          id;
   const char                      *name;
+  sf_fvec3_t                       bs_center;
+  float                            bs_radius;
 } sf_obj_t;
 
 typedef struct {
@@ -630,11 +632,31 @@ void sf_stop(sf_ctx_t *ctx) {
 void sf_render_enti(sf_ctx_t *ctx, sf_cam_t *cam, sf_enti_t *enti) {
   if (!enti || !enti->frame) return;
 
-  size_t mark = sf_arena_save(ctx, &ctx->arena);
   sf_fmat4_t M = enti->frame->global_M;
   sf_fmat4_t V = cam->V;
   sf_fmat4_t P = cam->P;
   sf_fmat4_t MV = sf_fmat4_mul_fmat4(M, V);
+
+  float sx = sqrtf(M.m[0][0]*M.m[0][0] + M.m[0][1]*M.m[0][1] + M.m[0][2]*M.m[0][2]);
+  float sy = sqrtf(M.m[1][0]*M.m[1][0] + M.m[1][1]*M.m[1][1] + M.m[1][2]*M.m[1][2]);
+  float sz = sqrtf(M.m[2][0]*M.m[2][0] + M.m[2][1]*M.m[2][1] + M.m[2][2]*M.m[2][2]);
+  float max_s = sx > sy ? (sx > sz ? sx : sz) : (sy > sz ? sy : sz);
+  float r = enti->obj.bs_radius * max_s;
+  sf_fvec3_t c = sf_fmat4_mul_vec3(MV, enti->obj.bs_center);
+  float fov_r = cam->fov * 0.01745329f * 0.5f;
+  float aspect = (float)cam->w / (float)cam->h;
+  float cos_v = cosf(fov_r);
+  float sin_v = sinf(fov_r);
+  float cos_h = cosf(atanf(tanf(fov_r) * aspect));
+  float sin_h = sinf(atanf(tanf(fov_r) * aspect));
+  if (c.z - r > -cam->near_plane) { return; }
+  if (c.z + r < -cam->far_plane)  { return; }
+  if ( c.x * cos_h + c.z * sin_h > r) { return; }
+  if (-c.x * cos_h + c.z * sin_h > r) { return; }
+  if ( c.y * cos_v + c.z * sin_v > r) { return; }
+  if (-c.y * cos_v + c.z * sin_v > r) { return; }
+
+  size_t mark = sf_arena_save(ctx, &ctx->arena);
   float near = 0.1f;
   sf_fvec3_t* vv = sf_arena_alloc(ctx, &ctx->arena, enti->obj.v_cnt * sizeof(sf_fvec3_t));
   if (!vv) return;
@@ -1315,6 +1337,25 @@ sf_obj_t* sf_load_obj(sf_ctx_t *ctx, const char *filename, const char *objname) 
       }
     }
   }
+
+  sf_fvec3_t bs_c = {0.0f, 0.0f, 0.0f};
+  for (int i = 0; i < v_cnt; i++) {
+    bs_c.x += obj->v[i].x;
+    bs_c.y += obj->v[i].y;
+    bs_c.z += obj->v[i].z;
+  }
+  float inv_v = 1.0f / (float)v_cnt;
+  bs_c.x *= inv_v; bs_c.y *= inv_v; bs_c.z *= inv_v;
+  float bs_r2 = 0.0f;
+  for (int i = 0; i < v_cnt; i++) {
+    float dx = obj->v[i].x - bs_c.x;
+    float dy = obj->v[i].y - bs_c.y;
+    float dz = obj->v[i].z - bs_c.z;
+    float d2 = dx*dx + dy*dy + dz*dz;
+    if (d2 > bs_r2) bs_r2 = d2;
+  }
+  obj->bs_center = bs_c;
+  obj->bs_radius = sqrtf(bs_r2);
 
   fclose(file);
   return obj;
