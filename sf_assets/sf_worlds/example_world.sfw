@@ -24,7 +24,7 @@ e teapot teapot -3.0 1.0   0.0 0.0 0.0 0.0   0.8 0.8 0.8
 e cube   cube    0.0 1.0   0.0 0.0 0.0 0.0   1.0 1.0 1.0       brick_tex
 
 # Sprites (name, duration, scale, num_frames, tex1, tex2...)
-s spr_fire  0.15 0.3 3 elements2 elements3 elements4
+s spr_fire  0.15 0.3 3 stars elements3 elements4
 s spr_smoke 1.0  0.5 1 stars
 s spr_spark 1.0  0.1 1 elements2
 
