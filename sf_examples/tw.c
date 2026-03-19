@@ -223,6 +223,7 @@ int main(int argc, char* argv[]) {
 
     while (sf_running(&sf_ctx)) {
         sf_time_update(&sf_ctx);
+        sf_update_frames(&sf_ctx);
         sf_render_cam(&sf_ctx, &sf_ctx.camera);
 
         render_to_terminal_pixels((uint32_t*)sf_ctx.camera.buffer, render_w, render_h, 3);
