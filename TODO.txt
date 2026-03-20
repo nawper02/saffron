@@ -1,7 +1,4 @@
-Refactor
-  Change world file syntax to make it as intuitive / easy as possible -- key value pairs and make load_world cleaner
-
-Features
+TODO
   Add frames / parenting to sfw files (P) (including conventions FLU NED etc)
   More Ui suite -- layouts, auto-sizing, a bunch of elements
   .sfui files, sf_load_ui
