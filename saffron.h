@@ -40,6 +40,7 @@ extern "C" {
 #define SF_MAX_SPRITES                20
 #define SF_MAX_EMITRS                 10
 #define SF_MAX_SPRITE_FRAMES          16
+#define SF_PERF_HIST_SIZE             64
 #define SF_LOG_INDENT                 "            "
 #define SF_PI                         3.14159265359f
 #define SF_NANOS_PER_SEC              1000000000ULL
@@ -380,6 +381,10 @@ struct sf_ctx_t_ {
   uint64_t                          _start_ticks;
   uint64_t                          _last_ticks;
 
+  float                             _perf_dt_hist[SF_PERF_HIST_SIZE];
+  int                               _perf_dt_idx;
+  int                               _perf_tri_count;
+
   sf_log_fn                         log_cb;
   void*                             log_user;
   sf_log_level_t                    log_min;
@@ -464,6 +469,7 @@ void           sf_draw_debug_axes   (sf_ctx_t *ctx, sf_cam_t *cam);
 void           sf_draw_debug_frames (sf_ctx_t *ctx, sf_cam_t *cam, float axis_size);
 void           sf_draw_debug_lights (sf_ctx_t *ctx, sf_cam_t *cam, float size);
 void           sf_draw_debug_cams   (sf_ctx_t *ctx, sf_cam_t *view_cam, float ray_len);
+void           sf_draw_debug_perf   (sf_ctx_t *ctx, sf_cam_t *cam);
 void           sf_draw_sprite       (sf_ctx_t *ctx, sf_cam_t *cam, sf_sprite_t *spr, sf_fvec3_t pos_w, float anim_time, float scale_mult);
 
 /* SF_UI_FUNCTIONS */
@@ -483,52 +489,52 @@ void           sf_set_logger        (sf_ctx_t *ctx, sf_log_fn log_cb, void* user
 void           sf_logger_console    (const char* message, void* userdata);
 
 /* SF_IMPLEMENTATION_HELPERS */
-uint32_t       _sf_vec_to_index    (sf_ctx_t *ctx, sf_cam_t *cam, sf_ivec2_t v);
-void           _sf_swap_svec2      (sf_ivec2_t *v0, sf_ivec2_t *v1);
-void           _sf_swap_fvec3      (sf_fvec3_t *v0, sf_fvec3_t *v1);
-float          _sf_lerp_f          (float a, float b, float t);
-sf_fvec3_t     _sf_lerp_fvec3      (sf_fvec3_t a, sf_fvec3_t b, float t);
-sf_fvec3_t     _sf_intersect_near  (sf_fvec3_t v0, sf_fvec3_t v1, float near);
-sf_fvec3_t     _sf_project_vertex  (sf_ctx_t *ctx, sf_cam_t *cam, sf_fvec3_t v, sf_fmat4_t P);
-const char*    _sf_log_lvl_to_str  (sf_log_level_t level);
-bool           _sf_resolve_asset   (const char* filename, char* out_path, size_t max_len);
-uint64_t       _sf_get_ticks       (void);
-sf_pkd_clr_t   _sf_pack_color      (sf_unpkd_clr_t);
-sf_unpkd_clr_t _sf_unpack_color    (sf_pkd_clr_t);
-size_t         _sf_obj_memusg      (sf_obj_t *obj);
-void           _sf_set_up_frames   (sf_ctx_t *ctx);
-void           _sf_calc_frame_tree (sf_frame_t *f, sf_fmat4_t parent_global_M, bool force_dirty);
-bool           _sf_sfw_read_kv     (FILE *f, char *key, size_t ksz, char *val, size_t vsz);
-void           _sf_sfw_trim        (char *s);
-sf_fvec3_t     _sf_sfw_prse_vec3   (const char *s);
-int            _sf_sfw_prse_list   (const char *s, char out[][64], int max);
-void           _sf_sfw_prse_cam    (sf_ctx_t *ctx, FILE *f, const char *name, int *cam_count);
-void           _sf_sfw_prse_enti   (sf_ctx_t *ctx, FILE *f, const char *name, int *enti_count);
-void           _sf_sfw_prse_light  (sf_ctx_t *ctx, FILE *f, const char *name, int *light_count);
-void           _sf_sfw_prse_sprit  (sf_ctx_t *ctx, FILE *f, const char *name, int *sprite_count);
-void           _sf_sfw_prse_emitr  (sf_ctx_t *ctx, FILE *f, const char *name, int *emitr_count);
+uint32_t       _sf_vec_to_index     (sf_ctx_t *ctx, sf_cam_t *cam, sf_ivec2_t v);
+void           _sf_swap_svec2       (sf_ivec2_t *v0, sf_ivec2_t *v1);
+void           _sf_swap_fvec3       (sf_fvec3_t *v0, sf_fvec3_t *v1);
+float          _sf_lerp_f           (float a, float b, float t);
+sf_fvec3_t     _sf_lerp_fvec3       (sf_fvec3_t a, sf_fvec3_t b, float t);
+sf_fvec3_t     _sf_intersect_near   (sf_fvec3_t v0, sf_fvec3_t v1, float near);
+sf_fvec3_t     _sf_project_vertex   (sf_ctx_t *ctx, sf_cam_t *cam, sf_fvec3_t v, sf_fmat4_t P);
+const char*    _sf_log_lvl_to_str   (sf_log_level_t level);
+bool           _sf_resolve_asset    (const char* filename, char* out_path, size_t max_len);
+uint64_t       _sf_get_ticks        (void);
+sf_pkd_clr_t   _sf_pack_color       (sf_unpkd_clr_t);
+sf_unpkd_clr_t _sf_unpack_color     (sf_pkd_clr_t);
+size_t         _sf_obj_memusg       (sf_obj_t *obj);
+void           _sf_set_up_frames    (sf_ctx_t *ctx);
+void           _sf_calc_frame_tree  (sf_frame_t *f, sf_fmat4_t parent_global_M, bool force_dirty);
+bool           _sf_sfw_read_kv      (FILE *f, char *key, size_t ksz, char *val, size_t vsz);
+void           _sf_sfw_trim         (char *s);
+sf_fvec3_t     _sf_sfw_prse_vec3    (const char *s);
+int            _sf_sfw_prse_list    (const char *s, char out[][64], int max);
+void           _sf_sfw_prse_cam     (sf_ctx_t *ctx, FILE *f, const char *name, int *cam_count);
+void           _sf_sfw_prse_enti    (sf_ctx_t *ctx, FILE *f, const char *name, int *enti_count);
+void           _sf_sfw_prse_light   (sf_ctx_t *ctx, FILE *f, const char *name, int *light_count);
+void           _sf_sfw_prse_sprit   (sf_ctx_t *ctx, FILE *f, const char *name, int *sprite_count);
+void           _sf_sfw_prse_emitr   (sf_ctx_t *ctx, FILE *f, const char *name, int *emitr_count);
 
 /* SF_LA_FUNCTIONS */
-sf_fmat4_t     sf_fmat4_mul_fmat4  (sf_fmat4_t m0, sf_fmat4_t m1);
-sf_fvec3_t     sf_fmat4_mul_vec3   (sf_fmat4_t m, sf_fvec3_t v);
-sf_fvec3_t     sf_fvec3_sub        (sf_fvec3_t v0, sf_fvec3_t v1);
-sf_fvec3_t     sf_fvec3_add        (sf_fvec3_t v0, sf_fvec3_t v1);
-sf_fvec3_t     sf_fvec3_norm       (sf_fvec3_t v);
-sf_fvec3_t     sf_fvec3_cross      (sf_fvec3_t v0, sf_fvec3_t v1);
-float          sf_fvec3_dot        (sf_fvec3_t v0, sf_fvec3_t v1);
-sf_fmat4_t     sf_make_tsl_fmat4   (float x, float y, float z);
-sf_fmat4_t     sf_make_rot_fmat4   (sf_fvec3_t angles);
-sf_fmat4_t     sf_make_psp_fmat4   (float fov_deg, float aspect, float near, float far);
-sf_fmat4_t     sf_make_idn_fmat4   (void);
-sf_fmat4_t     sf_make_view_fmat4  (sf_fvec3_t eye, sf_fvec3_t target, sf_fvec3_t up);
-sf_fmat4_t     sf_make_scale_fmat4 (sf_fvec3_t scale);
+sf_fmat4_t     sf_fmat4_mul_fmat4   (sf_fmat4_t m0, sf_fmat4_t m1);
+sf_fvec3_t     sf_fmat4_mul_vec3    (sf_fmat4_t m, sf_fvec3_t v);
+sf_fvec3_t     sf_fvec3_sub         (sf_fvec3_t v0, sf_fvec3_t v1);
+sf_fvec3_t     sf_fvec3_add         (sf_fvec3_t v0, sf_fvec3_t v1);
+sf_fvec3_t     sf_fvec3_norm        (sf_fvec3_t v);
+sf_fvec3_t     sf_fvec3_cross       (sf_fvec3_t v0, sf_fvec3_t v1);
+float          sf_fvec3_dot         (sf_fvec3_t v0, sf_fvec3_t v1);
+sf_fmat4_t     sf_make_tsl_fmat4    (float x, float y, float z);
+sf_fmat4_t     sf_make_rot_fmat4    (sf_fvec3_t angles);
+sf_fmat4_t     sf_make_psp_fmat4    (float fov_deg, float aspect, float near, float far);
+sf_fmat4_t     sf_make_idn_fmat4    (void);
+sf_fmat4_t     sf_make_view_fmat4   (sf_fvec3_t eye, sf_fvec3_t target, sf_fvec3_t up);
+sf_fmat4_t     sf_make_scale_fmat4  (sf_fvec3_t scale);
 
 /* SF_GAMMA_LUT */
-static const uint8_t               _sf_gamma_lut[256];
-static const uint8_t               _sf_degamma_lut[256];
+static const uint8_t                _sf_gamma_lut[256];
+static const uint8_t                _sf_degamma_lut[256];
 
 /* SF_FONT_DATA */
-static const uint8_t               _sf_font_8x8[];
+static const uint8_t                _sf_font_8x8[];
 
 #ifdef __cplusplus
 }
@@ -541,43 +547,43 @@ static const uint8_t               _sf_font_8x8[];
 /* SF_CORE_FUNCTIONS */
 void sf_init(sf_ctx_t *ctx, int w, int h) {
   memset(ctx, 0, sizeof(sf_ctx_t));
-  ctx->state                       = SF_RUN_STATE_RUNNING;
-  ctx->main_camera.w               = w;
-  ctx->main_camera.h               = h;
-  ctx->main_camera.buffer_size     = w * h;
-  ctx->main_camera.buffer          = (sf_pkd_clr_t*) malloc(w*h*sizeof(sf_pkd_clr_t));
-  ctx->main_camera.z_buffer        = (float*)        malloc(w*h*sizeof(float));
-  ctx->main_camera.fov             = 60.0f;
-  ctx->main_camera.near_plane      = 0.1f;
-  ctx->main_camera.far_plane       = 100.0f;
-  ctx->main_camera.is_proj_dirty   = true;
-  ctx->arena                       = sf_arena_init(ctx, SF_ARENA_SIZE);
-  ctx->log_cb                      = sf_logger_console;
-  ctx->log_user                    = NULL;
-  ctx->log_min                     = SF_LOG_INFO;
-  ctx->objs                        = sf_arena_alloc(ctx, &ctx->arena, SF_MAX_OBJS     * sizeof(sf_obj_t));
-  ctx->entities                    = sf_arena_alloc(ctx, &ctx->arena, SF_MAX_ENTITIES * sizeof(sf_enti_t));
-  ctx->lights                      = sf_arena_alloc(ctx, &ctx->arena, SF_MAX_LIGHTS   * sizeof(sf_light_t));
-  ctx->textures                    = sf_arena_alloc(ctx, &ctx->arena, SF_MAX_TEXTURES * sizeof(sf_tex_t));
-  ctx->cameras                     = sf_arena_alloc(ctx, &ctx->arena, SF_MAX_CAMS     * sizeof(sf_cam_t));
-  ctx->frames                      = sf_arena_alloc(ctx, &ctx->arena, SF_MAX_FRAMES   * sizeof(sf_frame_t));
-  ctx->sprites                     = sf_arena_alloc(ctx, &ctx->arena, SF_MAX_SPRITES  * sizeof(sf_sprite_t));
-  ctx->emitrs                      = sf_arena_alloc(ctx, &ctx->arena, SF_MAX_EMITRS   * sizeof(sf_emitr_t));
-  ctx->obj_count                   = 0;
-  ctx->enti_count                  = 0;
-  ctx->light_count                 = 0;
-  ctx->tex_count                   = 0;
-  ctx->cam_count                   = 0;
-  ctx->frames_count                = 0;
-  ctx->sprite_count                = 0;
-  ctx->emitr_count                 = 0;
-  ctx->_start_ticks                = _sf_get_ticks();
-  ctx->_last_ticks                 = ctx->_start_ticks;
-  ctx->delta_time                  = 0.0f;
-  ctx->elapsed_time                = 0.0f;
-  ctx->fps                         = 0.0f;
-  ctx->frame_count                 = 0;
-  ctx->ui                          = sf_create_ui(ctx);
+  ctx->state                        = SF_RUN_STATE_RUNNING;
+  ctx->main_camera.w                = w;
+  ctx->main_camera.h                = h;
+  ctx->main_camera.buffer_size      = w * h;
+  ctx->main_camera.buffer           = (sf_pkd_clr_t*) malloc(w*h*sizeof(sf_pkd_clr_t));
+  ctx->main_camera.z_buffer         = (float*)        malloc(w*h*sizeof(float));
+  ctx->main_camera.fov              = 60.0f;
+  ctx->main_camera.near_plane       = 0.1f;
+  ctx->main_camera.far_plane        = 100.0f;
+  ctx->main_camera.is_proj_dirty    = true;
+  ctx->arena                        = sf_arena_init(ctx, SF_ARENA_SIZE);
+  ctx->log_cb                       = sf_logger_console;
+  ctx->log_user                     = NULL;
+  ctx->log_min                      = SF_LOG_INFO;
+  ctx->objs                         = sf_arena_alloc(ctx, &ctx->arena, SF_MAX_OBJS     * sizeof(sf_obj_t));
+  ctx->entities                     = sf_arena_alloc(ctx, &ctx->arena, SF_MAX_ENTITIES * sizeof(sf_enti_t));
+  ctx->lights                       = sf_arena_alloc(ctx, &ctx->arena, SF_MAX_LIGHTS   * sizeof(sf_light_t));
+  ctx->textures                     = sf_arena_alloc(ctx, &ctx->arena, SF_MAX_TEXTURES * sizeof(sf_tex_t));
+  ctx->cameras                      = sf_arena_alloc(ctx, &ctx->arena, SF_MAX_CAMS     * sizeof(sf_cam_t));
+  ctx->frames                       = sf_arena_alloc(ctx, &ctx->arena, SF_MAX_FRAMES   * sizeof(sf_frame_t));
+  ctx->sprites                      = sf_arena_alloc(ctx, &ctx->arena, SF_MAX_SPRITES  * sizeof(sf_sprite_t));
+  ctx->emitrs                       = sf_arena_alloc(ctx, &ctx->arena, SF_MAX_EMITRS   * sizeof(sf_emitr_t));
+  ctx->obj_count                    = 0;
+  ctx->enti_count                   = 0;
+  ctx->light_count                  = 0;
+  ctx->tex_count                    = 0;
+  ctx->cam_count                    = 0;
+  ctx->frames_count                 = 0;
+  ctx->sprite_count                 = 0;
+  ctx->emitr_count                  = 0;
+  ctx->_start_ticks                 = _sf_get_ticks();
+  ctx->_last_ticks                  = ctx->_start_ticks;
+  ctx->delta_time                   = 0.0f;
+  ctx->elapsed_time                 = 0.0f;
+  ctx->fps                          = 0.0f;
+  ctx->frame_count                  = 0;
+  ctx->ui                           = sf_create_ui(ctx);
   _sf_set_up_frames(ctx);
   ctx->main_camera.frame                = sf_add_frame(ctx, NULL);
 
@@ -616,18 +622,18 @@ void sf_destroy(sf_ctx_t *ctx) {
   free(ctx->main_camera.z_buffer);
   free(ctx->arena.buffer);
 
-  ctx->state                    = SF_RUN_STATE_STOPPED;
-  ctx->arena.offset             = 0;
-  ctx->main_camera.buffer_size  = 0;
-  ctx->main_camera.w            = 0;
-  ctx->main_camera.h            = 0;
-  ctx->enti_count               = 0;
-  ctx->obj_count                = 0;
-  ctx->tex_count                = 0;
-  ctx->light_count              = 0;
-  ctx->cam_count                = 0;
-  ctx->sprite_count             = 0;
-  ctx->emitr_count              = 0;
+  ctx->state                        = SF_RUN_STATE_STOPPED;
+  ctx->arena.offset                 = 0;
+  ctx->main_camera.buffer_size      = 0;
+  ctx->main_camera.w                = 0;
+  ctx->main_camera.h                = 0;
+  ctx->enti_count                   = 0;
+  ctx->obj_count                    = 0;
+  ctx->tex_count                    = 0;
+  ctx->light_count                  = 0;
+  ctx->cam_count                    = 0;
+  ctx->sprite_count                 = 0;
+  ctx->emitr_count                  = 0;
 }
 
 bool sf_running(sf_ctx_t *ctx) {
@@ -664,6 +670,8 @@ void sf_render_enti(sf_ctx_t *ctx, sf_cam_t *cam, sf_enti_t *enti) {
   if (-c.x * cos_h + c.z * sin_h > r) { return; }
   if ( c.y * cos_v + c.z * sin_v > r) { return; }
   if (-c.y * cos_v + c.z * sin_v > r) { return; }
+
+  ctx->_perf_tri_count += enti->obj.f_cnt;
 
   size_t mark = sf_arena_save(ctx, &ctx->arena);
   float near = 0.1f;
@@ -805,6 +813,7 @@ void sf_render_enti(sf_ctx_t *ctx, sf_cam_t *cam, sf_enti_t *enti) {
 void sf_render_ctx(sf_ctx_t *ctx) {
   sf_update_frames(ctx);
   sf_update_emitrs(ctx);
+  ctx->_perf_tri_count = 0;
   sf_render_cam(ctx, &ctx->main_camera);
   for (int i = 0; i < ctx->cam_count; ++i) {
     sf_render_cam(ctx, &ctx->cameras[i]);
@@ -937,6 +946,8 @@ void sf_time_update(sf_ctx_t *ctx) {
     ctx->fps = (ctx->fps * 0.9f) + (instant_fps * 0.1f);
   }
   ctx->frame_count++;
+  ctx->_perf_dt_hist[ctx->_perf_dt_idx] = ctx->delta_time;
+  ctx->_perf_dt_idx = (ctx->_perf_dt_idx + 1) % SF_PERF_HIST_SIZE;
 }
 
 /* SF_MEMORY_FUNCTIONS */
@@ -1607,7 +1618,7 @@ void sf_load_world(sf_ctx_t *ctx, const char *filename, const char *worldname) {
 
     char keyword[32] = {0}, name[64] = {0}, filepath[256] = {0};
 
-    if (sscanf(line, "%31s %63[^ \t{] {", keyword, name) == 2) {
+    if (sscanf(line, "%31s %63[^ \t{] {", keyword, name) == 2 && strchr(line, '{')) {
       _sf_sfw_trim(name);
       if      (strcmp(keyword, "camera")  == 0) _sf_sfw_prse_cam(ctx, file, name, &cam_count);
       else if (strcmp(keyword, "entity")  == 0) _sf_sfw_prse_enti(ctx, file, name, &enti_count);
@@ -2027,6 +2038,7 @@ void sf_draw_debug_ovrlay(sf_ctx_t *ctx, sf_cam_t *cam) {
   sf_draw_debug_frames (ctx, cam, 1.0f);
   sf_draw_debug_lights (ctx, cam, 1.0f);
   sf_draw_debug_cams   (ctx, cam, 1.0f);
+  sf_draw_debug_perf   (ctx, cam);
 }
 
 
@@ -2174,6 +2186,56 @@ void sf_draw_debug_cams(sf_ctx_t *ctx, sf_cam_t *view_cam, float ray_len) {
       }
     }
   }
+}
+
+void sf_draw_debug_perf(sf_ctx_t *ctx, sf_cam_t *cam) {
+  if (!ctx || !cam) return;
+
+  int bh = 18;
+  char buf[64];
+  sf_pkd_clr_t dim = (sf_pkd_clr_t)0xFF666666;
+  sf_pkd_clr_t val = SF_CLR_WHITE;
+
+  sf_rect(ctx, cam, (sf_pkd_clr_t)0xFF111111, (sf_ivec2_t){0, 0}, (sf_ivec2_t){cam->w - 1, bh - 1});
+  sf_line(ctx, cam, (sf_pkd_clr_t)0xFF333333, (sf_ivec2_t){0, bh - 1}, (sf_ivec2_t){cam->w - 1, bh - 1});
+
+  int ty = 5;
+  int col = 8;
+
+  sf_pkd_clr_t saf_clr[7] = {
+    (sf_pkd_clr_t)0xFFFF4444, (sf_pkd_clr_t)0xFFFF8800,
+    (sf_pkd_clr_t)0xFFFFEE00, (sf_pkd_clr_t)0xFF00FF44,
+    (sf_pkd_clr_t)0xFF00DDFF, (sf_pkd_clr_t)0xFF4488FF,
+    (sf_pkd_clr_t)0xFFDD44FF
+  };
+  int saf_yoff[7] = { -1, 0, -1, 0, -1, 1, 0 };
+  const char *saf_str = "SAFFRON";
+  for (int i = 0; i < 7; i++) {
+    char ch[2] = { saf_str[i], '\0' };
+    sf_put_text(ctx, cam, ch, (sf_ivec2_t){col + i * 8, ty + saf_yoff[i]}, saf_clr[i], 1);
+  }
+  col += 130;
+
+  sf_put_text(ctx, cam, "fps", (sf_ivec2_t){col, ty}, dim, 1);
+  snprintf(buf, sizeof(buf), "%6.1f", ctx->fps);
+  sf_put_text(ctx, cam, buf, (sf_ivec2_t){col + 32, ty}, val, 1);
+  col += 112;
+
+  sf_put_text(ctx, cam, "dt", (sf_ivec2_t){col, ty}, dim, 1);
+  snprintf(buf, sizeof(buf), "%6.2fms", ctx->delta_time * 1000.0f);
+  sf_put_text(ctx, cam, buf, (sf_ivec2_t){col + 24, ty}, val, 1);
+  col += 120;
+
+  sf_put_text(ctx, cam, "tri", (sf_ivec2_t){col, ty}, dim, 1);
+  snprintf(buf, sizeof(buf), "%7d", ctx->_perf_tri_count);
+  sf_put_text(ctx, cam, buf, (sf_ivec2_t){col + 32, ty}, val, 1);
+  col += 120;
+
+  float mem_used = (float)ctx->arena.offset / (1024.0f * 1024.0f);
+  float mem_pct = ((float)ctx->arena.offset / (float)ctx->arena.size) * 100.0f;
+  sf_put_text(ctx, cam, "mem", (sf_ivec2_t){col, ty}, dim, 1);
+  snprintf(buf, sizeof(buf), "%5.1fMB %3.0f%%", mem_used, mem_pct);
+  sf_put_text(ctx, cam, buf, (sf_ivec2_t){col + 32, ty}, val, 1);
 }
 
 void sf_draw_sprite(sf_ctx_t *ctx, sf_cam_t *cam, sf_sprite_t *spr, sf_fvec3_t pos_w, float anim_time, float scale_mult) {
