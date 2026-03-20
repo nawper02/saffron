@@ -2214,7 +2214,7 @@ void sf_draw_debug_perf(sf_ctx_t *ctx, sf_cam_t *cam) {
     char ch[2] = { saf_str[i], '\0' };
     sf_put_text(ctx, cam, ch, (sf_ivec2_t){col + i * 8, ty + saf_yoff[i]}, saf_clr[i], 1);
   }
-  col += 130;
+  col += 800;
 
   sf_put_text(ctx, cam, "fps", (sf_ivec2_t){col, ty}, dim, 1);
   snprintf(buf, sizeof(buf), "%6.1f", ctx->fps);

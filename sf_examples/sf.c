@@ -76,13 +76,21 @@ void on_render_start(sf_ctx_t *ctx, const sf_event_t *ev, void *userdata) {
     if (teapot) sf_enti_rotate(ctx, teapot, teapot_speed * ctx->delta_time, (teapot_speed * 1.5f) * ctx->delta_time, 0.0f);
     if (tux)    sf_enti_rotate(ctx, tux,    0.0f, -0.1f * ctx->delta_time, 0.0f);
 
+    sf_light_t *rainbow = sf_get_light(ctx, "rainbow");
+    if (rainbow) {
+      float t = ctx->elapsed_time * 2.0f;
+      float r = sinf(t)             * 0.5f + 0.5f;
+      float g = sinf(t + 2.094395f) * 0.5f + 0.5f;
+      float b = sinf(t + 4.188790f) * 0.5f + 0.5f;
+      rainbow->color = (sf_fvec3_t){r, g, b};
+    }
 }
 
 /* --- MAIN PROGRAM --- */
 
 int main(int argc, char* argv[]) {
-    const int width = 683;
-    const int height = 384;
+    const int width = 683*2;
+    const int height = 384*2;
 
     SDL_Init(SDL_INIT_VIDEO);
     SDL_Window* window = SDL_CreateWindow("Saffron 3D", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, width, height, SDL_WINDOW_FULLSCREEN_DESKTOP);
@@ -114,6 +122,12 @@ int main(int argc, char* argv[]) {
 
       tux2->frame->pos = (sf_fvec3_t){ 20.0f, 10.0f, 0.0f };
       tux2->frame->is_dirty = true;
+    }
+
+    sf_light_t *rainbow = sf_add_light(&sf_ctx, "rainbow", SF_LIGHT_POINT, (sf_fvec3_t){1.0f, 0.0f, 0.0f}, 8.0f);
+    if (rainbow) {
+      rainbow->frame->pos = (sf_fvec3_t){3.0f, -4.0f, 0.0f};
+      rainbow->frame->is_dirty = true;
     }
 
     /* --- INITIALIZE UI ELEMENTS --- */
