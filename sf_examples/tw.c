@@ -135,8 +135,8 @@ void on_render_end(sf_ctx_t *ctx, const sf_event_t *ev, void *userdata) {
     int margin_lt = 6;  // Left/Top margin
     int margin_rb = 14; // Right/Bottom margin (extra room for character width)
     
-    int W = ctx->camera.w - (margin_lt + margin_rb);
-    int H = ctx->camera.h - (margin_lt + margin_rb);
+    int W = ctx->main_camera.w - (margin_lt + margin_rb);
+    int H = ctx->main_camera.h - (margin_lt + margin_rb);
     int perimeter = 2 * (W + H);
     
     // We subtract the offset to move 'forward' in a clockwise direction
@@ -182,7 +182,7 @@ void on_render_end(sf_ctx_t *ctx, const sf_event_t *ev, void *userdata) {
         // The character at index 'i' in the snake
         char c[2] = { text[i % text_len], '\0' };
         
-        sf_put_text(ctx, &ctx->camera, c, pos, char_clr, 1);
+        sf_put_text(ctx, &ctx->main_camera, c, pos, char_clr, 1);
     }
 }
 
@@ -199,9 +199,9 @@ int main(int argc, char* argv[]) {
     g_sf_ctx = &sf_ctx;
 
     /* Setup Camera */
-    sf_camera_set_psp(&sf_ctx, &sf_ctx.camera, 60.0f, 0.1f, 100.0f);
-    sf_camera_set_pos(&sf_ctx, &sf_ctx.camera, 0.0f, 0.0f, 6.0f);
-    sf_camera_look_at(&sf_ctx, &sf_ctx.camera, (sf_fvec3_t){0.0f, 0.0f, 0.0f});
+    sf_camera_set_psp(&sf_ctx, &sf_ctx.main_camera, 60.0f, 0.1f, 100.0f);
+    sf_camera_set_pos(&sf_ctx, &sf_ctx.main_camera, 0.0f, 0.0f, 6.0f);
+    sf_camera_look_at(&sf_ctx, &sf_ctx.main_camera, (sf_fvec3_t){0.0f, 0.0f, 0.0f});
 
     /* Load mk2 from the defined system path */
     sf_obj_t* mk2_obj = sf_load_obj(&sf_ctx, SF_ASSET_PATH "/sf_objs/mk2.obj", "mk2_mesh");
@@ -224,9 +224,9 @@ int main(int argc, char* argv[]) {
     while (sf_running(&sf_ctx)) {
         sf_time_update(&sf_ctx);
         sf_update_frames(&sf_ctx);
-        sf_render_cam(&sf_ctx, &sf_ctx.camera);
+        sf_render_cam(&sf_ctx, &sf_ctx.main_camera);
 
-        render_to_terminal_pixels((uint32_t*)sf_ctx.camera.buffer, render_w, render_h, 3);
+        render_to_terminal_pixels((uint32_t*)sf_ctx.main_camera.buffer, render_w, render_h, 3);
 
         /* Cap frame rate to ~30 FPS */
         sleep_ms(33); 

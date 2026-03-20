@@ -64,9 +64,9 @@ int main(int argc, char* argv[]) {
     sf_init(&sf_ctx, render_w, render_h);
 
     /* Setup Camera */
-    sf_camera_set_psp(&sf_ctx, &sf_ctx.camera, 60.0f, 0.1f, 100.0f);
-    sf_camera_set_pos(&sf_ctx, &sf_ctx.camera, 0.0f, 0.0f, 6.0f);
-    sf_camera_look_at(&sf_ctx, &sf_ctx.camera, (sf_fvec3_t){0.0f, 0.0f, 0.0f});
+    sf_camera_set_psp(&sf_ctx, &sf_ctx.main_camera, 60.0f, 0.1f, 100.0f);
+    sf_camera_set_pos(&sf_ctx, &sf_ctx.main_camera, 0.0f, 0.0f, 6.0f);
+    sf_camera_look_at(&sf_ctx, &sf_ctx.main_camera, (sf_fvec3_t){0.0f, 0.0f, 0.0f});
 
     /* Load mk2 from ../assets/ */
     sf_obj_t* mk2_obj = sf_load_obj(&sf_ctx, SF_ASSET_PATH "/sf_objs/mk2.obj", "mk2_mesh");
@@ -93,7 +93,7 @@ int main(int argc, char* argv[]) {
         sf_time_update(&sf_ctx);
         sf_render_ctx(&sf_ctx);
 
-        SDL_UpdateTexture(texture, NULL, sf_ctx.camera.buffer, render_w * sizeof(sf_pkd_clr_t));
+        SDL_UpdateTexture(texture, NULL, sf_ctx.main_camera.buffer, render_w * sizeof(sf_pkd_clr_t));
         SDL_RenderClear(renderer);
         SDL_RenderCopy(renderer, texture, NULL, NULL);
         SDL_RenderPresent(renderer);

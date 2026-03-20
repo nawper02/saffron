@@ -371,7 +371,7 @@ struct sf_ctx_t_ {
   sf_input_state_t                 input;
   sf_callback_entry_t              callbacks[SF_EVT_MAX][SF_MAX_CB_PER_EVT];
 
-  sf_cam_t                         camera;
+  sf_cam_t                         main_camera;
 
   float                            delta_time;
   float                            elapsed_time;
@@ -533,15 +533,15 @@ static const uint8_t               _sf_font_8x8[];
 void sf_init(sf_ctx_t *ctx, int w, int h) {
   memset(ctx, 0, sizeof(sf_ctx_t));
   ctx->state                       = SF_RUN_STATE_RUNNING;
-  ctx->camera.w                    = w;
-  ctx->camera.h                    = h;
-  ctx->camera.buffer_size          = w * h;
-  ctx->camera.buffer               = (sf_pkd_clr_t*) malloc(w*h*sizeof(sf_pkd_clr_t));
-  ctx->camera.z_buffer             = (float*)        malloc(w*h*sizeof(float));
-  ctx->camera.fov                  = 60.0f;
-  ctx->camera.near_plane           = 0.1f;
-  ctx->camera.far_plane            = 100.0f;
-  ctx->camera.is_proj_dirty        = true;
+  ctx->main_camera.w               = w;
+  ctx->main_camera.h               = h;
+  ctx->main_camera.buffer_size     = w * h;
+  ctx->main_camera.buffer          = (sf_pkd_clr_t*) malloc(w*h*sizeof(sf_pkd_clr_t));
+  ctx->main_camera.z_buffer        = (float*)        malloc(w*h*sizeof(float));
+  ctx->main_camera.fov             = 60.0f;
+  ctx->main_camera.near_plane      = 0.1f;
+  ctx->main_camera.far_plane       = 100.0f;
+  ctx->main_camera.is_proj_dirty   = true;
   ctx->arena                       = sf_arena_init(ctx, SF_ARENA_SIZE);
   ctx->log_cb                      = sf_logger_console;
   ctx->log_user                    = NULL;
@@ -570,14 +570,14 @@ void sf_init(sf_ctx_t *ctx, int w, int h) {
   ctx->frame_count                 = 0;
   ctx->ui                          = sf_create_ui(ctx);
   _sf_set_up_frames(ctx);
-  ctx->camera.frame                = sf_add_frame(ctx, NULL);
+  ctx->main_camera.frame                = sf_add_frame(ctx, NULL);
 
   SF_LOG(ctx, SF_LOG_INFO,
               SF_LOG_INDENT "buffer : %dx%d\n"
               SF_LOG_INDENT "memory : %d\n"
               SF_LOG_INDENT "mxobjs : %d\n" 
               SF_LOG_INDENT "mxents : %d\n", 
-              ctx->camera.w, ctx->camera.h, SF_ARENA_SIZE, SF_MAX_OBJS, SF_MAX_ENTITIES);
+              ctx->main_camera.w, ctx->main_camera.h, SF_ARENA_SIZE, SF_MAX_OBJS, SF_MAX_ENTITIES);
 }
 
 void sf_destroy(sf_ctx_t *ctx) {
@@ -603,15 +603,15 @@ void sf_destroy(sf_ctx_t *ctx) {
     free(ctx->cameras[i].buffer);
     free(ctx->cameras[i].z_buffer);
   }
-  free(ctx->camera.buffer);
-  free(ctx->camera.z_buffer);
+  free(ctx->main_camera.buffer);
+  free(ctx->main_camera.z_buffer);
   free(ctx->arena.buffer);
 
   ctx->state                    = SF_RUN_STATE_STOPPED;
   ctx->arena.offset             = 0;
-  ctx->camera.buffer_size       = 0;
-  ctx->camera.w                 = 0;
-  ctx->camera.h                 = 0;
+  ctx->main_camera.buffer_size  = 0;
+  ctx->main_camera.w            = 0;
+  ctx->main_camera.h            = 0;
   ctx->enti_count               = 0;
   ctx->obj_count                = 0;
   ctx->tex_count                = 0;
@@ -796,7 +796,7 @@ void sf_render_enti(sf_ctx_t *ctx, sf_cam_t *cam, sf_enti_t *enti) {
 void sf_render_ctx(sf_ctx_t *ctx) {
   sf_update_frames(ctx);
   sf_update_emitrs(ctx);
-  sf_render_cam(ctx, &ctx->camera);
+  sf_render_cam(ctx, &ctx->main_camera);
   for (int i = 0; i < ctx->cam_count; ++i) {
     sf_render_cam(ctx, &ctx->cameras[i]);
   }
@@ -1646,10 +1646,10 @@ void sf_load_world(sf_ctx_t *ctx, const char *filename, const char *worldname) {
     else if (cmd == 'M') { 
       float px, py, pz, tx, ty, tz, fov;
       if (sscanf(line, "M %f %f %f %f %f %f %f", &px, &py, &pz, &tx, &ty, &tz, &fov) == 7) {
-        sf_camera_set_pos(ctx, &ctx->camera, px, py, pz);
-        sf_camera_look_at(ctx, &ctx->camera, (sf_fvec3_t){tx, ty, tz});
-        ctx->camera.fov = fov;
-        ctx->camera.is_proj_dirty = true;
+        sf_camera_set_pos(ctx, &ctx->main_camera, px, py, pz);
+        sf_camera_look_at(ctx, &ctx->main_camera, (sf_fvec3_t){tx, ty, tz});
+        ctx->main_camera.fov = fov;
+        ctx->main_camera.is_proj_dirty = true;
         cam_count++;
       }
     }

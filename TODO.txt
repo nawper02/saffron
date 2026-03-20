@@ -1,0 +1,25 @@
+Refactor
+  Break out load world into smaller functions?
+
+Features
+  Change world file syntax to make it as intuitive / easy as possible -- key value pairs
+  Add frames / parenting to sfw files (P) (including conventions FLU NED etc)
+  More Ui suite -- layouts, auto-sizing, a bunch of elements
+  .sfui files, sf_load_ui
+  .sfm files (think like drone sdf file)
+  3d world basics -- walls, floors, perlin noise and terrain -- sorta like how doom did it
+  .mtl parsing and rendering
+  Add fog
+  Orbit camera (takes in entity, automatically handles mouse pan)
+  A way to sync one instance to another over the network . Render low res on the drone and high res on pc. 
+  Performance debug dashboard
+  Wireframe view
+  Depth buffer view
+  Mouse interaction with scene/world
+
+Things to make with the library
+  sf_studio: Sfw builder (+terrain sculpting), Sfm builder, Sfui builder
+  Video core module that makes simulated contexts for EO and ar and subscribed to drone and gimbal pose (simple orbweaver demo)
+  OrbWeaver
+  A classic FPS like cs1.6
+  Promo for the drone

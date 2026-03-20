@@ -51,7 +51,7 @@ void on_key_down(sf_ctx_t *ctx, const sf_event_t *ev, void *userdata) {
 }
 
 void on_render_start(sf_ctx_t *ctx, const sf_event_t *ev, void *userdata) {
-    sf_cam_t *cam = &ctx->camera;
+    sf_cam_t *cam = &ctx->main_camera;
     float move_speed = 5.0f * ctx->delta_time;
     float look_speed = 60.0f * ctx->delta_time;
 
@@ -78,7 +78,7 @@ void on_render_start(sf_ctx_t *ctx, const sf_event_t *ev, void *userdata) {
 
     char fps_text[32];
     snprintf(fps_text, sizeof(fps_text), "FPS: %.2f", ctx->fps);
-    sf_put_text(ctx, &ctx->camera, fps_text, (sf_ivec2_t){ctx->camera.w-93, 10}, SF_CLR_WHITE, 1.0);
+    sf_put_text(ctx, &ctx->main_camera, fps_text, (sf_ivec2_t){ctx->main_camera.w-93, 10}, SF_CLR_WHITE, 1.0);
 }
 
 /* --- MAIN PROGRAM --- */
@@ -149,20 +149,20 @@ int main(int argc, char* argv[]) {
         sf_update_ui(&sf_ctx, sf_ctx.ui);
 
         sf_render_ctx(&sf_ctx);
-        sf_rect(&sf_ctx, &sf_ctx.camera, SF_CLR_WHITE, (sf_ivec2_t){width-pip_cam->w-22, height-pip_cam->h-22}, (sf_ivec2_t){width-19, height-19});
-        sf_draw_cam_pip(&sf_ctx, &sf_ctx.camera, pip_cam, (sf_ivec2_t){width-pip_cam->w-20,height-pip_cam->h-20}); 
+        sf_rect(&sf_ctx, &sf_ctx.main_camera, SF_CLR_WHITE, (sf_ivec2_t){width-pip_cam->w-22, height-pip_cam->h-22}, (sf_ivec2_t){width-19, height-19});
+        sf_draw_cam_pip(&sf_ctx, &sf_ctx.main_camera, pip_cam, (sf_ivec2_t){width-pip_cam->w-20,height-pip_cam->h-20}); 
         
         // Tied to Checkbox!
         if (draw_axes) {
-            sf_draw_debug_ovrlay(&sf_ctx, &sf_ctx.camera);
+            sf_draw_debug_ovrlay(&sf_ctx, &sf_ctx.main_camera);
         }
 
-        sf_put_text(&sf_ctx, &sf_ctx.camera, "SAFFRON 3D", (sf_ivec2_t){10, 10}, SF_CLR_WHITE, 1);
+        sf_put_text(&sf_ctx, &sf_ctx.main_camera, "SAFFRON 3D", (sf_ivec2_t){10, 10}, SF_CLR_WHITE, 1);
 
         // --- RENDER UI ON TOP OF 3D ---
-        sf_render_ui(&sf_ctx, &sf_ctx.camera, sf_ctx.ui);
+        sf_render_ui(&sf_ctx, &sf_ctx.main_camera, sf_ctx.ui);
 
-        SDL_UpdateTexture(texture, NULL, sf_ctx.camera.buffer, sf_ctx.camera.w * sizeof(sf_pkd_clr_t));
+        SDL_UpdateTexture(texture, NULL, sf_ctx.main_camera.buffer, sf_ctx.main_camera.w * sizeof(sf_pkd_clr_t));
         SDL_RenderCopy(renderer, texture, NULL, NULL);
         SDL_RenderPresent(renderer);
     }
