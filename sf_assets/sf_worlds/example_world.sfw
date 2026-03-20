@@ -1,44 +1,111 @@
-# Main Camera Setup (Position: 0,0,8 | Target: 0,0,0 | FoV: 60.0)
-M 0.0 0.0 8.0  0.0 0.0 0.0  60.0
+# Saffron World File - Example World
 
-# Additional Camera
-c pip_cam 100 100 75.0  0.0 0.0 5.0  0.0 0.0 0.0
+camera main {
+    pos    = (0, 0, 8)
+    target = (0, 0, 0)
+    fov    = 60.0
+}
 
-# Mesh Definitions
-m tux      tux.obj
-m teapot   teapot.obj
-m cube     cube.obj
+camera pip_cam {
+    size   = (100, 100)
+    fov    = 75.0
+    pos    = (0, 0, 5)
+    target = (0, 0, 0)
+}
 
-# Textures
-t brick_tex Brick_01-128x128.bmp
-t elements  Elements_09-128x128.bmp
-t elements2  Elements_01-128x128.bmp
-t elements3  Elements_02-128x128.bmp
-t elements4  Elements_03-128x128.bmp
-t stars  Stars.bmp
+mesh tux      "tux.obj"
+mesh teapot   "teapot.obj"
+mesh cube     "cube.obj"
 
-# Entity Instances (mesh, name, pos, rot, scale, optional_texture)
-e tux    tux     3.0 0.0 -10.0 0.0 0.0 0.0   0.1 0.1 0.1       elements
-e tux    tux2    8.0 0.0 -10.0 0.0 0.0 0.0   0.5 0.5 0.5       elements2
-e teapot teapot -3.0 1.0   0.0 0.0 0.0 0.0   0.8 0.8 0.8
-e cube   cube    0.0 1.0   0.0 0.0 0.0 0.0   1.0 1.0 1.0       brick_tex
+texture brick_tex   "Brick_01-128x128.bmp"
+texture elements    "Elements_09-128x128.bmp"
+texture elements2   "Elements_01-128x128.bmp"
+texture elements3   "Elements_02-128x128.bmp"
+texture elements4   "Elements_03-128x128.bmp"
+texture stars       "Stars.bmp"
 
-# Sprites (name, duration, scale, num_frames, tex1, tex2...)
-s spr_fire  0.15 0.3 3 stars elements3 elements4
-s spr_smoke 1.0  0.5 1 stars
-s spr_spark 1.0  0.1 1 elements2
+entity tux {
+    mesh    = tux
+    pos     = (3, 0, -10)
+    scale   = (0.1, 0.1, 0.1)
+    texture = elements
+}
 
-# Lighting (type, pos_xyz, color_rgb, intensity)
-l point  2.0 5.0 2.0   1.0 0.8 0.8   2.0
+entity tux2 {
+    mesh    = tux
+    pos     = (8, 0, -10)
+    scale   = (0.5, 0.5, 0.5)
+    texture = elements2
+}
 
-# Emitters (name, type, sprite, max_p, pos_xyz, spawn_rate, life, speed, [type_args...])
-# 1. Omni: Shoots outward in all directions from (0, 3, 0)
-p em_sparks omni spr_spark 50   0.0 6.0 -10.0   20.0 1.5 3.0
+entity teapot {
+    mesh  = teapot
+    pos   = (-3, 1, 0)
+    scale = (0.8, 0.8, 0.8)
+}
 
-# 2. Directional: Rises UP (0, 1, 0) with a 0.2 spread
-# [type_args: dir_x dir_y dir_z spread]
-p em_fire   dir  spr_fire  100 3.0 3.0 0.0   30.0 2.0 4.0   0.0 1.0 0.0 0.2
+entity cube {
+    mesh    = cube
+    pos     = (0, 1, 0)
+    texture = brick_tex
+}
 
-# 3. Volumetric: Spawns and despawns randomly inside a 10x10x10
-# [type_args: vol_x vol_y vol_z]
-p em_dust   vol  spr_smoke 200  10.0 0.0 0.0   40.0 4.0 0.0   10.0 10.0 10.0
+sprite spr_fire {
+    duration = 0.15
+    scale    = 0.3
+    frames   = [stars, elements3, elements4]
+}
+
+sprite spr_smoke {
+    duration = 1.0
+    scale    = 0.5
+    frames   = [stars]
+}
+
+sprite spr_spark {
+    duration = 1.0
+    scale    = 0.1
+    frames   = [elements2]
+}
+
+light point_light {
+    type      = point
+    pos       = (2, 5, 2)
+    color     = (1.0, 0.8, 0.8)
+    intensity = 2.0
+}
+
+emitter em_sparks {
+    type       = omni
+    sprite     = spr_spark
+    max        = 50
+    pos        = (0, 6, -10)
+    spawn_rate = 20.0
+    life       = 1.5
+    speed      = 3.0
+}
+
+# Directional: Rises UP with a 0.2 spread
+emitter em_fire {
+    type       = dir
+    sprite     = spr_fire
+    max        = 100
+    pos        = (3, 3, 0)
+    spawn_rate = 30.0
+    life       = 2.0
+    speed      = 4.0
+    dir        = (0, 1, 0)
+    spread     = 0.2
+}
+
+# Volumetric: Spawns and despawns randomly inside a 10x10x10
+emitter em_dust {
+    type       = vol
+    sprite     = spr_smoke
+    max        = 200
+    pos        = (10, 0, 0)
+    spawn_rate = 40.0
+    life       = 4.0
+    speed      = 0.0
+    volume     = (10, 10, 10)
+}

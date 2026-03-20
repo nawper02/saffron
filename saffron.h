@@ -98,73 +98,73 @@ typedef enum {
 
 typedef struct sf_frame_t_ sf_frame_t;
 struct sf_frame_t_ {
-  sf_fvec3_t                       pos;
-  sf_fvec3_t                       rot;
-  sf_fvec3_t                       scale;
+  sf_fvec3_t                        pos;
+  sf_fvec3_t                        rot;
+  sf_fvec3_t                        scale;
 
-  sf_fmat4_t                       local_M;
-  sf_fmat4_t                       global_M;
-  bool                             is_dirty;
-  bool                             is_root;
+  sf_fmat4_t                        local_M;
+  sf_fmat4_t                        global_M;
+  bool                              is_dirty;
+  bool                              is_root;
 
-  sf_frame_t                      *parent;
-  sf_frame_t                      *first_child;
-  sf_frame_t                      *next_sibling;
+  sf_frame_t                       *parent;
+  sf_frame_t                       *first_child;
+  sf_frame_t                       *next_sibling;
 };
 
 typedef struct {
-  int32_t                          id;
-  const char                      *name;
-  int                              w, h, buffer_size;
-  sf_pkd_clr_t                    *buffer;
-  float                           *z_buffer;
-  float                            fov, near_plane, far_plane;
-  bool                             is_proj_dirty;
-  sf_fmat4_t                       V, P;
-  sf_frame_t                      *frame;
+  int32_t                           id;
+  const char                       *name;
+  int                               w, h, buffer_size;
+  sf_pkd_clr_t                     *buffer;
+  float                            *z_buffer;
+  float                             fov, near_plane, far_plane;
+  bool                              is_proj_dirty;
+  sf_fmat4_t                        V, P;
+  sf_frame_t                       *frame;
 } sf_cam_t;
 
 typedef struct {
-  sf_pkd_clr_t                    *px;
-  int                              w;
-  int                              h;
-  int                              w_mask;
-  int                              h_mask;
-  int32_t                          id;
-  const char                      *name;
+  sf_pkd_clr_t                     *px;
+  int                               w;
+  int                               h;
+  int                               w_mask;
+  int                               h_mask;
+  int32_t                           id;
+  const char                       *name;
 } sf_tex_t;
 
 typedef struct {
-  int                              v;
-  int                              vt;
-  int                              vn;
+  int                               v;
+  int                               vt;
+  int                               vn;
 } sf_vtx_idx_t;
 
 typedef struct {
-  sf_vtx_idx_t                     idx[3];
+  sf_vtx_idx_t                      idx[3];
 } sf_face_t;
 
 typedef struct {
-  sf_fvec3_t                      *v;
-  sf_fvec2_t                      *vt;
-  sf_fvec3_t                      *vn;
-  sf_face_t                       *f;
-  int32_t                          v_cnt;
-  int32_t                          vt_cnt;
-  int32_t                          vn_cnt;
-  int32_t                          f_cnt;
-  int32_t                          id;
-  const char                      *name;
-  sf_fvec3_t                       bs_center;
-  float                            bs_radius;
+  sf_fvec3_t                       *v;
+  sf_fvec2_t                       *vt;
+  sf_fvec3_t                       *vn;
+  sf_face_t                        *f;
+  int32_t                           v_cnt;
+  int32_t                           vt_cnt;
+  int32_t                           vn_cnt;
+  int32_t                           f_cnt;
+  int32_t                           id;
+  const char                       *name;
+  sf_fvec3_t                        bs_center;
+  float                             bs_radius;
 } sf_obj_t;
 
 typedef struct {
-  sf_obj_t                         obj;
-  int32_t                          id;
-  sf_tex_t                        *tex;
-  const char                      *name;
-  sf_frame_t                      *frame;
+  sf_obj_t                          obj;
+  int32_t                           id;
+  sf_tex_t                         *tex;
+  const char                       *name;
+  sf_frame_t                       *frame;
 } sf_enti_t;
 
 typedef enum {
@@ -173,30 +173,30 @@ typedef enum {
 } sf_light_type_t;
 
 typedef struct {
-  sf_light_type_t                  type;
-  sf_fvec3_t                       color;
-  float                            intensity;
-  sf_frame_t                      *frame;
-  const char                      *name;
-  int32_t                          id;
+  sf_light_type_t                   type;
+  sf_fvec3_t                        color;
+  float                             intensity;
+  sf_frame_t                       *frame;
+  const char                       *name;
+  int32_t                           id;
 } sf_light_t;
 
 typedef struct {
-  int32_t                          id;
-  const char                      *name;
-  sf_tex_t                        *frames[SF_MAX_SPRITE_FRAMES];
-  int                              frame_count;
-  float                            frame_duration;
-  float                            base_scale;
+  int32_t                           id;
+  const char                       *name;
+  sf_tex_t                         *frames[SF_MAX_SPRITE_FRAMES];
+  int                               frame_count;
+  float                             frame_duration;
+  float                             base_scale;
 } sf_sprite_t;
 
 typedef struct {
-  sf_fvec3_t                       pos;
-  sf_fvec3_t                       vel;
-  float                            life;
-  float                            max_life;
-  float                            anim_time;
-  bool                             active;
+  sf_fvec3_t                        pos;
+  sf_fvec3_t                        vel;
+  float                             life;
+  float                             max_life;
+  float                             anim_time;
+  bool                              active;
 } sf_particle_t;
 
 typedef enum {
@@ -206,28 +206,28 @@ typedef enum {
 } sf_emitr_type_t;
 
 typedef struct {
-  int32_t                          id;
-  const char                      *name;
-  sf_emitr_type_t                  type;
-  sf_sprite_t                     *sprite;
-  sf_frame_t                      *frame;
+  int32_t                           id;
+  const char                       *name;
+  sf_emitr_type_t                   type;
+  sf_sprite_t                      *sprite;
+  sf_frame_t                       *frame;
 
-  sf_particle_t                   *particles;
-  int                              max_particles;
-  float                            spawn_rate;
-  float                            spawn_acc;
-  float                            particle_life;
-  float                            speed;
+  sf_particle_t                    *particles;
+  int                               max_particles;
+  float                             spawn_rate;
+  float                             spawn_acc;
+  float                             particle_life;
+  float                             speed;
 
-  sf_fvec3_t                       dir;
-  float                            spread;
-  sf_fvec3_t                       volume_size;
+  sf_fvec3_t                        dir;
+  float                             spread;
+  sf_fvec3_t                        volume_size;
 } sf_emitr_t;
 
 typedef struct {
-  size_t                           size;
-  size_t                           offset;
-  uint8_t                         *buffer;
+  size_t                            size;
+  size_t                            offset;
+  uint8_t                          *buffer;
 } sf_arena_t;
 
 typedef enum {
@@ -273,17 +273,17 @@ typedef struct {
 typedef void (*sf_event_cb)(struct sf_ctx_t_ *ctx, const sf_event_t *event, void *userdata);
 
 typedef struct {
-  sf_event_cb                      cb;
-  void                            *userdata;
+  sf_event_cb                       cb;
+  void                             *userdata;
 } sf_callback_entry_t;
 
 typedef struct {
-  bool                             keys[SF_KEY_MAX];
-  bool                             keys_prev[SF_KEY_MAX];
-  int                              mouse_x, mouse_y;
-  int                              mouse_dx, mouse_dy;
-  bool                             mouse_btns[SF_MOUSE_MAX];
-  bool                             mouse_btns_prev[SF_MOUSE_MAX];
+  bool                              keys[SF_KEY_MAX];
+  bool                              keys_prev[SF_KEY_MAX];
+  int                               mouse_x, mouse_y;
+  int                               mouse_dx, mouse_dy;
+  bool                              mouse_btns[SF_MOUSE_MAX];
+  bool                              mouse_btns_prev[SF_MOUSE_MAX];
 } sf_input_state_t;
 
 typedef void (*sf_ui_cb)(struct sf_ctx_t_ *ctx, void *userdata);
@@ -295,192 +295,192 @@ typedef enum {
 } sf_ui_type_t;
 
 typedef struct {
-  sf_pkd_clr_t                     color_base;
-  sf_pkd_clr_t                     color_hover;
-  sf_pkd_clr_t                     color_active;
-  sf_pkd_clr_t                     color_text;
-  bool                             draw_outline;
+  sf_pkd_clr_t                      color_base;
+  sf_pkd_clr_t                      color_hover;
+  sf_pkd_clr_t                      color_active;
+  sf_pkd_clr_t                      color_text;
+  bool                              draw_outline;
 } sf_ui_style_t;
 
 typedef struct {
-  sf_ui_type_t                     type;
-  sf_ui_style_t                    style;
+  sf_ui_type_t                      type;
+  sf_ui_style_t                     style;
 
-  sf_ivec2_t                       v0, v1;
-  bool                             is_hovered;
-  bool                             is_pressed;
-  bool                             is_visible;
-  bool                             is_disabled;
+  sf_ivec2_t                        v0, v1;
+  bool                              is_hovered;
+  bool                              is_pressed;
+  bool                              is_visible;
+  bool                              is_disabled;
 
   union {
     struct {
-      const char                  *text;
-      sf_ui_cb                     callback;
-      void                        *userdata;
+      const char                   *text;
+      sf_ui_cb                      callback;
+      void                         *userdata;
     } button;
     struct {
-      float                        value;
-      float                        min_val;
-      float                        max_val;
-      sf_ui_cb                     callback;
-      void                        *userdata;
+      float                         value;
+      float                         min_val;
+      float                         max_val;
+      sf_ui_cb                      callback;
+      void                         *userdata;
     } slider;
     struct {
-      const char                  *text;
-      bool                         is_checked;
-      sf_ui_cb                     callback;
-      void                        *userdata;
+      const char                   *text;
+      bool                          is_checked;
+      sf_ui_cb                      callback;
+      void                         *userdata;
     } checkbox;
 
   };
 } sf_ui_lmn_t;
 
 typedef struct sf_ui_t_ {
-  sf_ui_lmn_t                     *elements;
-  int32_t                          count;
-  sf_ui_style_t                    default_style;
+  sf_ui_lmn_t                      *elements;
+  int32_t                           count;
+  sf_ui_style_t                     default_style;
 } sf_ui_t;
 
 struct sf_ctx_t_ {
-  sf_run_state_t                   state;
+  sf_run_state_t                    state;
 
-  sf_arena_t                       arena;
-  int                              arena_size;
+  sf_arena_t                        arena;
+  int                               arena_size;
 
-  sf_frame_t                      *roots[SF_CONV_MAX];
-  sf_frame_t                      *frames;
-  int32_t                          frames_count;
-  sf_obj_t                        *objs;
-  int32_t                          obj_count;
-  sf_enti_t                       *entities;
-  int32_t                          enti_count;
-  sf_tex_t                        *textures;
-  int32_t                          tex_count;
-  sf_cam_t                        *cameras;
-  int32_t                          cam_count;
-  sf_sprite_t                     *sprites;
-  int32_t                          sprite_count;
-  sf_emitr_t                      *emitrs;
-  int32_t                          emitr_count;
+  sf_frame_t                       *roots[SF_CONV_MAX];
+  sf_frame_t                       *frames;
+  int32_t                           frames_count;
+  sf_obj_t                         *objs;
+  int32_t                           obj_count;
+  sf_enti_t                        *entities;
+  int32_t                           enti_count;
+  sf_tex_t                         *textures;
+  int32_t                           tex_count;
+  sf_cam_t                         *cameras;
+  int32_t                           cam_count;
+  sf_sprite_t                      *sprites;
+  int32_t                           sprite_count;
+  sf_emitr_t                       *emitrs;
+  int32_t                           emitr_count;
 
-  sf_light_t                      *lights;
-  int32_t                          light_count;
+  sf_light_t                       *lights;
+  int32_t                           light_count;
 
-  sf_ui_t                         *ui;
+  sf_ui_t                          *ui;
 
-  sf_input_state_t                 input;
-  sf_callback_entry_t              callbacks[SF_EVT_MAX][SF_MAX_CB_PER_EVT];
+  sf_input_state_t                  input;
+  sf_callback_entry_t               callbacks[SF_EVT_MAX][SF_MAX_CB_PER_EVT];
 
-  sf_cam_t                         main_camera;
+  sf_cam_t                          main_camera;
 
-  float                            delta_time;
-  float                            elapsed_time;
-  float                            fps;
-  uint32_t                         frame_count;
-  uint64_t                         _start_ticks;
-  uint64_t                         _last_ticks;
+  float                             delta_time;
+  float                             elapsed_time;
+  float                             fps;
+  uint32_t                          frame_count;
+  uint64_t                          _start_ticks;
+  uint64_t                          _last_ticks;
 
-  sf_log_fn                        log_cb;
-  void*                            log_user;
-  sf_log_level_t                   log_min;
+  sf_log_fn                         log_cb;
+  void*                             log_user;
+  sf_log_level_t                    log_min;
 };
 
 /* SF_CORE_FUNCTIONS */
-void          sf_init              (sf_ctx_t *ctx, int w, int h);
-void          sf_destroy           (sf_ctx_t *ctx);
-bool          sf_running           (sf_ctx_t *ctx);
-void          sf_stop              (sf_ctx_t *ctx);
-void          sf_render_enti       (sf_ctx_t *ctx, sf_cam_t *cam, sf_enti_t *enti);
-void          sf_render_ctx        (sf_ctx_t *ctx);
-void          sf_render_cam        (sf_ctx_t *ctx, sf_cam_t *cam);
-void          sf_render_emitrs     (sf_ctx_t *ctx, sf_cam_t *cam);
-void          sf_update_emitrs     (sf_ctx_t *ctx);
-void          sf_time_update       (sf_ctx_t *ctx);
+void           sf_init              (sf_ctx_t *ctx, int w, int h);
+void           sf_destroy           (sf_ctx_t *ctx);
+bool           sf_running           (sf_ctx_t *ctx);
+void           sf_stop              (sf_ctx_t *ctx);
+void           sf_render_enti       (sf_ctx_t *ctx, sf_cam_t *cam, sf_enti_t *enti);
+void           sf_render_ctx        (sf_ctx_t *ctx);
+void           sf_render_cam        (sf_ctx_t *ctx, sf_cam_t *cam);
+void           sf_render_emitrs     (sf_ctx_t *ctx, sf_cam_t *cam);
+void           sf_update_emitrs     (sf_ctx_t *ctx);
+void           sf_time_update       (sf_ctx_t *ctx);
 
 /* SF_MEMORY_FUNCTIONS */
-sf_arena_t    sf_arena_init        (sf_ctx_t *ctx, size_t size);
-void*         sf_arena_alloc       (sf_ctx_t *ctx, sf_arena_t *arena, size_t size);
-size_t        sf_arena_save        (sf_ctx_t *ctx, sf_arena_t *arena);
-void          sf_arena_restore     (sf_ctx_t *ctx, sf_arena_t *arena, size_t mark);
+sf_arena_t     sf_arena_init        (sf_ctx_t *ctx, size_t size);
+void*          sf_arena_alloc       (sf_ctx_t *ctx, sf_arena_t *arena, size_t size);
+size_t         sf_arena_save        (sf_ctx_t *ctx, sf_arena_t *arena);
+void           sf_arena_restore     (sf_ctx_t *ctx, sf_arena_t *arena, size_t mark);
 
 /* SF_EVENT_FUNCTIONS */
-void          sf_event_reg         (sf_ctx_t *ctx, sf_event_type_t type, sf_event_cb cb, void *userdata);
-void          sf_event_trigger     (sf_ctx_t *ctx, const sf_event_t *event);
-void          sf_input_cycle_state (sf_ctx_t *ctx);
-void          sf_input_set_key     (sf_ctx_t *ctx, sf_key_t key, bool is_down);
-void          sf_input_set_mouse_p (sf_ctx_t *ctx, int x, int y);
-void          sf_input_set_mouse_b (sf_ctx_t *ctx, sf_mouse_btn_t btn, bool is_down);
-bool          sf_key_down          (sf_ctx_t *ctx, sf_key_t key);
-bool          sf_key_pressed       (sf_ctx_t *ctx, sf_key_t key);
+void           sf_event_reg         (sf_ctx_t *ctx, sf_event_type_t type, sf_event_cb cb, void *userdata);
+void           sf_event_trigger     (sf_ctx_t *ctx, const sf_event_t *event);
+void           sf_input_cycle_state (sf_ctx_t *ctx);
+void           sf_input_set_key     (sf_ctx_t *ctx, sf_key_t key, bool is_down);
+void           sf_input_set_mouse_p (sf_ctx_t *ctx, int x, int y);
+void           sf_input_set_mouse_b (sf_ctx_t *ctx, sf_mouse_btn_t btn, bool is_down);
+bool           sf_key_down          (sf_ctx_t *ctx, sf_key_t key);
+bool           sf_key_pressed       (sf_ctx_t *ctx, sf_key_t key);
 
 /* SF_SCENE_FUNCTIONS */
-sf_tex_t*     sf_load_texture_bmp  (sf_ctx_t *ctx, const char *filename, const char *texname);
-sf_tex_t*     sf_get_texture_      (sf_ctx_t *ctx, const char *texname, bool should_log_failure);
-sf_sprite_t*  sf_load_sprite       (sf_ctx_t *ctx, const char *spritename, float duration, float scale, int frame_count, ...);
-sf_sprite_t*  sf_get_sprite_       (sf_ctx_t *ctx, const char *spritename, bool should_log_failure);
-sf_emitr_t*   sf_add_emitr         (sf_ctx_t *ctx, const char *emitrname, sf_emitr_type_t type, sf_sprite_t *sprite, int max_p);
-sf_emitr_t*   sf_get_emitr_        (sf_ctx_t *ctx, const char *emitrname, bool should_log_failure);
-sf_obj_t*     sf_load_obj          (sf_ctx_t *ctx, const char *filename, const char *objname);
-sf_obj_t*     sf_get_obj_          (sf_ctx_t *ctx, const char *objname, bool should_log_failure);
-sf_enti_t*    sf_add_enti          (sf_ctx_t *ctx, sf_obj_t *obj, const char *entiname);
-sf_enti_t*    sf_get_enti_         (sf_ctx_t *ctx, const char *entiname, bool should_log_failure);
-sf_cam_t*     sf_add_cam           (sf_ctx_t *ctx, const char *camname, int w, int h, float fov);
-sf_cam_t*     sf_get_cam_          (sf_ctx_t *ctx, const char *camname, bool should_log_failure);
-sf_light_t*   sf_add_light         (sf_ctx_t *ctx, const char *lightname, sf_light_type_t type, sf_fvec3_t color, float intensity);
-sf_light_t*   sf_get_light_        (sf_ctx_t *ctx, const char *lightname, bool should_log_failure);
-void          sf_enti_set_pos      (sf_ctx_t *ctx, sf_enti_t *enti, float x, float y, float z);
-void          sf_enti_move         (sf_ctx_t *ctx, sf_enti_t *enti, float dx, float dy, float dz);
-void          sf_enti_set_rot      (sf_ctx_t *ctx, sf_enti_t *enti, float rx, float ry, float rz);
-void          sf_enti_rotate       (sf_ctx_t *ctx, sf_enti_t *enti, float drx, float dry, float drz);
-void          sf_enti_set_scale    (sf_ctx_t *ctx, sf_enti_t *enti, float sx, float sy, float sz);
-void          sf_enti_set_tex      (sf_ctx_t *ctx, const char *entiname, const char *texname);
-void          sf_load_world        (sf_ctx_t *ctx, const char *filename, const char *worldname);
-void          sf_camera_set_psp    (sf_ctx_t *ctx, sf_cam_t *cam, float fov, float near_plane, float far_plane);
-void          sf_camera_set_pos    (sf_ctx_t *ctx, sf_cam_t *cam, float x, float y, float z);
-void          sf_camera_move_loc   (sf_ctx_t *ctx, sf_cam_t *cam, float fwd, float right, float up);
-void          sf_camera_look_at    (sf_ctx_t *ctx, sf_cam_t *cam, sf_fvec3_t target);
-void          sf_camera_add_yp     (sf_ctx_t *ctx, sf_cam_t *cam, float yaw_offset, float pitch_offset);
+sf_tex_t*      sf_load_texture_bmp  (sf_ctx_t *ctx, const char *filename, const char *texname);
+sf_tex_t*      sf_get_texture_      (sf_ctx_t *ctx, const char *texname, bool should_log_failure);
+sf_sprite_t*   sf_load_sprite       (sf_ctx_t *ctx, const char *spritename, float duration, float scale, int frame_count, ...);
+sf_sprite_t*   sf_get_sprite_       (sf_ctx_t *ctx, const char *spritename, bool should_log_failure);
+sf_emitr_t*    sf_add_emitr         (sf_ctx_t *ctx, const char *emitrname, sf_emitr_type_t type, sf_sprite_t *sprite, int max_p);
+sf_emitr_t*    sf_get_emitr_        (sf_ctx_t *ctx, const char *emitrname, bool should_log_failure);
+sf_obj_t*      sf_load_obj          (sf_ctx_t *ctx, const char *filename, const char *objname);
+sf_obj_t*      sf_get_obj_          (sf_ctx_t *ctx, const char *objname, bool should_log_failure);
+sf_enti_t*     sf_add_enti          (sf_ctx_t *ctx, sf_obj_t *obj, const char *entiname);
+sf_enti_t*     sf_get_enti_         (sf_ctx_t *ctx, const char *entiname, bool should_log_failure);
+sf_cam_t*      sf_add_cam           (sf_ctx_t *ctx, const char *camname, int w, int h, float fov);
+sf_cam_t*      sf_get_cam_          (sf_ctx_t *ctx, const char *camname, bool should_log_failure);
+sf_light_t*    sf_add_light         (sf_ctx_t *ctx, const char *lightname, sf_light_type_t type, sf_fvec3_t color, float intensity);
+sf_light_t*    sf_get_light_        (sf_ctx_t *ctx, const char *lightname, bool should_log_failure);
+void           sf_enti_set_pos      (sf_ctx_t *ctx, sf_enti_t *enti, float x, float y, float z);
+void           sf_enti_move         (sf_ctx_t *ctx, sf_enti_t *enti, float dx, float dy, float dz);
+void           sf_enti_set_rot      (sf_ctx_t *ctx, sf_enti_t *enti, float rx, float ry, float rz);
+void           sf_enti_rotate       (sf_ctx_t *ctx, sf_enti_t *enti, float drx, float dry, float drz);
+void           sf_enti_set_scale    (sf_ctx_t *ctx, sf_enti_t *enti, float sx, float sy, float sz);
+void           sf_enti_set_tex      (sf_ctx_t *ctx, const char *entiname, const char *texname);
+void           sf_load_world        (sf_ctx_t *ctx, const char *filename, const char *worldname);
+void           sf_camera_set_psp    (sf_ctx_t *ctx, sf_cam_t *cam, float fov, float near_plane, float far_plane);
+void           sf_camera_set_pos    (sf_ctx_t *ctx, sf_cam_t *cam, float x, float y, float z);
+void           sf_camera_move_loc   (sf_ctx_t *ctx, sf_cam_t *cam, float fwd, float right, float up);
+void           sf_camera_look_at    (sf_ctx_t *ctx, sf_cam_t *cam, sf_fvec3_t target);
+void           sf_camera_add_yp     (sf_ctx_t *ctx, sf_cam_t *cam, float yaw_offset, float pitch_offset);
 
 /* SF_FRAME_FUNCTIONS */
-sf_frame_t*   sf_get_root          (sf_ctx_t *ctx, sf_convention_t conv);
-sf_frame_t*   sf_add_frame         (sf_ctx_t *ctx, sf_frame_t *parent);
-void          sf_update_frames     (sf_ctx_t *ctx);
-void          sf_frame_look_at     (sf_frame_t *f, sf_fvec3_t target);
-void          sf_frame_set_parent  (sf_frame_t *child, sf_frame_t *new_parent);
+sf_frame_t*    sf_get_root          (sf_ctx_t *ctx, sf_convention_t conv);
+sf_frame_t*    sf_add_frame         (sf_ctx_t *ctx, sf_frame_t *parent);
+void           sf_update_frames     (sf_ctx_t *ctx);
+void           sf_frame_look_at     (sf_frame_t *f, sf_fvec3_t target);
+void           sf_frame_set_parent  (sf_frame_t *child, sf_frame_t *new_parent);
 
 /* SF_DRAWING_FUNCTIONS */
-void          sf_fill              (sf_ctx_t *ctx, sf_cam_t *cam, sf_pkd_clr_t c);
-void          sf_pixel             (sf_ctx_t *ctx, sf_cam_t *cam, sf_pkd_clr_t c, sf_ivec2_t v0);
-void          sf_pixel_depth       (sf_ctx_t *ctx, sf_cam_t *cam, sf_pkd_clr_t c, sf_ivec2_t v0, float z);
-void          sf_line              (sf_ctx_t *ctx, sf_cam_t *cam, sf_pkd_clr_t c, sf_ivec2_t v0, sf_ivec2_t v1);
-void          sf_rect              (sf_ctx_t *ctx, sf_cam_t *cam, sf_pkd_clr_t c, sf_ivec2_t v0, sf_ivec2_t v1);
-void          sf_tri               (sf_ctx_t *ctx, sf_cam_t *cam, sf_pkd_clr_t c, sf_fvec3_t v0, sf_fvec3_t v1, sf_fvec3_t v2, bool use_depth);
-void          sf_tri_tex           (sf_ctx_t *ctx, sf_cam_t *cam, sf_tex_t *tex, sf_fvec3_t v0, sf_fvec3_t v1, sf_fvec3_t v2, sf_fvec3_t uvz0, sf_fvec3_t uvz1, sf_fvec3_t uvz2, sf_fvec3_t l_int);
-void          sf_put_text          (sf_ctx_t *ctx, sf_cam_t *cam, const char *text, sf_ivec2_t p, sf_pkd_clr_t c, int scale);
-void          sf_clear_depth       (sf_ctx_t *ctx, sf_cam_t *cam);
-void          sf_draw_cam_pip      (sf_ctx_t *ctx, sf_cam_t *dest, sf_cam_t *src, sf_ivec2_t pos);
-void          sf_draw_debug_ovrlay (sf_ctx_t *ctx, sf_cam_t *cam);
-void          sf_draw_debug_axes   (sf_ctx_t *ctx, sf_cam_t *cam);
-void          sf_draw_debug_frames (sf_ctx_t *ctx, sf_cam_t *cam, float axis_size);
-void          sf_draw_debug_lights (sf_ctx_t *ctx, sf_cam_t *cam, float size);
-void          sf_draw_debug_cams   (sf_ctx_t *ctx, sf_cam_t *view_cam, float ray_len);
-void          sf_draw_sprite       (sf_ctx_t *ctx, sf_cam_t *cam, sf_sprite_t *spr, sf_fvec3_t pos_w, float anim_time, float scale_mult);
+void           sf_fill              (sf_ctx_t *ctx, sf_cam_t *cam, sf_pkd_clr_t c);
+void           sf_pixel             (sf_ctx_t *ctx, sf_cam_t *cam, sf_pkd_clr_t c, sf_ivec2_t v0);
+void           sf_pixel_depth       (sf_ctx_t *ctx, sf_cam_t *cam, sf_pkd_clr_t c, sf_ivec2_t v0, float z);
+void           sf_line              (sf_ctx_t *ctx, sf_cam_t *cam, sf_pkd_clr_t c, sf_ivec2_t v0, sf_ivec2_t v1);
+void           sf_rect              (sf_ctx_t *ctx, sf_cam_t *cam, sf_pkd_clr_t c, sf_ivec2_t v0, sf_ivec2_t v1);
+void           sf_tri               (sf_ctx_t *ctx, sf_cam_t *cam, sf_pkd_clr_t c, sf_fvec3_t v0, sf_fvec3_t v1, sf_fvec3_t v2, bool use_depth);
+void           sf_tri_tex           (sf_ctx_t *ctx, sf_cam_t *cam, sf_tex_t *tex, sf_fvec3_t v0, sf_fvec3_t v1, sf_fvec3_t v2, sf_fvec3_t uvz0, sf_fvec3_t uvz1, sf_fvec3_t uvz2, sf_fvec3_t l_int);
+void           sf_put_text          (sf_ctx_t *ctx, sf_cam_t *cam, const char *text, sf_ivec2_t p, sf_pkd_clr_t c, int scale);
+void           sf_clear_depth       (sf_ctx_t *ctx, sf_cam_t *cam);
+void           sf_draw_cam_pip      (sf_ctx_t *ctx, sf_cam_t *dest, sf_cam_t *src, sf_ivec2_t pos);
+void           sf_draw_debug_ovrlay (sf_ctx_t *ctx, sf_cam_t *cam);
+void           sf_draw_debug_axes   (sf_ctx_t *ctx, sf_cam_t *cam);
+void           sf_draw_debug_frames (sf_ctx_t *ctx, sf_cam_t *cam, float axis_size);
+void           sf_draw_debug_lights (sf_ctx_t *ctx, sf_cam_t *cam, float size);
+void           sf_draw_debug_cams   (sf_ctx_t *ctx, sf_cam_t *view_cam, float ray_len);
+void           sf_draw_sprite       (sf_ctx_t *ctx, sf_cam_t *cam, sf_sprite_t *spr, sf_fvec3_t pos_w, float anim_time, float scale_mult);
 
 /* SF_UI_FUNCTIONS */
-sf_ui_t*      sf_create_ui         (sf_ctx_t *ctx);
-void          sf_update_ui         (sf_ctx_t *ctx, sf_ui_t *ui);
-void          sf_render_ui         (sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_t *ui);
-sf_ui_lmn_t*  sf_add_button        (sf_ctx_t *ctx, const char *text, sf_ivec2_t v0, sf_ivec2_t v1, sf_ui_cb cb, void *userdata);
-sf_ui_lmn_t*  sf_add_slider        (sf_ctx_t *ctx, sf_ivec2_t v0, sf_ivec2_t v1, float min_val, float max_val, float init_val, sf_ui_cb cb, void *userdata);
-sf_ui_lmn_t*  sf_add_checkbox      (sf_ctx_t *ctx, const char *text, sf_ivec2_t v0, sf_ivec2_t v1, bool init_state, sf_ui_cb cb, void *userdata);
-void          draw_button          (sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_lmn_t *el);
-void          draw_slider          (sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_lmn_t *el);
-void          draw_checkbox        (sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_lmn_t *el);
+sf_ui_t*       sf_create_ui         (sf_ctx_t *ctx);
+void           sf_update_ui         (sf_ctx_t *ctx, sf_ui_t *ui);
+void           sf_render_ui         (sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_t *ui);
+sf_ui_lmn_t*   sf_add_button        (sf_ctx_t *ctx, const char *text, sf_ivec2_t v0, sf_ivec2_t v1, sf_ui_cb cb, void *userdata);
+sf_ui_lmn_t*   sf_add_slider        (sf_ctx_t *ctx, sf_ivec2_t v0, sf_ivec2_t v1, float min_val, float max_val, float init_val, sf_ui_cb cb, void *userdata);
+sf_ui_lmn_t*   sf_add_checkbox      (sf_ctx_t *ctx, const char *text, sf_ivec2_t v0, sf_ivec2_t v1, bool init_state, sf_ui_cb cb, void *userdata);
+void           draw_button          (sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_lmn_t *el);
+void           draw_slider          (sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_lmn_t *el);
+void           draw_checkbox        (sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_lmn_t *el);
 
 /* SF_LOG_FUNCTIONS */
-void          sf_log_              (sf_ctx_t *ctx, sf_log_level_t level, const char* func, const char* fmt, ...);
-void          sf_set_logger        (sf_ctx_t *ctx, sf_log_fn log_cb, void* userdata);
-void          sf_logger_console    (const char* message, void* userdata);
+void           sf_log_              (sf_ctx_t *ctx, sf_log_level_t level, const char* func, const char* fmt, ...);
+void           sf_set_logger        (sf_ctx_t *ctx, sf_log_fn log_cb, void* userdata);
+void           sf_logger_console    (const char* message, void* userdata);
 
 /* SF_IMPLEMENTATION_HELPERS */
 uint32_t       _sf_vec_to_index    (sf_ctx_t *ctx, sf_cam_t *cam, sf_ivec2_t v);
@@ -498,6 +498,15 @@ sf_unpkd_clr_t _sf_unpack_color    (sf_pkd_clr_t);
 size_t         _sf_obj_memusg      (sf_obj_t *obj);
 void           _sf_set_up_frames   (sf_ctx_t *ctx);
 void           _sf_calc_frame_tree (sf_frame_t *f, sf_fmat4_t parent_global_M, bool force_dirty);
+bool           _sf_sfw_read_kv     (FILE *f, char *key, size_t ksz, char *val, size_t vsz);
+void           _sf_sfw_trim        (char *s);
+sf_fvec3_t     _sf_sfw_prse_vec3   (const char *s);
+int            _sf_sfw_prse_list   (const char *s, char out[][64], int max);
+void           _sf_sfw_prse_cam    (sf_ctx_t *ctx, FILE *f, const char *name, int *cam_count);
+void           _sf_sfw_prse_enti   (sf_ctx_t *ctx, FILE *f, const char *name, int *enti_count);
+void           _sf_sfw_prse_light  (sf_ctx_t *ctx, FILE *f, const char *name, int *light_count);
+void           _sf_sfw_prse_sprit  (sf_ctx_t *ctx, FILE *f, const char *name, int *sprite_count);
+void           _sf_sfw_prse_emitr  (sf_ctx_t *ctx, FILE *f, const char *name, int *emitr_count);
 
 /* SF_LA_FUNCTIONS */
 sf_fmat4_t     sf_fmat4_mul_fmat4  (sf_fmat4_t m0, sf_fmat4_t m1);
@@ -575,8 +584,8 @@ void sf_init(sf_ctx_t *ctx, int w, int h) {
   SF_LOG(ctx, SF_LOG_INFO,
               SF_LOG_INDENT "buffer : %dx%d\n"
               SF_LOG_INDENT "memory : %d\n"
-              SF_LOG_INDENT "mxobjs : %d\n" 
-              SF_LOG_INDENT "mxents : %d\n", 
+              SF_LOG_INDENT "mxobjs : %d\n"
+              SF_LOG_INDENT "mxents : %d\n",
               ctx->main_camera.w, ctx->main_camera.h, SF_ARENA_SIZE, SF_MAX_OBJS, SF_MAX_ENTITIES);
 }
 
@@ -1593,149 +1602,29 @@ void sf_load_world(sf_ctx_t *ctx, const char *filename, const char *worldname) {
   char line[512];
   int obj_count = 0, enti_count = 0, light_count = 0, cam_count = 0, tex_count = 0, sprite_count = 0, emitr_count = 0;
   while (fgets(line, sizeof(line), file)) {
-    if (line[0] == '#' || line[0] == '\n' || line[0] == '\r') continue;
-    char cmd;
-    sscanf(line, " %c", &cmd);
-    if (cmd == 't') {
-      char t_name[64], t_file[256];
-      if (sscanf(line, "t %63s %255s", t_name, t_file) == 2) {
-        sf_load_texture_bmp(ctx, t_file, t_name);
-        tex_count++;
+    _sf_sfw_trim(line);
+    if (line[0] == '#' || line[0] == '\0') continue;
+
+    char keyword[32] = {0}, name[64] = {0}, filepath[256] = {0};
+
+    if (sscanf(line, "%31s %63[^ \t{] {", keyword, name) == 2) {
+      _sf_sfw_trim(name);
+      if      (strcmp(keyword, "camera")  == 0) _sf_sfw_prse_cam(ctx, file, name, &cam_count);
+      else if (strcmp(keyword, "entity")  == 0) _sf_sfw_prse_enti(ctx, file, name, &enti_count);
+      else if (strcmp(keyword, "light")   == 0) _sf_sfw_prse_light(ctx, file, name, &light_count);
+      else if (strcmp(keyword, "sprite")  == 0) _sf_sfw_prse_sprit(ctx, file, name, &sprite_count);
+      else if (strcmp(keyword, "emitter") == 0) _sf_sfw_prse_emitr(ctx, file, name, &emitr_count);
+    }
+    else if (sscanf(line, "mesh %63s \"%255[^\"]\"", name, filepath) == 2) {
+      char r_path[512];
+      if (_sf_resolve_asset(filepath, r_path, sizeof(r_path))) {
+        sf_load_obj(ctx, r_path, name);
+        obj_count++;
       }
     }
-    else if (cmd == 'm') {
-      char m_name[64], m_file[256], r_path[512];
-      if (sscanf(line, "m %63s %255s", m_name, m_file) == 2) {
-        if (_sf_resolve_asset(m_file, r_path, sizeof(r_path))) {
-          sf_load_obj(ctx, r_path, m_name);
-          obj_count++;
-        }
-      }
-    } 
-    else if (cmd == 'e') {
-      char m_name[64], e_name[64], t_name[64] = {0};
-      float px, py, pz, rx, ry, rz, sx, sy, sz;
-      int res = sscanf(line, "e %63s %63s %f %f %f %f %f %f %f %f %f %63s", 
-        m_name, e_name, &px, &py, &pz, &rx, &ry, &rz, &sx, &sy, &sz, t_name);
-      if (res >= 11) {
-        sf_obj_t *obj = sf_get_obj_(ctx, m_name, true);
-        if (obj) {
-          sf_enti_t *enti = sf_add_enti(ctx, obj, e_name);
-          enti_count++;
-          sf_enti_set_pos(ctx, enti, px, py, pz);
-          sf_enti_set_rot(ctx,enti, rx, ry, rz);
-          sf_enti_set_scale(ctx,enti, sx, sy, sz);
-          if (res == 12) {
-            enti->tex = sf_get_texture_(ctx, t_name, true);
-          }
-        }
-      }
-    }
-    else if (cmd == 'l') {
-      char l_type[16];
-      float x, y, z, r, g, b, i;
-      sscanf(line, "l %15s %f %f %f %f %f %f %f", l_type, &x, &y, &z, &r, &g, &b, &i);
-      if (strcmp(l_type, "dir") == 0) {
-        sf_light_t *l = sf_add_light(ctx, NULL, SF_LIGHT_DIR, (sf_fvec3_t){r, g, b}, i);
-        sf_frame_look_at(l->frame, (sf_fvec3_t){x, y, z});
-      } else if (strcmp(l_type, "point") == 0) {
-        sf_light_t *l = sf_add_light(ctx, NULL, SF_LIGHT_POINT, (sf_fvec3_t){r, g, b}, i);
-        l->frame->pos = (sf_fvec3_t){x, y, z};
-      }
-    }
-    else if (cmd == 'M') { 
-      float px, py, pz, tx, ty, tz, fov;
-      if (sscanf(line, "M %f %f %f %f %f %f %f", &px, &py, &pz, &tx, &ty, &tz, &fov) == 7) {
-        sf_camera_set_pos(ctx, &ctx->main_camera, px, py, pz);
-        sf_camera_look_at(ctx, &ctx->main_camera, (sf_fvec3_t){tx, ty, tz});
-        ctx->main_camera.fov = fov;
-        ctx->main_camera.is_proj_dirty = true;
-        cam_count++;
-      }
-    }
-    else if (cmd == 'c') { 
-      char c_name[64];
-      int w, h;
-      float fov, px, py, pz, tx, ty, tz;
-      if (sscanf(line, "c %63s %d %d %f %f %f %f %f %f %f", c_name, &w, &h, &fov, &px, &py, &pz, &tx, &ty, &tz) == 10) {
-        sf_cam_t *cam = sf_add_cam(ctx, c_name, w, h, fov);
-        if (cam) {
-          sf_camera_set_pos(ctx, cam, px, py, pz);
-          sf_camera_look_at(ctx, cam, (sf_fvec3_t){tx, ty, tz});
-          cam_count++;
-        }
-      }
-    }
-    else if (cmd == 's') {
-      char s_name[64];
-      float dur, scale;
-      int n_frames;
-      int offset = 0;
-      if (sscanf(line, "s %63s %f %f %d %n", s_name, &dur, &scale, &n_frames, &offset) == 4) {
-        char tn[16][64] = {0};
-        char *ptr = line + offset;
-        for (int i = 0; i < n_frames && i < 16; i++) {
-          int read = 0;
-          sscanf(ptr, " %63s %n", tn[i], &read);
-          ptr += read;
-        }
-        if (n_frames > 16) n_frames = 16;
-        switch (n_frames) {
-          case 1:  sf_load_sprite(ctx, s_name, dur, scale, 1, tn[0]); break;
-          case 2:  sf_load_sprite(ctx, s_name, dur, scale, 2, tn[0], tn[1]); break;
-          case 3:  sf_load_sprite(ctx, s_name, dur, scale, 3, tn[0], tn[1], tn[2]); break;
-          case 4:  sf_load_sprite(ctx, s_name, dur, scale, 4, tn[0], tn[1], tn[2], tn[3]); break;
-          case 5:  sf_load_sprite(ctx, s_name, dur, scale, 5, tn[0], tn[1], tn[2], tn[3], tn[4]); break;
-          case 6:  sf_load_sprite(ctx, s_name, dur, scale, 6, tn[0], tn[1], tn[2], tn[3], tn[4], tn[5]); break;
-          case 7:  sf_load_sprite(ctx, s_name, dur, scale, 7, tn[0], tn[1], tn[2], tn[3], tn[4], tn[5], tn[6]); break;
-          case 8:  sf_load_sprite(ctx, s_name, dur, scale, 8, tn[0], tn[1], tn[2], tn[3], tn[4], tn[5], tn[6], tn[7]); break;
-          case 9:  sf_load_sprite(ctx, s_name, dur, scale, 9, tn[0], tn[1], tn[2], tn[3], tn[4], tn[5], tn[6], tn[7], tn[8]); break;
-          case 10: sf_load_sprite(ctx, s_name, dur, scale, 10, tn[0], tn[1], tn[2], tn[3], tn[4], tn[5], tn[6], tn[7], tn[8], tn[9]); break;
-          case 11: sf_load_sprite(ctx, s_name, dur, scale, 11, tn[0], tn[1], tn[2], tn[3], tn[4], tn[5], tn[6], tn[7], tn[8], tn[9], tn[10]); break;
-          case 12: sf_load_sprite(ctx, s_name, dur, scale, 12, tn[0], tn[1], tn[2], tn[3], tn[4], tn[5], tn[6], tn[7], tn[8], tn[9], tn[10], tn[11]); break;
-          case 13: sf_load_sprite(ctx, s_name, dur, scale, 13, tn[0], tn[1], tn[2], tn[3], tn[4], tn[5], tn[6], tn[7], tn[8], tn[9], tn[10], tn[11], tn[12]); break;
-          case 14: sf_load_sprite(ctx, s_name, dur, scale, 14, tn[0], tn[1], tn[2], tn[3], tn[4], tn[5], tn[6], tn[7], tn[8], tn[9], tn[10], tn[11], tn[12], tn[13]); break;
-          case 15: sf_load_sprite(ctx, s_name, dur, scale, 15, tn[0], tn[1], tn[2], tn[3], tn[4], tn[5], tn[6], tn[7], tn[8], tn[9], tn[10], tn[11], tn[12], tn[13], tn[14]); break;
-          case 16: sf_load_sprite(ctx, s_name, dur, scale, 16, tn[0], tn[1], tn[2], tn[3], tn[4], tn[5], tn[6], tn[7], tn[8], tn[9], tn[10], tn[11], tn[12], tn[13], tn[14], tn[15]); break;
-        }
-        sprite_count++;
-      }
-    }
-    else if (cmd == 'p') {
-      char e_name[64], type_str[16], spr_name[64];
-      int max_p;
-      float px, py, pz, rate, life, speed;
-      int offset = 0;
-      if (sscanf(line, "p %63s %15s %63s %d %f %f %f %f %f %f %n", 
-          e_name, type_str, spr_name, &max_p, &px, &py, &pz, &rate, &life, &speed, &offset) >= 10) {
-        sf_emitr_type_t type = SF_EMITR_OMNI;
-        if (strcmp(type_str, "dir") == 0) type = SF_EMITR_DIR;
-        else if (strcmp(type_str, "vol") == 0) type = SF_EMITR_VOLUME;
-        sf_sprite_t *spr = sf_get_sprite_(ctx, spr_name, true);
-        if (spr) {
-          sf_emitr_t *em = sf_add_emitr(ctx, e_name, type, spr, max_p);
-          if (em) {
-            em->frame->pos = (sf_fvec3_t){px, py, pz};
-            em->spawn_rate = rate;
-            em->particle_life = life;
-            em->speed = speed;
-            char *ptr = line + offset;
-            if (type == SF_EMITR_DIR) {
-              float dx, dy, dz, spread;
-              if (sscanf(ptr, " %f %f %f %f", &dx, &dy, &dz, &spread) == 4) {
-                em->dir = sf_fvec3_norm((sf_fvec3_t){dx, dy, dz});
-                em->spread = spread;
-              }
-            } else if (type == SF_EMITR_VOLUME) {
-              float vx, vy, vz;
-              if (sscanf(ptr, " %f %f %f", &vx, &vy, &vz) == 3) {
-                em->volume_size = (sf_fvec3_t){vx, vy, vz};
-              }
-            }
-            emitr_count++;
-          }
-        }
-      }
+    else if (sscanf(line, "texture %63s \"%255[^\"]\"", name, filepath) == 2) {
+      sf_load_texture_bmp(ctx, filepath, name);
+      tex_count++;
     }
   }
   fclose(file);
@@ -2832,6 +2721,187 @@ void _sf_calc_frame_tree(sf_frame_t *f, sf_fmat4_t parent_global_M, bool force_d
  
   _sf_calc_frame_tree(f->first_child, f->global_M, current_dirty);
   _sf_calc_frame_tree(f->next_sibling, parent_global_M, force_dirty);
+}
+
+bool _sf_sfw_read_kv(FILE *f, char *key, size_t ksz, char *val, size_t vsz) {
+  char line[512];
+  while (fgets(line, sizeof(line), f)) {
+    _sf_sfw_trim(line);
+    if (line[0] == '#' || line[0] == '\0') continue;
+    if (line[0] == '}') return false;
+    char *eq = strchr(line, '=');
+    if (!eq) continue;
+    *eq = '\0';
+    char *k = line;  _sf_sfw_trim(k);
+    char *v = eq + 1; _sf_sfw_trim(v);
+    snprintf(key, ksz, "%s", k);
+    snprintf(val, vsz, "%s", v);
+    return true;
+  }
+  return false;
+}
+
+void _sf_sfw_trim(char *s) {
+  while (*s == ' ' || *s == '\t') { char *d = s; while ((*d = *(d+1))) d++; }
+  size_t len = strlen(s);
+  while (len > 0 && (s[len-1] == ' ' || s[len-1] == '\t' || s[len-1] == '\n' || s[len-1] == '\r')) s[--len] = '\0';
+}
+
+sf_fvec3_t _sf_sfw_prse_vec3(const char *s) {
+  sf_fvec3_t v = {0, 0, 0};
+  sscanf(s, " ( %f , %f , %f )", &v.x, &v.y, &v.z);
+  return v;
+}
+
+int _sf_sfw_prse_list(const char *s, char out[][64], int max) {
+  const char *p = strchr(s, '[');
+  if (!p) return 0;
+  p++;
+  int count = 0;
+  while (count < max) {
+    while (*p == ' ' || *p == '\t') p++;
+    if (*p == ']' || *p == '\0') break;
+    int i = 0;
+    while (*p && *p != ',' && *p != ']' && *p != ' ' && *p != '\t' && i < 63) out[count][i++] = *p++;
+    out[count][i] = '\0';
+    count++;
+    while (*p == ' ' || *p == '\t') p++;
+    if (*p == ',') p++;
+  }
+  return count;
+}
+
+void _sf_sfw_prse_cam(sf_ctx_t *ctx, FILE *f, const char *name, int *cam_count) {
+  char key[64], val[256];
+  sf_fvec3_t pos = {0,0,0}, target = {0,0,0};
+  float fov = 60.0f;
+  int w = 0, h = 0;
+  bool has_target = false;
+  while (_sf_sfw_read_kv(f, key, sizeof(key), val, sizeof(val))) {
+    if      (strcmp(key, "pos")    == 0) pos    = _sf_sfw_prse_vec3(val);
+    else if (strcmp(key, "target") == 0) { target = _sf_sfw_prse_vec3(val); has_target = true; }
+    else if (strcmp(key, "fov")    == 0) sscanf(val, "%f", &fov);
+    else if (strcmp(key, "size")   == 0) { sf_fvec3_t s = _sf_sfw_prse_vec3(val); w = (int)s.x; h = (int)s.y; }
+  }
+  if (strcmp(name, "main") == 0) {
+    sf_camera_set_pos(ctx, &ctx->main_camera, pos.x, pos.y, pos.z);
+    if (has_target) sf_camera_look_at(ctx, &ctx->main_camera, target);
+    ctx->main_camera.fov = fov;
+    ctx->main_camera.is_proj_dirty = true;
+  } else {
+    if (w == 0) w = ctx->main_camera.w;
+    if (h == 0) h = ctx->main_camera.h;
+    sf_cam_t *cam = sf_add_cam(ctx, name, w, h, fov);
+    if (cam) {
+      sf_camera_set_pos(ctx, cam, pos.x, pos.y, pos.z);
+      if (has_target) sf_camera_look_at(ctx, cam, target);
+    }
+  }
+  (*cam_count)++;
+}
+
+void _sf_sfw_prse_enti(sf_ctx_t *ctx, FILE *f, const char *name, int *enti_count) {
+  char key[64], val[256];
+  char mesh_name[64] = {0}, tex_name[64] = {0};
+  sf_fvec3_t pos = {0,0,0}, rot = {0,0,0}, scale = {1,1,1};
+  while (_sf_sfw_read_kv(f, key, sizeof(key), val, sizeof(val))) {
+    if      (strcmp(key, "mesh")    == 0) snprintf(mesh_name, sizeof(mesh_name), "%s", val);
+    else if (strcmp(key, "texture") == 0) snprintf(tex_name, sizeof(tex_name), "%s", val);
+    else if (strcmp(key, "pos")     == 0) pos   = _sf_sfw_prse_vec3(val);
+    else if (strcmp(key, "rot")     == 0) rot   = _sf_sfw_prse_vec3(val);
+    else if (strcmp(key, "scale")   == 0) scale = _sf_sfw_prse_vec3(val);
+  }
+  sf_obj_t *obj = sf_get_obj_(ctx, mesh_name, true);
+  if (!obj) return;
+  sf_enti_t *enti = sf_add_enti(ctx, obj, name);
+  if (!enti) return;
+  sf_enti_set_pos(ctx, enti, pos.x, pos.y, pos.z);
+  sf_enti_set_rot(ctx, enti, rot.x, rot.y, rot.z);
+  sf_enti_set_scale(ctx, enti, scale.x, scale.y, scale.z);
+  if (tex_name[0]) enti->tex = sf_get_texture_(ctx, tex_name, true);
+  (*enti_count)++;
+}
+
+void _sf_sfw_prse_light(sf_ctx_t *ctx, FILE *f, const char *name, int *light_count) {
+  char key[64], val[256];
+  char type_str[16] = "point";
+  sf_fvec3_t pos = {0,0,0}, color = {1,1,1};
+  float intensity = 1.0f;
+  while (_sf_sfw_read_kv(f, key, sizeof(key), val, sizeof(val))) {
+    if      (strcmp(key, "type")      == 0) snprintf(type_str, sizeof(type_str), "%s", val);
+    else if (strcmp(key, "pos")       == 0) pos       = _sf_sfw_prse_vec3(val);
+    else if (strcmp(key, "color")     == 0) color     = _sf_sfw_prse_vec3(val);
+    else if (strcmp(key, "intensity") == 0) sscanf(val, "%f", &intensity);
+  }
+  if (strcmp(type_str, "dir") == 0) {
+    sf_light_t *l = sf_add_light(ctx, name, SF_LIGHT_DIR, color, intensity);
+    if (l) sf_frame_look_at(l->frame, pos);
+  } else {
+    sf_light_t *l = sf_add_light(ctx, name, SF_LIGHT_POINT, color, intensity);
+    if (l) l->frame->pos = pos;
+  }
+  (*light_count)++;
+}
+
+void _sf_sfw_prse_sprit(sf_ctx_t *ctx, FILE *f, const char *name, int *sprite_count) {
+  char key[64], val[256];
+  float duration = 1.0f, scale = 1.0f;
+  char frame_names[SF_MAX_SPRITE_FRAMES][64] = {{0}};
+  int frame_count = 0;
+  while (_sf_sfw_read_kv(f, key, sizeof(key), val, sizeof(val))) {
+    if      (strcmp(key, "duration") == 0) sscanf(val, "%f", &duration);
+    else if (strcmp(key, "scale")    == 0) sscanf(val, "%f", &scale);
+    else if (strcmp(key, "frames")   == 0) frame_count = _sf_sfw_prse_list(val, frame_names, SF_MAX_SPRITE_FRAMES);
+  }
+  if (frame_count == 0) return;
+  if (ctx->sprite_count >= SF_MAX_SPRITES) return;
+  if (NULL != sf_get_sprite_(ctx, name, false)) return;
+  sf_sprite_t *spr = &ctx->sprites[ctx->sprite_count++];
+  spr->id = ctx->sprite_count - 1;
+  spr->frame_count = frame_count;
+  spr->frame_duration = duration;
+  spr->base_scale = scale;
+  size_t name_len = strlen(name) + 1;
+  spr->name = (const char*)sf_arena_alloc(ctx, &ctx->arena, name_len);
+  if (spr->name) memcpy((void*)spr->name, name, name_len);
+  for (int i = 0; i < frame_count; i++)
+    spr->frames[i] = sf_get_texture_(ctx, frame_names[i], true);
+  (*sprite_count)++;
+}
+
+void _sf_sfw_prse_emitr(sf_ctx_t *ctx, FILE *f, const char *name, int *emitr_count) {
+  char key[64], val[256];
+  char type_str[16] = "omni", spr_name[64] = {0};
+  int max_p = 100;
+  float spawn_rate = 10.0f, life = 1.0f, speed = 1.0f, spread = 0.0f;
+  sf_fvec3_t pos = {0,0,0}, dir = {0,1,0}, volume = {1,1,1};
+  bool has_dir = false, has_vol = false;
+  while (_sf_sfw_read_kv(f, key, sizeof(key), val, sizeof(val))) {
+    if      (strcmp(key, "type")       == 0) snprintf(type_str, sizeof(type_str), "%s", val);
+    else if (strcmp(key, "sprite")     == 0) snprintf(spr_name, sizeof(spr_name), "%s", val);
+    else if (strcmp(key, "max")        == 0) sscanf(val, "%d", &max_p);
+    else if (strcmp(key, "pos")        == 0) pos        = _sf_sfw_prse_vec3(val);
+    else if (strcmp(key, "spawn_rate") == 0) sscanf(val, "%f", &spawn_rate);
+    else if (strcmp(key, "life")       == 0) sscanf(val, "%f", &life);
+    else if (strcmp(key, "speed")      == 0) sscanf(val, "%f", &speed);
+    else if (strcmp(key, "dir")        == 0) { dir    = _sf_sfw_prse_vec3(val); has_dir = true; }
+    else if (strcmp(key, "spread")     == 0) sscanf(val, "%f", &spread);
+    else if (strcmp(key, "volume")     == 0) { volume = _sf_sfw_prse_vec3(val); has_vol = true; }
+  }
+  sf_emitr_type_t type = SF_EMITR_OMNI;
+  if      (strcmp(type_str, "dir") == 0) type = SF_EMITR_DIR;
+  else if (strcmp(type_str, "vol") == 0) type = SF_EMITR_VOLUME;
+  sf_sprite_t *spr = sf_get_sprite_(ctx, spr_name, true);
+  if (!spr) return;
+  sf_emitr_t *em = sf_add_emitr(ctx, name, type, spr, max_p);
+  if (!em) return;
+  em->frame->pos = pos;
+  em->spawn_rate = spawn_rate;
+  em->particle_life = life;
+  em->speed = speed;
+  if (type == SF_EMITR_DIR || has_dir) { em->dir = sf_fvec3_norm(dir); em->spread = spread; }
+  if (type == SF_EMITR_VOLUME || has_vol) em->volume_size = volume;
+  (*emitr_count)++;
 }
 
 /* SF_LA_FUNCTIONS */
