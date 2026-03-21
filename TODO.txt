@@ -12,6 +12,8 @@ TODO
   Wireframe view
   Depth buffer view
   Mouse interaction with scene/world
+  LoD meshes for performance
+  Sound / synthesis -- full audio backend (sources, pedals, sink)
 
 Things to make with the library
   sf_studio: Sfw builder (+terrain sculpting), Sfm builder, Sfui builder
