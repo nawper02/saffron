@@ -1,0 +1,27 @@
+[
+{
+  "directory": "/home/saffron/saffron",
+  "command": "/usr/bin/cc -DSAFFRON_ASSET_DIR=\\\"/usr/local/share/saffron/sf_assets/\\\" -I/home/saffron/saffron -isystem /usr/include/SDL2  -O2 -ffast-math -std=gnu11 -o CMakeFiles/au.dir/sf_examples/au.c.o -c /home/saffron/saffron/sf_examples/au.c",
+  "file": "/home/saffron/saffron/sf_examples/au.c"
+},
+{
+  "directory": "/home/saffron/saffron",
+  "command": "/usr/bin/cc -DSAFFRON_ASSET_DIR=\\\"/usr/local/share/saffron/sf_assets/\\\" -I/home/saffron/saffron -isystem /usr/include/SDL2  -O2 -ffast-math -std=gnu11 -o CMakeFiles/sf.dir/sf_examples/sf.c.o -c /home/saffron/saffron/sf_examples/sf.c",
+  "file": "/home/saffron/saffron/sf_examples/sf.c"
+},
+{
+  "directory": "/home/saffron/saffron",
+  "command": "/usr/bin/cc -DSAFFRON_ASSET_DIR=\\\"/usr/local/share/saffron/sf_assets/\\\" -I/home/saffron/saffron -isystem /usr/include/SDL2  -O2 -ffast-math -std=gnu11 -o CMakeFiles/sp.dir/sf_examples/sp.c.o -c /home/saffron/saffron/sf_examples/sp.c",
+  "file": "/home/saffron/saffron/sf_examples/sp.c"
+},
+{
+  "directory": "/home/saffron/saffron",
+  "command": "/usr/bin/cc -DSAFFRON_ASSET_DIR=\\\"/usr/local/share/saffron/sf_assets/\\\" -I/home/saffron/saffron -isystem /usr/include/SDL2  -O2 -ffast-math -std=gnu11 -o CMakeFiles/tw.dir/sf_examples/tw.c.o -c /home/saffron/saffron/sf_examples/tw.c",
+  "file": "/home/saffron/saffron/sf_examples/tw.c"
+},
+{
+  "directory": "/home/saffron/saffron",
+  "command": "/usr/bin/cc -DSAFFRON_ASSET_DIR=\\\"/usr/local/share/saffron/sf_assets/\\\" -I/home/saffron/saffron -isystem /usr/include/SDL2  -O2 -ffast-math -std=gnu11 -o CMakeFiles/sf_png2bmp.dir/sf_extras/sf_png2bmp.c.o -c /home/saffron/saffron/sf_extras/sf_png2bmp.c",
+  "file": "/home/saffron/saffron/sf_extras/sf_png2bmp.c"
+}
+]

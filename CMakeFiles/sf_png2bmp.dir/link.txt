@@ -1,0 +1,1 @@
+/usr/bin/cc  -O2 -ffast-math CMakeFiles/sf_png2bmp.dir/sf_extras/sf_png2bmp.c.o -o sf_png2bmp  /usr/lib/x86_64-linux-gnu/libSDL2.so -lm 
