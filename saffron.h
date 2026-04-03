@@ -36,6 +36,8 @@ extern "C" {
 #define SF_MAX_CAMS                   5
 #define SF_MAX_CB_PER_EVT             4
 #define SF_MAX_UI_ELEMENTS            64
+#define SF_UI_TEXTINPUT_MAX           128
+#define SF_UI_DROPDOWN_MAX            16
 #define SF_MAX_FRAMES                 512
 #define SF_MAX_SPRITES                20
 #define SF_MAX_EMITRS                 10
@@ -243,6 +245,7 @@ typedef enum {
   SF_KEY_5, SF_KEY_6, SF_KEY_7, SF_KEY_8, SF_KEY_9,
   SF_KEY_SPACE, SF_KEY_LSHIFT, SF_KEY_UP, SF_KEY_DOWN,
   SF_KEY_LEFT, SF_KEY_RIGHT,
+  SF_KEY_BACKSPACE, SF_KEY_RETURN, SF_KEY_ESCAPE,
   SF_KEY_MAX
 } sf_key_t;
 
@@ -287,6 +290,7 @@ typedef struct {
   int                               mouse_dx, mouse_dy;
   bool                              mouse_btns[SF_MOUSE_MAX];
   bool                              mouse_btns_prev[SF_MOUSE_MAX];
+  char                              typed_char;
 } sf_input_state_t;
 
 typedef void (*sf_ui_cb)(struct sf_ctx_t_ *ctx, void *userdata);
@@ -294,7 +298,12 @@ typedef void (*sf_ui_cb)(struct sf_ctx_t_ *ctx, void *userdata);
 typedef enum {
   SF_UI_BUTTON,
   SF_UI_SLIDER,
-  SF_UI_CHECKBOX
+  SF_UI_CHECKBOX,
+  SF_UI_LABEL,
+  SF_UI_PANEL,
+  SF_UI_PROGRESS,
+  SF_UI_TEXTINPUT,
+  SF_UI_DROPDOWN,
 } sf_ui_type_t;
 
 typedef struct {
@@ -314,6 +323,7 @@ typedef struct {
   bool                              is_pressed;
   bool                              is_visible;
   bool                              is_disabled;
+  int16_t                           panel_idx;
 
   union {
     struct {
@@ -322,6 +332,7 @@ typedef struct {
       void                         *userdata;
     } button;
     struct {
+      const char                   *label;
       float                         value;
       float                         min_val;
       float                         max_val;
@@ -334,14 +345,55 @@ typedef struct {
       sf_ui_cb                      callback;
       void                         *userdata;
     } checkbox;
-
+    struct {
+      const char                   *text;
+      sf_pkd_clr_t                  bg_color;
+    } label;
+    struct {
+      const char                   *title;
+    } panel;
+    struct {
+      float                         value;
+      const char                   *label;
+    } progress;
+    struct {
+      char                          buf[SF_UI_TEXTINPUT_MAX];
+      int                           buf_len;
+      int                           cursor;
+      int                           max_len;
+      const char                   *placeholder;
+      bool                          is_focused;
+      float                         bs_timer;
+      float                         lr_timer;
+      sf_ui_cb                      callback;
+      void                         *userdata;
+    } textinput;
+    struct {
+      const char                   *items[SF_UI_DROPDOWN_MAX];
+      int                           item_count;
+      int                           selected;
+      bool                          is_open;
+      sf_ui_cb                      callback;
+      void                         *userdata;
+    } dropdown;
   };
 } sf_ui_lmn_t;
+
+typedef struct {
+  int                               x, y, w;
+  int                               cursor_y;
+  int                               pad;
+} sf_ui_layout_t;
 
 typedef struct sf_ui_t_ {
   sf_ui_lmn_t                      *elements;
   int32_t                           count;
   sf_ui_style_t                     default_style;
+  int32_t                           focused_idx;
+  int32_t                           active_panel_idx;
+  sf_ui_layout_t                    _layout;
+  int32_t                           drag_panel_idx;
+  int                               drag_ox, drag_oy;
 } sf_ui_t;
 
 struct sf_ctx_t_ {
@@ -413,12 +465,13 @@ void           sf_arena_restore     (sf_ctx_t *ctx, sf_arena_t *arena, size_t ma
 /* SF_EVENT_FUNCTIONS */
 void           sf_event_reg         (sf_ctx_t *ctx, sf_event_type_t type, sf_event_cb cb, void *userdata);
 void           sf_event_trigger     (sf_ctx_t *ctx, const sf_event_t *event);
-void           sf_input_cycle_state (sf_ctx_t *ctx);
-void           sf_input_set_key     (sf_ctx_t *ctx, sf_key_t key, bool is_down);
-void           sf_input_set_mouse_p (sf_ctx_t *ctx, int x, int y);
-void           sf_input_set_mouse_b (sf_ctx_t *ctx, sf_mouse_btn_t btn, bool is_down);
-bool           sf_key_down          (sf_ctx_t *ctx, sf_key_t key);
-bool           sf_key_pressed       (sf_ctx_t *ctx, sf_key_t key);
+void           sf_input_cycle_state    (sf_ctx_t *ctx);
+void           sf_input_set_key        (sf_ctx_t *ctx, sf_key_t key, bool is_down);
+void           sf_input_set_mouse_p    (sf_ctx_t *ctx, int x, int y);
+void           sf_input_set_mouse_b    (sf_ctx_t *ctx, sf_mouse_btn_t btn, bool is_down);
+void           sf_input_set_typed_char (sf_ctx_t *ctx, char c);
+bool           sf_key_down             (sf_ctx_t *ctx, sf_key_t key);
+bool           sf_key_pressed          (sf_ctx_t *ctx, sf_key_t key);
 
 /* SF_SCENE_FUNCTIONS */
 sf_tex_t*      sf_load_texture_bmp  (sf_ctx_t *ctx, const char *filename, const char *texname);
@@ -478,9 +531,26 @@ void           sf_draw_sprite       (sf_ctx_t *ctx, sf_cam_t *cam, sf_sprite_t *
 sf_ui_t*       sf_create_ui         (sf_ctx_t *ctx);
 void           sf_update_ui         (sf_ctx_t *ctx, sf_ui_t *ui);
 void           sf_render_ui         (sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_t *ui);
+bool           sf_ui_has_focus      (sf_ctx_t *ctx);
 sf_ui_lmn_t*   sf_add_button        (sf_ctx_t *ctx, const char *text, sf_ivec2_t v0, sf_ivec2_t v1, sf_ui_cb cb, void *userdata);
-sf_ui_lmn_t*   sf_add_slider        (sf_ctx_t *ctx, sf_ivec2_t v0, sf_ivec2_t v1, float min_val, float max_val, float init_val, sf_ui_cb cb, void *userdata);
+sf_ui_lmn_t*   sf_add_slider        (sf_ctx_t *ctx, const char *label, sf_ivec2_t v0, sf_ivec2_t v1, float min_val, float max_val, float init_val, sf_ui_cb cb, void *userdata);
 sf_ui_lmn_t*   sf_add_checkbox      (sf_ctx_t *ctx, const char *text, sf_ivec2_t v0, sf_ivec2_t v1, bool init_state, sf_ui_cb cb, void *userdata);
+sf_ui_lmn_t*   sf_add_label         (sf_ctx_t *ctx, const char *text, sf_ivec2_t v0, sf_ivec2_t v1, sf_pkd_clr_t bg_color);
+sf_ui_lmn_t*   sf_add_panel         (sf_ctx_t *ctx, const char *title, sf_ivec2_t v0, sf_ivec2_t v1);
+sf_ui_lmn_t*   sf_add_progress      (sf_ctx_t *ctx, const char *label, float init_val, sf_ivec2_t v0, sf_ivec2_t v1);
+sf_ui_lmn_t*   sf_add_textinput     (sf_ctx_t *ctx, const char *placeholder, int max_len, sf_ivec2_t v0, sf_ivec2_t v1, sf_ui_cb cb, void *userdata);
+sf_ui_lmn_t*   sf_add_dropdown      (sf_ctx_t *ctx, int item_count, const char **items, int init_sel, sf_ivec2_t v0, sf_ivec2_t v1, sf_ui_cb cb, void *userdata);
+void           sf_ui_layout_init    (sf_ui_layout_t *l, int x, int y, int w, int pad);
+void           sf_ui_layout_row     (sf_ui_layout_t *l, int h, sf_ivec2_t *out_v0, sf_ivec2_t *out_v1);
+void           sf_ui_begin_panel    (sf_ctx_t *ctx, const char *title, int x, int y, int w, int pad);
+void           sf_ui_end_panel      (sf_ctx_t *ctx);
+sf_ui_lmn_t*   sf_row_button        (sf_ctx_t *ctx, const char *text, int h, sf_ui_cb cb, void *userdata);
+sf_ui_lmn_t*   sf_row_slider        (sf_ctx_t *ctx, const char *label, int h, float min, float max, float init, sf_ui_cb cb, void *userdata);
+sf_ui_lmn_t*   sf_row_checkbox      (sf_ctx_t *ctx, const char *text, int h, bool init, sf_ui_cb cb, void *userdata);
+sf_ui_lmn_t*   sf_row_label         (sf_ctx_t *ctx, const char *text, int h, sf_pkd_clr_t bg);
+sf_ui_lmn_t*   sf_row_progress      (sf_ctx_t *ctx, const char *label, int h, float init);
+sf_ui_lmn_t*   sf_row_textinput     (sf_ctx_t *ctx, const char *placeholder, int h, int max_len, sf_ui_cb cb, void *userdata);
+sf_ui_lmn_t*   sf_row_dropdown      (sf_ctx_t *ctx, int count, const char **items, int sel, int h, sf_ui_cb cb, void *userdata);
 void           draw_button          (sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_lmn_t *el);
 void           draw_slider          (sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_lmn_t *el);
 void           draw_checkbox        (sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_lmn_t *el);
@@ -1015,6 +1085,11 @@ void sf_input_cycle_state(sf_ctx_t *ctx) {
   memcpy(ctx->input.mouse_btns_prev, ctx->input.mouse_btns, sizeof(ctx->input.mouse_btns));
   ctx->input.mouse_dx = 0;
   ctx->input.mouse_dy = 0;
+  ctx->input.typed_char = 0;
+}
+
+void sf_input_set_typed_char(sf_ctx_t *ctx, char c) {
+  ctx->input.typed_char = c;
 }
 
 void sf_input_set_key(sf_ctx_t *ctx, sf_key_t key, bool is_down) {
@@ -2319,7 +2394,12 @@ void sf_draw_sprite(sf_ctx_t *ctx, sf_cam_t *cam, sf_sprite_t *spr, sf_fvec3_t p
 sf_ui_t* sf_create_ui (sf_ctx_t *ctx) {
   sf_ui_t *ui = (sf_ui_t*)sf_arena_alloc(ctx, &ctx->arena, sizeof(sf_ui_t));
   ui->elements = sf_arena_alloc(ctx, &ctx->arena, SF_MAX_UI_ELEMENTS * sizeof(sf_ui_lmn_t));
-  ui->count = 0;
+  ui->count            = 0;
+  ui->focused_idx      = -1;
+  ui->active_panel_idx = -1;
+  ui->drag_panel_idx   = -1;
+  ui->drag_ox          = 0;
+  ui->drag_oy          = 0;
   ui->default_style.color_base   = (sf_pkd_clr_t)0xFF404040;
   ui->default_style.color_hover  = (sf_pkd_clr_t)0xFF555555;
   ui->default_style.color_active = (sf_pkd_clr_t)0xFF707070;
@@ -2336,6 +2416,7 @@ sf_ui_lmn_t* sf_add_button(sf_ctx_t *ctx, const char *text, sf_ivec2_t v0, sf_iv
 
   sf_ui_lmn_t *el = &ctx->ui->elements[ctx->ui->count++];
   memset(el, 0, sizeof(sf_ui_lmn_t));
+  el->panel_idx = -1;
 
   el->type            = SF_UI_BUTTON;
   el->style           = ctx->ui->default_style;
@@ -2356,11 +2437,12 @@ sf_ui_lmn_t* sf_add_button(sf_ctx_t *ctx, const char *text, sf_ivec2_t v0, sf_iv
   return el;
 }
 
-sf_ui_lmn_t* sf_add_slider(sf_ctx_t *ctx, sf_ivec2_t v0, sf_ivec2_t v1, float min_val, float max_val, float init_val, sf_ui_cb cb, void *userdata) {
+sf_ui_lmn_t* sf_add_slider(sf_ctx_t *ctx, const char *label, sf_ivec2_t v0, sf_ivec2_t v1, float min_val, float max_val, float init_val, sf_ui_cb cb, void *userdata) {
   if (!ctx->ui || ctx->ui->count >= SF_MAX_UI_ELEMENTS) return NULL;
 
   sf_ui_lmn_t *el = &ctx->ui->elements[ctx->ui->count++];
   memset(el, 0, sizeof(sf_ui_lmn_t));
+  el->panel_idx = -1;
 
   el->type            = SF_UI_SLIDER;
   el->style           = ctx->ui->default_style;
@@ -2368,6 +2450,7 @@ sf_ui_lmn_t* sf_add_slider(sf_ctx_t *ctx, sf_ivec2_t v0, sf_ivec2_t v1, float mi
   el->v1              = v1;
   el->is_visible      = true;
 
+  el->slider.label    = label;
   el->slider.min_val  = min_val;
   el->slider.max_val  = max_val;
   el->slider.value    = init_val;
@@ -2375,11 +2458,12 @@ sf_ui_lmn_t* sf_add_slider(sf_ctx_t *ctx, sf_ivec2_t v0, sf_ivec2_t v1, float mi
   el->slider.userdata = userdata;
 
   SF_LOG(ctx, SF_LOG_INFO,
+              SF_LOG_INDENT "label  : %s\n"
               SF_LOG_INDENT "pos    : (%d,%d)-(%d,%d)\n"
               SF_LOG_INDENT "range  : %.2f-%.2f\n"
               SF_LOG_INDENT "init   : %.2f\n"
               SF_LOG_INDENT "used   : %d/%d\n",
-              v0.x, v0.y, v1.x, v1.y, min_val, max_val, init_val, ctx->ui->count, SF_MAX_UI_ELEMENTS);
+              label ? label : "(none)", v0.x, v0.y, v1.x, v1.y, min_val, max_val, init_val, ctx->ui->count, SF_MAX_UI_ELEMENTS);
   return el;
 }
 
@@ -2388,6 +2472,7 @@ sf_ui_lmn_t* sf_add_checkbox(sf_ctx_t *ctx, const char *text, sf_ivec2_t v0, sf_
 
   sf_ui_lmn_t *el = &ctx->ui->elements[ctx->ui->count++];
   memset(el, 0, sizeof(sf_ui_lmn_t));
+  el->panel_idx = -1;
 
   el->type                = SF_UI_CHECKBOX;
   el->style               = ctx->ui->default_style;
@@ -2407,6 +2492,90 @@ sf_ui_lmn_t* sf_add_checkbox(sf_ctx_t *ctx, const char *text, sf_ivec2_t v0, sf_
               SF_LOG_INDENT "used   : %d/%d\n",
               text, v0.x, v0.y, v1.x, v1.y, init_state ? "checked" : "unchecked", ctx->ui->count, SF_MAX_UI_ELEMENTS);
   return el;
+}
+
+sf_ui_lmn_t* sf_add_label(sf_ctx_t *ctx, const char *text, sf_ivec2_t v0, sf_ivec2_t v1, sf_pkd_clr_t bg_color) {
+  if (!ctx->ui || ctx->ui->count >= SF_MAX_UI_ELEMENTS) return NULL;
+  sf_ui_lmn_t *el = &ctx->ui->elements[ctx->ui->count++];
+  memset(el, 0, sizeof(sf_ui_lmn_t));
+  el->panel_idx = -1;
+  el->type           = SF_UI_LABEL;
+  el->style          = ctx->ui->default_style;
+  el->v0             = v0;
+  el->v1             = v1;
+  el->is_visible     = true;
+  el->label.text     = text;
+  el->label.bg_color = bg_color;
+  return el;
+}
+
+sf_ui_lmn_t* sf_add_panel(sf_ctx_t *ctx, const char *title, sf_ivec2_t v0, sf_ivec2_t v1) {
+  if (!ctx->ui || ctx->ui->count >= SF_MAX_UI_ELEMENTS) return NULL;
+  sf_ui_lmn_t *el = &ctx->ui->elements[ctx->ui->count++];
+  memset(el, 0, sizeof(sf_ui_lmn_t));
+  el->panel_idx = -1;
+  el->type        = SF_UI_PANEL;
+  el->style       = ctx->ui->default_style;
+  el->v0          = v0;
+  el->v1          = v1;
+  el->is_visible  = true;
+  el->panel.title = title;
+  return el;
+}
+
+sf_ui_lmn_t* sf_add_progress(sf_ctx_t *ctx, const char *label, float init_val, sf_ivec2_t v0, sf_ivec2_t v1) {
+  if (!ctx->ui || ctx->ui->count >= SF_MAX_UI_ELEMENTS) return NULL;
+  sf_ui_lmn_t *el = &ctx->ui->elements[ctx->ui->count++];
+  memset(el, 0, sizeof(sf_ui_lmn_t));
+  el->panel_idx = -1;
+  el->type            = SF_UI_PROGRESS;
+  el->style           = ctx->ui->default_style;
+  el->v0              = v0;
+  el->v1              = v1;
+  el->is_visible      = true;
+  el->progress.value  = init_val < 0.0f ? 0.0f : init_val > 1.0f ? 1.0f : init_val;
+  el->progress.label  = label;
+  return el;
+}
+
+sf_ui_lmn_t* sf_add_textinput(sf_ctx_t *ctx, const char *placeholder, int max_len, sf_ivec2_t v0, sf_ivec2_t v1, sf_ui_cb cb, void *userdata) {
+  if (!ctx->ui || ctx->ui->count >= SF_MAX_UI_ELEMENTS) return NULL;
+  sf_ui_lmn_t *el = &ctx->ui->elements[ctx->ui->count++];
+  memset(el, 0, sizeof(sf_ui_lmn_t));
+  el->panel_idx = -1;
+  el->type                   = SF_UI_TEXTINPUT;
+  el->style                  = ctx->ui->default_style;
+  el->v0                     = v0;
+  el->v1                     = v1;
+  el->is_visible             = true;
+  el->textinput.placeholder  = placeholder;
+  el->textinput.max_len      = max_len < 1 ? 1 : max_len < SF_UI_TEXTINPUT_MAX ? max_len : SF_UI_TEXTINPUT_MAX - 1;
+  el->textinput.callback     = cb;
+  el->textinput.userdata     = userdata;
+  return el;
+}
+
+sf_ui_lmn_t* sf_add_dropdown(sf_ctx_t *ctx, int item_count, const char **items, int init_sel, sf_ivec2_t v0, sf_ivec2_t v1, sf_ui_cb cb, void *userdata) {
+  if (!ctx->ui || ctx->ui->count >= SF_MAX_UI_ELEMENTS) return NULL;
+  sf_ui_lmn_t *el = &ctx->ui->elements[ctx->ui->count++];
+  memset(el, 0, sizeof(sf_ui_lmn_t));
+  el->panel_idx = -1;
+  el->type                  = SF_UI_DROPDOWN;
+  el->style                 = ctx->ui->default_style;
+  el->v0                    = v0;
+  el->v1                    = v1;
+  el->is_visible            = true;
+  el->dropdown.item_count   = item_count > SF_UI_DROPDOWN_MAX ? SF_UI_DROPDOWN_MAX : item_count;
+  el->dropdown.selected     = init_sel < 0 ? 0 : init_sel >= el->dropdown.item_count ? 0 : init_sel;
+  el->dropdown.callback     = cb;
+  el->dropdown.userdata     = userdata;
+  for (int i = 0; i < el->dropdown.item_count; i++)
+    el->dropdown.items[i] = items[i];
+  return el;
+}
+
+bool sf_ui_has_focus(sf_ctx_t *ctx) {
+  return ctx->ui && ctx->ui->focused_idx >= 0;
 }
 
 void draw_button(sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_lmn_t *btn) {
@@ -2465,9 +2634,12 @@ void draw_slider(sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_lmn_t *el) {
     sf_rect(ctx, cam, fill_color, el->v0, fill_v1);
   }
 
-  char val_str[32];
-  snprintf(val_str, sizeof(val_str), "%.2f", el->slider.value);
-  int text_w = strlen(val_str) * 8;
+  char val_str[64];
+  if (el->slider.label)
+    snprintf(val_str, sizeof(val_str), "%s: %.2f", el->slider.label, el->slider.value);
+  else
+    snprintf(val_str, sizeof(val_str), "%.2f", el->slider.value);
+  int text_w = (int)strlen(val_str) * 8;
   sf_ivec2_t text_pos = {
     el->v0.x + (total_w - text_w) / 2,
     el->v0.y + ((el->v1.y - el->v0.y) - 8) / 2
@@ -2509,21 +2681,152 @@ void draw_checkbox(sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_lmn_t *el) {
   }
 }
 
+void draw_label(sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_lmn_t *el) {
+  if (!el->is_visible) return;
+  if (el->label.bg_color)
+    sf_rect(ctx, cam, el->label.bg_color, el->v0, el->v1);
+  if (el->label.text) {
+    int h = el->v1.y - el->v0.y;
+    sf_ivec2_t text_pos = { el->v0.x + 4, el->v0.y + (h - 8) / 2 };
+    sf_put_text(ctx, cam, el->label.text, text_pos, el->style.color_text, 1);
+  }
+}
+
+void draw_panel(sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_lmn_t *el) {
+  if (!el->is_visible) return;
+  sf_pkd_clr_t body_color  = (sf_pkd_clr_t)0xCC2A2A2A;
+  sf_pkd_clr_t title_color = el->style.color_base;
+  sf_rect(ctx, cam, body_color, el->v0, el->v1);
+  if (el->panel.title) {
+    sf_ivec2_t title_v1 = { el->v1.x, el->v0.y + 14 };
+    sf_rect(ctx, cam, title_color, el->v0, title_v1);
+    int text_w = (int)strlen(el->panel.title) * 8;
+    int panel_w = el->v1.x - el->v0.x;
+    sf_ivec2_t text_pos = { el->v0.x + (panel_w - text_w) / 2, el->v0.y + 3 };
+    sf_put_text(ctx, cam, el->panel.title, text_pos, el->style.color_text, 1);
+  }
+}
+
+void draw_progress(sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_lmn_t *el) {
+  if (!el->is_visible) return;
+  sf_pkd_clr_t track_color = (sf_pkd_clr_t)0xFF222222;
+  sf_pkd_clr_t fill_color  = el->style.color_base;
+  sf_rect(ctx, cam, track_color, el->v0, el->v1);
+  float t = el->progress.value < 0.0f ? 0.0f : el->progress.value > 1.0f ? 1.0f : el->progress.value;
+  int fill_w = (int)((el->v1.x - el->v0.x) * t);
+  if (fill_w > 0) {
+    sf_ivec2_t fill_v1 = { el->v0.x + fill_w, el->v1.y };
+    sf_rect(ctx, cam, fill_color, el->v0, fill_v1);
+  }
+  if (el->progress.label) {
+    char lbl[64];
+    snprintf(lbl, sizeof(lbl), "%s: %d%%", el->progress.label, (int)(t * 100.0f));
+    int text_w = (int)strlen(lbl) * 8;
+    int total_w = el->v1.x - el->v0.x;
+    sf_ivec2_t text_pos = {
+      el->v0.x + (total_w - text_w) / 2,
+      el->v0.y + ((el->v1.y - el->v0.y) - 8) / 2
+    };
+    sf_put_text(ctx, cam, lbl, text_pos, el->style.color_text, 1);
+  }
+}
+
+void draw_textinput(sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_lmn_t *el) {
+  if (!el->is_visible) return;
+  sf_pkd_clr_t bg = el->textinput.is_focused ? el->style.color_hover : el->style.color_base;
+  if (el->is_disabled) bg = (sf_pkd_clr_t)0xFF333333;
+  sf_rect(ctx, cam, bg, el->v0, el->v1);
+  if (el->textinput.is_focused) {
+    sf_line(ctx, cam, el->style.color_active, el->v0, (sf_ivec2_t){el->v1.x, el->v0.y});
+    sf_line(ctx, cam, el->style.color_active, (sf_ivec2_t){el->v0.x, el->v1.y}, el->v1);
+    sf_line(ctx, cam, el->style.color_active, el->v0, (sf_ivec2_t){el->v0.x, el->v1.y});
+    sf_line(ctx, cam, el->style.color_active, (sf_ivec2_t){el->v1.x, el->v0.y}, el->v1);
+  }
+  int h = el->v1.y - el->v0.y;
+  int text_y = el->v0.y + (h - 8) / 2;
+  if (el->textinput.buf_len > 0) {
+    sf_put_text(ctx, cam, el->textinput.buf, (sf_ivec2_t){el->v0.x + 4, text_y}, el->style.color_text, 1);
+    if (el->textinput.is_focused) {
+      bool cursor_vis = (int)(ctx->elapsed_time * 2.0f) % 2 == 0;
+      if (cursor_vis) {
+        int cx = el->v0.x + 4 + el->textinput.cursor * 8;
+        sf_line(ctx, cam, el->style.color_text, (sf_ivec2_t){cx, text_y}, (sf_ivec2_t){cx, text_y + 8});
+      }
+    }
+  } else if (el->textinput.placeholder) {
+    sf_pkd_clr_t ph_clr = (sf_pkd_clr_t)0xFF888888;
+    sf_put_text(ctx, cam, el->textinput.placeholder, (sf_ivec2_t){el->v0.x + 4, text_y}, ph_clr, 1);
+    if (el->textinput.is_focused) {
+      bool cursor_vis = (int)(ctx->elapsed_time * 2.0f) % 2 == 0;
+      if (cursor_vis)
+        sf_line(ctx, cam, el->style.color_text, (sf_ivec2_t){el->v0.x + 4, text_y}, (sf_ivec2_t){el->v0.x + 4, text_y + 8});
+    }
+  }
+}
+
+void draw_dropdown(sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_lmn_t *el) {
+  if (!el->is_visible) return;
+  sf_pkd_clr_t bg = el->is_hovered ? el->style.color_hover : el->style.color_base;
+  if (el->dropdown.is_open) bg = el->style.color_active;
+  if (el->is_disabled)      bg = (sf_pkd_clr_t)0xFF555555;
+  sf_rect(ctx, cam, bg, el->v0, el->v1);
+  int h = el->v1.y - el->v0.y;
+  int w = el->v1.x - el->v0.x;
+  if (el->dropdown.item_count > 0 && el->dropdown.selected < el->dropdown.item_count) {
+    sf_put_text(ctx, cam, el->dropdown.items[el->dropdown.selected],
+                (sf_ivec2_t){el->v0.x + 4, el->v0.y + (h - 8) / 2},
+                el->style.color_text, 1);
+  }
+  sf_put_text(ctx, cam, el->dropdown.is_open ? "^" : "v",
+              (sf_ivec2_t){el->v1.x - 12, el->v0.y + (h - 8) / 2},
+              el->style.color_text, 1);
+  if (el->dropdown.is_open) {
+    int item_h = h;
+    for (int i = 0; i < el->dropdown.item_count; i++) {
+      sf_ivec2_t iv0 = { el->v0.x, el->v1.y + i * item_h };
+      sf_ivec2_t iv1 = { el->v1.x, el->v1.y + (i + 1) * item_h };
+      sf_pkd_clr_t ibg = (i == el->dropdown.selected)
+                       ? el->style.color_active
+                       : (sf_pkd_clr_t)0xFF303030;
+      sf_rect(ctx, cam, ibg, iv0, iv1);
+      if (el->dropdown.items[i])
+        sf_put_text(ctx, cam, el->dropdown.items[i],
+                    (sf_ivec2_t){iv0.x + 4, iv0.y + (item_h - 8) / 2},
+                    el->style.color_text, 1);
+    }
+  }
+}
+
 void sf_render_ui(sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_t *ui) {
   if (!ui) return;
   for (int i = 0; i < ui->count; ++i) {
     sf_ui_lmn_t *el = &ui->elements[i];
+    if (el->is_visible && el->type == SF_UI_PANEL) draw_panel(ctx, cam, el);
+  }
+  for (int i = 0; i < ui->count; ++i) {
+    sf_ui_lmn_t *el = &ui->elements[i];
+    if (!el->is_visible) continue;
     switch (el->type) {
-      case SF_UI_BUTTON:
-        draw_button(ctx, cam, el);
+      case SF_UI_BUTTON:    draw_button(ctx, cam, el);    break;
+      case SF_UI_SLIDER:    draw_slider(ctx, cam, el);    break;
+      case SF_UI_CHECKBOX:  draw_checkbox(ctx, cam, el);  break;
+      case SF_UI_LABEL:     draw_label(ctx, cam, el);     break;
+      case SF_UI_PROGRESS:  draw_progress(ctx, cam, el);  break;
+      case SF_UI_TEXTINPUT: draw_textinput(ctx, cam, el); break;
+      case SF_UI_DROPDOWN: {
+        bool was_open = el->dropdown.is_open;
+        el->dropdown.is_open = false;
+        draw_dropdown(ctx, cam, el);
+        el->dropdown.is_open = was_open;
         break;
-      case SF_UI_SLIDER:
-        draw_slider(ctx, cam, el);
-        break;
-      case SF_UI_CHECKBOX:
-        draw_checkbox(ctx, cam, el);
-        break;
+      }
+      default: break;
     }
+  }
+  for (int i = 0; i < ui->count; ++i) {
+    sf_ui_lmn_t *el = &ui->elements[i];
+    if (el->is_visible && el->type == SF_UI_DROPDOWN && el->dropdown.is_open)
+      draw_dropdown(ctx, cam, el);
   }
 }
 
@@ -2562,14 +2865,157 @@ static void _sf_update_slider(sf_ctx_t *ctx, sf_ui_lmn_t *el, bool m_down, bool 
   }
 }
 
+static void _sf_update_textinput(sf_ctx_t *ctx, sf_ui_lmn_t *el, bool m_pressed, bool m_released) {
+  float dt = ctx->delta_time;
+  if (m_pressed) {
+    bool was_focused = el->textinput.is_focused;
+    el->textinput.is_focused = el->is_hovered;
+    if (!was_focused && el->textinput.is_focused)
+      el->textinput.bs_timer = el->textinput.lr_timer = 0.0f;
+  }
+  if (!el->textinput.is_focused) return;
+
+  if (sf_key_pressed(ctx, SF_KEY_ESCAPE)) {
+    el->textinput.is_focused = false;
+    return;
+  }
+  if (sf_key_pressed(ctx, SF_KEY_RETURN)) {
+    if (el->textinput.callback) el->textinput.callback(ctx, el->textinput.userdata);
+    el->textinput.is_focused = false;
+    return;
+  }
+  char c = ctx->input.typed_char;
+  if (c >= 32 && c < 127 && el->textinput.buf_len < el->textinput.max_len) {
+    int pos = el->textinput.cursor;
+    memmove(&el->textinput.buf[pos + 1], &el->textinput.buf[pos], el->textinput.buf_len - pos);
+    el->textinput.buf[pos] = c;
+    el->textinput.buf_len++;
+    el->textinput.buf[el->textinput.buf_len] = '\0';
+    el->textinput.cursor++;
+  }
+  bool bs_pressed = sf_key_pressed(ctx, SF_KEY_BACKSPACE);
+  bool bs_held    = sf_key_down(ctx, SF_KEY_BACKSPACE);
+  if (bs_pressed) { el->textinput.bs_timer = 0.4f; }
+  else if (bs_held) {
+    el->textinput.bs_timer -= dt;
+    bs_pressed = (el->textinput.bs_timer <= 0.0f);
+    if (bs_pressed) el->textinput.bs_timer = 0.05f;
+  }
+  if (bs_pressed && el->textinput.cursor > 0) {
+    int pos = el->textinput.cursor - 1;
+    memmove(&el->textinput.buf[pos], &el->textinput.buf[pos + 1], el->textinput.buf_len - pos);
+    el->textinput.buf_len--;
+    el->textinput.buf[el->textinput.buf_len] = '\0';
+    el->textinput.cursor--;
+  }
+  bool left_pressed  = sf_key_pressed(ctx, SF_KEY_LEFT);
+  bool right_pressed = sf_key_pressed(ctx, SF_KEY_RIGHT);
+  if (left_pressed)  { el->textinput.lr_timer = 0.4f; }
+  else if (sf_key_down(ctx, SF_KEY_LEFT)) {
+    el->textinput.lr_timer -= dt;
+    if (el->textinput.lr_timer <= 0.0f) { left_pressed = true; el->textinput.lr_timer = 0.05f; }
+  }
+  if (right_pressed) { el->textinput.lr_timer = 0.4f; }
+  else if (sf_key_down(ctx, SF_KEY_RIGHT)) {
+    el->textinput.lr_timer -= dt;
+    if (el->textinput.lr_timer <= 0.0f) { right_pressed = true; el->textinput.lr_timer = 0.05f; }
+  }
+  if (left_pressed  && el->textinput.cursor > 0)                   el->textinput.cursor--;
+  if (right_pressed && el->textinput.cursor < el->textinput.buf_len) el->textinput.cursor++;
+}
+
+static void _sf_update_dropdown(sf_ctx_t *ctx, sf_ui_lmn_t *el, int idx,
+                                bool m_pressed, int mx, int my) {
+  if (!m_pressed) return;
+  int h = el->v1.y - el->v0.y;
+  if (el->is_hovered) {
+    el->dropdown.is_open = !el->dropdown.is_open;
+    return;
+  }
+  if (el->dropdown.is_open) {
+    for (int i = 0; i < el->dropdown.item_count; i++) {
+      int iy0 = el->v1.y + i * h;
+      int iy1 = el->v1.y + (i + 1) * h;
+      if (mx >= el->v0.x && mx <= el->v1.x && my >= iy0 && my <= iy1) {
+        el->dropdown.selected = i;
+        el->dropdown.is_open  = false;
+        if (el->dropdown.callback) el->dropdown.callback(ctx, el->dropdown.userdata);
+        return;
+      }
+    }
+    el->dropdown.is_open = false;
+  }
+}
+
 void sf_update_ui(sf_ctx_t *ctx, sf_ui_t *ui) {
   if (!ui) return;
 
   int mx = ctx->input.mouse_x;
   int my = ctx->input.mouse_y;
-  bool m_down = ctx->input.mouse_btns[SF_MOUSE_LEFT];
-  bool m_pressed = m_down && !ctx->input.mouse_btns_prev[SF_MOUSE_LEFT];
+  bool m_down     = ctx->input.mouse_btns[SF_MOUSE_LEFT];
+  bool m_pressed  = m_down && !ctx->input.mouse_btns_prev[SF_MOUSE_LEFT];
   bool m_released = !m_down && ctx->input.mouse_btns_prev[SF_MOUSE_LEFT];
+
+  if (m_pressed && ui->drag_panel_idx < 0) {
+    for (int i = 0; i < ui->count; ++i) {
+      sf_ui_lmn_t *p = &ui->elements[i];
+      if (p->type != SF_UI_PANEL || !p->is_visible || !p->panel.title) continue;
+      if (mx >= p->v0.x && mx <= p->v1.x && my >= p->v0.y && my <= p->v0.y + 14) {
+        ui->drag_panel_idx = i;
+        ui->drag_ox = mx - p->v0.x;
+        ui->drag_oy = my - p->v0.y;
+        break;
+      }
+    }
+  }
+  if (ui->drag_panel_idx >= 0) {
+    if (m_down) {
+      sf_ui_lmn_t *p = &ui->elements[ui->drag_panel_idx];
+      int nx = mx - ui->drag_ox;
+      int ny = my - ui->drag_oy;
+      int dx = nx - p->v0.x;
+      int dy = ny - p->v0.y;
+      int pw = p->v1.x - p->v0.x;
+      int ph = p->v1.y - p->v0.y;
+      p->v0.x = nx; p->v0.y = ny;
+      p->v1.x = nx + pw; p->v1.y = ny + ph;
+      for (int i = 0; i < ui->count; ++i) {
+        if (ui->elements[i].panel_idx == (int16_t)ui->drag_panel_idx) {
+          ui->elements[i].v0.x += dx; ui->elements[i].v0.y += dy;
+          ui->elements[i].v1.x += dx; ui->elements[i].v1.y += dy;
+        }
+      }
+    } else {
+      ui->drag_panel_idx = -1;
+    }
+    return;
+  }
+
+  if (m_pressed) {
+    bool on_interactive = false;
+    for (int i = 0; i < ui->count; ++i) {
+      sf_ui_lmn_t *el = &ui->elements[i];
+      if (!el->is_visible || el->is_disabled) continue;
+      if (el->type == SF_UI_LABEL || el->type == SF_UI_PANEL || el->type == SF_UI_PROGRESS) continue;
+      if (mx >= el->v0.x && mx <= el->v1.x && my >= el->v0.y && my <= el->v1.y) {
+        on_interactive = true; break;
+      }
+      if (el->type == SF_UI_DROPDOWN && el->dropdown.is_open) {
+        int h = el->v1.y - el->v0.y;
+        int list_y1 = el->v1.y + el->dropdown.item_count * h;
+        if (mx >= el->v0.x && mx <= el->v1.x && my >= el->v1.y && my <= list_y1) {
+          on_interactive = true; break;
+        }
+      }
+    }
+    if (!on_interactive) {
+      for (int i = 0; i < ui->count; ++i) {
+        if (ui->elements[i].type == SF_UI_TEXTINPUT)
+          ui->elements[i].textinput.is_focused = false;
+      }
+      ui->focused_idx = -1;
+    }
+  }
 
   for (int i = 0; i < ui->count; ++i) {
     sf_ui_lmn_t *el = &ui->elements[i];
@@ -2580,29 +3026,104 @@ void sf_update_ui(sf_ctx_t *ctx, sf_ui_t *ui) {
       continue;
     }
 
-    el->is_hovered = (mx >= el->v0.x && mx <= el->v1.x && 
+    el->is_hovered = (mx >= el->v0.x && mx <= el->v1.x &&
                       my >= el->v0.y && my <= el->v1.y);
 
-    if (el->is_hovered && m_pressed) {
-      el->is_pressed = true;
-    }
+    if (el->is_hovered && m_pressed) el->is_pressed = true;
 
     switch (el->type) {
       case SF_UI_BUTTON:
-        _sf_update_button(ctx, el, m_down, m_pressed, m_released); 
+        _sf_update_button(ctx, el, m_down, m_pressed, m_released);
         break;
       case SF_UI_CHECKBOX:
-        _sf_update_checkbox(ctx, el, m_down, m_pressed, m_released); 
+        _sf_update_checkbox(ctx, el, m_down, m_pressed, m_released);
         break;
       case SF_UI_SLIDER:
-        _sf_update_slider(ctx, el, m_down, m_pressed, m_released); 
+        _sf_update_slider(ctx, el, m_down, m_pressed, m_released);
         break;
+      case SF_UI_TEXTINPUT:
+        _sf_update_textinput(ctx, el, m_pressed, m_released);
+        if (el->textinput.is_focused) ui->focused_idx = i;
+        break;
+      case SF_UI_DROPDOWN:
+        _sf_update_dropdown(ctx, el, i, m_pressed, mx, my);
+        break;
+      default: break;
     }
 
-    if (!m_down) {
-      el->is_pressed = false;
-    }
+    if (!m_down) el->is_pressed = false;
   }
+}
+
+void sf_ui_layout_init(sf_ui_layout_t *l, int x, int y, int w, int pad) {
+  l->x        = x;
+  l->y        = y;
+  l->w        = w;
+  l->cursor_y = y;
+  l->pad      = pad;
+}
+
+void sf_ui_layout_row(sf_ui_layout_t *l, int h, sf_ivec2_t *out_v0, sf_ivec2_t *out_v1) {
+  out_v0->x   = l->x;
+  out_v0->y   = l->cursor_y;
+  out_v1->x   = l->x + l->w;
+  out_v1->y   = l->cursor_y + h;
+  l->cursor_y += h + l->pad;
+}
+
+void sf_ui_begin_panel(sf_ctx_t *ctx, const char *title, int x, int y, int w, int pad) {
+  sf_ui_lmn_t *p = sf_add_panel(ctx, title, (sf_ivec2_t){x, y}, (sf_ivec2_t){x + w, y});
+  if (!p) return;
+  ctx->ui->active_panel_idx = ctx->ui->count - 1;
+  int content_y = y + (title ? 14 : 0) + pad;
+  sf_ui_layout_init(&ctx->ui->_layout, x + pad, content_y, w - 2 * pad, pad);
+}
+
+void sf_ui_end_panel(sf_ctx_t *ctx) {
+  if (!ctx->ui || ctx->ui->active_panel_idx < 0) return;
+  sf_ui_lmn_t *p = &ctx->ui->elements[ctx->ui->active_panel_idx];
+  p->v1.y = ctx->ui->_layout.cursor_y + ctx->ui->_layout.pad;
+  ctx->ui->active_panel_idx = -1;
+}
+
+static sf_ui_lmn_t* _sf_row_tag(sf_ctx_t *ctx, sf_ui_lmn_t *el) {
+  if (el && ctx->ui->active_panel_idx >= 0)
+    el->panel_idx = (int16_t)ctx->ui->active_panel_idx;
+  return el;
+}
+
+#define _SF_ROW_BOUNDS(h) \
+  sf_ivec2_t _rv0, _rv1; \
+  if (!ctx->ui || ctx->ui->active_panel_idx < 0) return NULL; \
+  sf_ui_layout_row(&ctx->ui->_layout, h, &_rv0, &_rv1);
+
+sf_ui_lmn_t* sf_row_button(sf_ctx_t *ctx, const char *text, int h, sf_ui_cb cb, void *userdata) {
+  _SF_ROW_BOUNDS(h)
+  return _sf_row_tag(ctx, sf_add_button(ctx, text, _rv0, _rv1, cb, userdata));
+}
+sf_ui_lmn_t* sf_row_slider(sf_ctx_t *ctx, const char *label, int h, float mn, float mx, float init, sf_ui_cb cb, void *userdata) {
+  _SF_ROW_BOUNDS(h)
+  return _sf_row_tag(ctx, sf_add_slider(ctx, label, _rv0, _rv1, mn, mx, init, cb, userdata));
+}
+sf_ui_lmn_t* sf_row_checkbox(sf_ctx_t *ctx, const char *text, int h, bool init, sf_ui_cb cb, void *userdata) {
+  _SF_ROW_BOUNDS(h)
+  return _sf_row_tag(ctx, sf_add_checkbox(ctx, text, _rv0, _rv1, init, cb, userdata));
+}
+sf_ui_lmn_t* sf_row_label(sf_ctx_t *ctx, const char *text, int h, sf_pkd_clr_t bg) {
+  _SF_ROW_BOUNDS(h)
+  return _sf_row_tag(ctx, sf_add_label(ctx, text, _rv0, _rv1, bg));
+}
+sf_ui_lmn_t* sf_row_progress(sf_ctx_t *ctx, const char *label, int h, float init) {
+  _SF_ROW_BOUNDS(h)
+  return _sf_row_tag(ctx, sf_add_progress(ctx, label, init, _rv0, _rv1));
+}
+sf_ui_lmn_t* sf_row_textinput(sf_ctx_t *ctx, const char *placeholder, int h, int max_len, sf_ui_cb cb, void *userdata) {
+  _SF_ROW_BOUNDS(h)
+  return _sf_row_tag(ctx, sf_add_textinput(ctx, placeholder, max_len, _rv0, _rv1, cb, userdata));
+}
+sf_ui_lmn_t* sf_row_dropdown(sf_ctx_t *ctx, int count, const char **items, int sel, int h, sf_ui_cb cb, void *userdata) {
+  _SF_ROW_BOUNDS(h)
+  return _sf_row_tag(ctx, sf_add_dropdown(ctx, count, items, sel, _rv0, _rv1, cb, userdata));
 }
 
 /* SF_LOG_FUNCTIONS */

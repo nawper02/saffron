@@ -13,32 +13,40 @@
 const char* world_path = SF_ASSET_PATH "/sf_worlds/example_world.sfw";
 
 /* --- TEST STATE VARIABLES --- */
-static float teapot_speed = 1.0f;
-static bool  draw_axes    = true;
+static float teapot_speed  = 1.0f;
+static bool  draw_axes     = true;
+static char  fps_buf[32]   = "FPS: --";
+static char  name_buf[64]  = {0};
 
 /* --- UI CALLBACKS --- */
 
 void btn_test_cb(sf_ctx_t *ctx, void *userdata) {
     SF_LOG(ctx, SF_LOG_INFO, SF_LOG_INDENT "Button Clicked! Changing theme color.\n");
-    // Change the global theme color randomly on click
     ctx->ui->default_style.color_base = (sf_pkd_clr_t)(0xFF000000 | (rand() % 0xFFFFFF));
-    
-    // Apply it to existing elements (optional, just for fun)
-    for(int i=0; i<ctx->ui->count; i++) {
+    for (int i = 0; i < ctx->ui->count; i++)
         ctx->ui->elements[i].style.color_base = ctx->ui->default_style.color_base;
-    }
 }
 
 void slider_test_cb(sf_ctx_t *ctx, void *userdata) {
-    // We pass the slider element itself as userdata so we can read its value
     sf_ui_lmn_t *el = (sf_ui_lmn_t*)userdata;
     teapot_speed = el->slider.value;
 }
 
 void checkbox_test_cb(sf_ctx_t *ctx, void *userdata) {
-    // Read the checkbox state
     sf_ui_lmn_t *el = (sf_ui_lmn_t*)userdata;
     draw_axes = el->checkbox.is_checked;
+}
+
+void textinput_cb(sf_ctx_t *ctx, void *userdata) {
+    sf_ui_lmn_t *el = (sf_ui_lmn_t*)userdata;
+    snprintf(name_buf, sizeof(name_buf), "%s", el->textinput.buf);
+    SF_LOG(ctx, SF_LOG_INFO, SF_LOG_INDENT "Name submitted: %s\n", name_buf);
+}
+
+void dropdown_cb(sf_ctx_t *ctx, void *userdata) {
+    sf_ui_lmn_t *el = (sf_ui_lmn_t*)userdata;
+    SF_LOG(ctx, SF_LOG_INFO, SF_LOG_INDENT "Dropdown selected: %s\n",
+           el->dropdown.items[el->dropdown.selected]);
 }
 
 /* --- ENGINE CALLBACKS --- */
@@ -55,18 +63,20 @@ void on_render_start(sf_ctx_t *ctx, const sf_event_t *ev, void *userdata) {
     float move_speed = 5.0f * ctx->delta_time;
     float look_speed = 60.0f * ctx->delta_time;
 
-    /* Continuous Input */
-    if (sf_key_down(ctx, SF_KEY_W))      sf_camera_move_loc(ctx, cam,  move_speed, 0.0f, 0.0f);
-    if (sf_key_down(ctx, SF_KEY_S))      sf_camera_move_loc(ctx, cam, -move_speed, 0.0f, 0.0f);
-    if (sf_key_down(ctx, SF_KEY_A))      sf_camera_move_loc(ctx, cam, 0.0f, -move_speed, 0.0f);
-    if (sf_key_down(ctx, SF_KEY_D))      sf_camera_move_loc(ctx, cam, 0.0f,  move_speed, 0.0f);
-    if (sf_key_down(ctx, SF_KEY_SPACE))  sf_camera_move_loc(ctx, cam, 0.0f, 0.0f,  move_speed);
-    if (sf_key_down(ctx, SF_KEY_LSHIFT)) sf_camera_move_loc(ctx, cam, 0.0f, 0.0f, -move_speed);
+    /* Skip camera/game input while a text field has focus */
+    if (!sf_ui_has_focus(ctx)) {
+        if (sf_key_down(ctx, SF_KEY_W))      sf_camera_move_loc(ctx, cam,  move_speed, 0.0f, 0.0f);
+        if (sf_key_down(ctx, SF_KEY_S))      sf_camera_move_loc(ctx, cam, -move_speed, 0.0f, 0.0f);
+        if (sf_key_down(ctx, SF_KEY_A))      sf_camera_move_loc(ctx, cam, 0.0f, -move_speed, 0.0f);
+        if (sf_key_down(ctx, SF_KEY_D))      sf_camera_move_loc(ctx, cam, 0.0f,  move_speed, 0.0f);
+        if (sf_key_down(ctx, SF_KEY_SPACE))  sf_camera_move_loc(ctx, cam, 0.0f, 0.0f,  move_speed);
+        if (sf_key_down(ctx, SF_KEY_LSHIFT)) sf_camera_move_loc(ctx, cam, 0.0f, 0.0f, -move_speed);
 
-    if (sf_key_down(ctx, SF_KEY_UP))    sf_camera_add_yp(ctx, cam, 0.0f,  look_speed);
-    if (sf_key_down(ctx, SF_KEY_DOWN))  sf_camera_add_yp(ctx, cam, 0.0f, -look_speed);
-    if (sf_key_down(ctx, SF_KEY_LEFT))  sf_camera_add_yp(ctx, cam, -look_speed, 0.0f);
-    if (sf_key_down(ctx, SF_KEY_RIGHT)) sf_camera_add_yp(ctx, cam,  look_speed, 0.0f);
+        if (sf_key_down(ctx, SF_KEY_UP))    sf_camera_add_yp(ctx, cam, 0.0f,  look_speed);
+        if (sf_key_down(ctx, SF_KEY_DOWN))  sf_camera_add_yp(ctx, cam, 0.0f, -look_speed);
+        if (sf_key_down(ctx, SF_KEY_LEFT))  sf_camera_add_yp(ctx, cam, -look_speed, 0.0f);
+        if (sf_key_down(ctx, SF_KEY_RIGHT)) sf_camera_add_yp(ctx, cam,  look_speed, 0.0f);
+    }
 
     /* Update entities by name */
     sf_enti_t *teapot = sf_get_enti(ctx, "teapot");
@@ -84,6 +94,19 @@ void on_render_start(sf_ctx_t *ctx, const sf_event_t *ev, void *userdata) {
       float b = sinf(t + 4.188790f) * 0.5f + 0.5f;
       rainbow->color = (sf_fvec3_t){r, g, b};
     }
+
+    /* Update live FPS label and progress bar */
+    snprintf(fps_buf, sizeof(fps_buf), "FPS: %.0f", ctx->fps);
+    sf_ui_lmn_t *fps_lbl = NULL;
+    sf_ui_lmn_t *prog    = NULL;
+    for (int i = 0; i < ctx->ui->count; i++) {
+      sf_ui_lmn_t *el = &ctx->ui->elements[i];
+      if (el->type == SF_UI_LABEL    && el->label.text    == (const char*)fps_buf) fps_lbl = el;
+      if (el->type == SF_UI_PROGRESS && el->progress.label != NULL)                prog    = el;
+    }
+    (void)fps_lbl; /* text pointer already points to fps_buf, updates automatically */
+    /* Drive the progress bar with teapot_speed normalized over [0, 5] */
+    if (prog) prog->progress.value = teapot_speed / 5.0f;
 }
 
 /* --- MAIN PROGRAM --- */
@@ -116,13 +139,35 @@ int main(int argc, char* argv[]) {
     }
 
     /* --- INITIALIZE UI ELEMENTS --- */
-    sf_add_button(&sf_ctx, "Random Theme", (sf_ivec2_t){10, 50}, (sf_ivec2_t){130, 80}, btn_test_cb, NULL);
-    
-    sf_ui_lmn_t* sldr = sf_add_slider(&sf_ctx, (sf_ivec2_t){10, 90}, (sf_ivec2_t){130, 110}, 0.0f, 5.0f, teapot_speed, slider_test_cb, NULL);
-    sldr->slider.userdata = sldr; // Pass itself so the callback can read the value
 
-    sf_ui_lmn_t* chk = sf_add_checkbox(&sf_ctx, "Draw Debug Overlay", (sf_ivec2_t){10, 120}, (sf_ivec2_t){130, 140}, draw_axes, checkbox_test_cb, NULL);
-    chk->checkbox.userdata = chk; // Pass itself so the callback can read the state
+    /* sf_ui_begin_panel creates the panel and sets up the internal layout.
+       All sf_row_* calls between begin and end are automatically positioned
+       and parented to the panel (so it can be dragged as a unit). */
+    sf_ui_begin_panel(&sf_ctx, "Controls", 5, 5, 160, 4);
+
+    /* Live FPS label — text pointer points to fps_buf, updated each frame */
+    sf_row_label(&sf_ctx, fps_buf, 14, 0);
+
+    sf_row_button(&sf_ctx, "Random Theme", 24, btn_test_cb, NULL);
+
+    sf_ui_lmn_t *sldr = sf_row_slider(&sf_ctx, "Speed", 20, 0.0f, 5.0f, teapot_speed, slider_test_cb, NULL);
+    sldr->slider.userdata = sldr;
+
+    sf_row_progress(&sf_ctx, "Power", 20, teapot_speed / 5.0f);
+
+    sf_ui_lmn_t *chk = sf_row_checkbox(&sf_ctx, "Debug Overlay", 20, draw_axes, checkbox_test_cb, NULL);
+    chk->checkbox.userdata = chk;
+
+    sf_row_label(&sf_ctx, "-- Scene --", 14, 0);
+
+    const char *mesh_names[] = {"tux", "teapot", "cube"};
+    sf_ui_lmn_t *ddwn = sf_row_dropdown(&sf_ctx, 3, mesh_names, 0, 20, dropdown_cb, NULL);
+    ddwn->dropdown.userdata = ddwn;
+
+    sf_ui_lmn_t *ti = sf_row_textinput(&sf_ctx, "Enter name...", 20, 32, textinput_cb, NULL);
+    ti->textinput.userdata = ti;
+
+    sf_ui_end_panel(&sf_ctx);
 
 
     SDL_Event event;
