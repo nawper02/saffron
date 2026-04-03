@@ -1,1 +1,0 @@
-/usr/bin/cc  -O2 -ffast-math CMakeFiles/sf.dir/sf_examples/sf.c.o -o sf  /usr/lib/x86_64-linux-gnu/libSDL2.so -lm 
