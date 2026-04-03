@@ -390,11 +390,21 @@ typedef struct sf_ui_t_ {
   int32_t                           count;
   sf_ui_style_t                     default_style;
   int32_t                           focused_idx;
-  int32_t                           active_panel_idx;
-  sf_ui_layout_t                    _layout;
   int32_t                           drag_panel_idx;
   int                               drag_ox, drag_oy;
 } sf_ui_t;
+
+#define SF_PANEL_ROW_MAX 16
+typedef struct {
+  sf_ctx_t                         *ctx;
+  int16_t                           panel_idx;
+  sf_ui_layout_t                    _vlay;
+  bool                              in_row;
+  int                               row_h;
+  int                               row_y;
+  int16_t                           row_elems[SF_PANEL_ROW_MAX];
+  int                               row_count;
+} sf_panel_t;
 
 struct sf_ctx_t_ {
   sf_run_state_t                    state;
@@ -542,15 +552,18 @@ sf_ui_lmn_t*   sf_add_textinput     (sf_ctx_t *ctx, const char *placeholder, int
 sf_ui_lmn_t*   sf_add_dropdown      (sf_ctx_t *ctx, int item_count, const char **items, int init_sel, sf_ivec2_t v0, sf_ivec2_t v1, sf_ui_cb cb, void *userdata);
 void           sf_ui_layout_init    (sf_ui_layout_t *l, int x, int y, int w, int pad);
 void           sf_ui_layout_row     (sf_ui_layout_t *l, int h, sf_ivec2_t *out_v0, sf_ivec2_t *out_v1);
-void           sf_ui_begin_panel    (sf_ctx_t *ctx, const char *title, int x, int y, int w, int pad);
-void           sf_ui_end_panel      (sf_ctx_t *ctx);
-sf_ui_lmn_t*   sf_row_button        (sf_ctx_t *ctx, const char *text, int h, sf_ui_cb cb, void *userdata);
-sf_ui_lmn_t*   sf_row_slider        (sf_ctx_t *ctx, const char *label, int h, float min, float max, float init, sf_ui_cb cb, void *userdata);
-sf_ui_lmn_t*   sf_row_checkbox      (sf_ctx_t *ctx, const char *text, int h, bool init, sf_ui_cb cb, void *userdata);
-sf_ui_lmn_t*   sf_row_label         (sf_ctx_t *ctx, const char *text, int h, sf_pkd_clr_t bg);
-sf_ui_lmn_t*   sf_row_progress      (sf_ctx_t *ctx, const char *label, int h, float init);
-sf_ui_lmn_t*   sf_row_textinput     (sf_ctx_t *ctx, const char *placeholder, int h, int max_len, sf_ui_cb cb, void *userdata);
-sf_ui_lmn_t*   sf_row_dropdown      (sf_ctx_t *ctx, int count, const char **items, int sel, int h, sf_ui_cb cb, void *userdata);
+void           sf_panel_begin       (sf_ctx_t *ctx, sf_panel_t *p, const char *title, int x, int y, int w, int pad);
+void           sf_panel_end         (sf_panel_t *p);
+void           sf_panel_row_begin   (sf_panel_t *p, int h);
+void           sf_panel_row_end     (sf_panel_t *p);
+void           sf_panel_space       (sf_panel_t *p, int h);
+sf_ui_lmn_t*   sf_panel_button      (sf_panel_t *p, const char *text, int h, sf_ui_cb cb, void *ud);
+sf_ui_lmn_t*   sf_panel_slider      (sf_panel_t *p, const char *label, int h, float min, float max, float init, sf_ui_cb cb, void *ud);
+sf_ui_lmn_t*   sf_panel_checkbox    (sf_panel_t *p, const char *text, int h, bool init, sf_ui_cb cb, void *ud);
+sf_ui_lmn_t*   sf_panel_label       (sf_panel_t *p, const char *text, int h, sf_pkd_clr_t bg);
+sf_ui_lmn_t*   sf_panel_progress    (sf_panel_t *p, const char *label, int h, float init);
+sf_ui_lmn_t*   sf_panel_textinput   (sf_panel_t *p, const char *placeholder, int h, int max_len, sf_ui_cb cb, void *ud);
+sf_ui_lmn_t*   sf_panel_dropdown    (sf_panel_t *p, int count, const char **items, int sel, int h, sf_ui_cb cb, void *ud);
 void           draw_button          (sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_lmn_t *el);
 void           draw_slider          (sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_lmn_t *el);
 void           draw_checkbox        (sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_lmn_t *el);
@@ -2394,10 +2407,9 @@ void sf_draw_sprite(sf_ctx_t *ctx, sf_cam_t *cam, sf_sprite_t *spr, sf_fvec3_t p
 sf_ui_t* sf_create_ui (sf_ctx_t *ctx) {
   sf_ui_t *ui = (sf_ui_t*)sf_arena_alloc(ctx, &ctx->arena, sizeof(sf_ui_t));
   ui->elements = sf_arena_alloc(ctx, &ctx->arena, SF_MAX_UI_ELEMENTS * sizeof(sf_ui_lmn_t));
-  ui->count            = 0;
-  ui->focused_idx      = -1;
-  ui->active_panel_idx = -1;
-  ui->drag_panel_idx   = -1;
+  ui->count          = 0;
+  ui->focused_idx    = -1;
+  ui->drag_panel_idx = -1;
   ui->drag_ox          = 0;
   ui->drag_oy          = 0;
   ui->default_style.color_base   = (sf_pkd_clr_t)0xFF404040;
@@ -3071,59 +3083,95 @@ void sf_ui_layout_row(sf_ui_layout_t *l, int h, sf_ivec2_t *out_v0, sf_ivec2_t *
   l->cursor_y += h + l->pad;
 }
 
-void sf_ui_begin_panel(sf_ctx_t *ctx, const char *title, int x, int y, int w, int pad) {
-  sf_ui_lmn_t *p = sf_add_panel(ctx, title, (sf_ivec2_t){x, y}, (sf_ivec2_t){x + w, y});
-  if (!p) return;
-  ctx->ui->active_panel_idx = ctx->ui->count - 1;
+void sf_panel_begin(sf_ctx_t *ctx, sf_panel_t *p, const char *title, int x, int y, int w, int pad) {
+  memset(p, 0, sizeof(sf_panel_t));
+  p->ctx = ctx;
+  p->panel_idx = -1;
+  sf_ui_lmn_t *bg = sf_add_panel(ctx, title, (sf_ivec2_t){x, y}, (sf_ivec2_t){x + w, y});
+  if (bg) p->panel_idx = (int16_t)(ctx->ui->count - 1);
   int content_y = y + (title ? 14 : 0) + pad;
-  sf_ui_layout_init(&ctx->ui->_layout, x + pad, content_y, w - 2 * pad, pad);
+  sf_ui_layout_init(&p->_vlay, x + pad, content_y, w - 2 * pad, pad);
 }
 
-void sf_ui_end_panel(sf_ctx_t *ctx) {
-  if (!ctx->ui || ctx->ui->active_panel_idx < 0) return;
-  sf_ui_lmn_t *p = &ctx->ui->elements[ctx->ui->active_panel_idx];
-  p->v1.y = ctx->ui->_layout.cursor_y + ctx->ui->_layout.pad;
-  ctx->ui->active_panel_idx = -1;
+void sf_panel_end(sf_panel_t *p) {
+  if (p->panel_idx >= 0) {
+    sf_ui_lmn_t *bg = &p->ctx->ui->elements[p->panel_idx];
+    bg->v1.y = p->_vlay.cursor_y + p->_vlay.pad;
+  }
 }
 
-static sf_ui_lmn_t* _sf_row_tag(sf_ctx_t *ctx, sf_ui_lmn_t *el) {
-  if (el && ctx->ui->active_panel_idx >= 0)
-    el->panel_idx = (int16_t)ctx->ui->active_panel_idx;
+void sf_panel_row_begin(sf_panel_t *p, int h) {
+  p->in_row    = true;
+  p->row_h     = h;
+  p->row_y     = p->_vlay.cursor_y;
+  p->row_count = 0;
+}
+
+void sf_panel_row_end(sf_panel_t *p) {
+  if (!p->in_row || p->row_count == 0) { p->in_row = false; return; }
+  int pad     = p->_vlay.pad;
+  int total_w = p->_vlay.w - (p->row_count - 1) * pad;
+  int item_w  = total_w / p->row_count;
+  for (int i = 0; i < p->row_count; i++) {
+    sf_ui_lmn_t *el = &p->ctx->ui->elements[p->row_elems[i]];
+    el->v0.x = p->_vlay.x + i * (item_w + pad);
+    el->v1.x = el->v0.x + item_w;
+    el->v0.y = p->row_y;
+    el->v1.y = p->row_y + p->row_h;
+  }
+  p->_vlay.cursor_y += p->row_h + pad;
+  p->in_row = false;
+}
+
+void sf_panel_space(sf_panel_t *p, int h) {
+  if (!p->in_row) p->_vlay.cursor_y += h;
+}
+
+static sf_ui_lmn_t* _sf_panel_add(sf_panel_t *p, sf_ui_lmn_t *el) {
+  if (!el) return NULL;
+  el->panel_idx = p->panel_idx;
+  if (p->in_row && p->row_count < SF_PANEL_ROW_MAX)
+    p->row_elems[p->row_count++] = (int16_t)(p->ctx->ui->count - 1);
   return el;
 }
 
-#define _SF_ROW_BOUNDS(h) \
-  sf_ivec2_t _rv0, _rv1; \
-  if (!ctx->ui || ctx->ui->active_panel_idx < 0) return NULL; \
-  sf_ui_layout_row(&ctx->ui->_layout, h, &_rv0, &_rv1);
+static void _sf_panel_bounds(sf_panel_t *p, int h, sf_ivec2_t *v0, sf_ivec2_t *v1) {
+  if (p->in_row) {
+    /* placeholder — row_end will reposition */
+    v0->x = p->_vlay.x; v0->y = p->row_y;
+    v1->x = p->_vlay.x + p->_vlay.w; v1->y = p->row_y + p->row_h;
+  } else {
+    sf_ui_layout_row(&p->_vlay, h, v0, v1);
+  }
+}
 
-sf_ui_lmn_t* sf_row_button(sf_ctx_t *ctx, const char *text, int h, sf_ui_cb cb, void *userdata) {
-  _SF_ROW_BOUNDS(h)
-  return _sf_row_tag(ctx, sf_add_button(ctx, text, _rv0, _rv1, cb, userdata));
+sf_ui_lmn_t* sf_panel_button(sf_panel_t *p, const char *text, int h, sf_ui_cb cb, void *ud) {
+  sf_ivec2_t v0, v1; _sf_panel_bounds(p, h, &v0, &v1);
+  return _sf_panel_add(p, sf_add_button(p->ctx, text, v0, v1, cb, ud));
 }
-sf_ui_lmn_t* sf_row_slider(sf_ctx_t *ctx, const char *label, int h, float mn, float mx, float init, sf_ui_cb cb, void *userdata) {
-  _SF_ROW_BOUNDS(h)
-  return _sf_row_tag(ctx, sf_add_slider(ctx, label, _rv0, _rv1, mn, mx, init, cb, userdata));
+sf_ui_lmn_t* sf_panel_slider(sf_panel_t *p, const char *label, int h, float mn, float mx, float init, sf_ui_cb cb, void *ud) {
+  sf_ivec2_t v0, v1; _sf_panel_bounds(p, h, &v0, &v1);
+  return _sf_panel_add(p, sf_add_slider(p->ctx, label, v0, v1, mn, mx, init, cb, ud));
 }
-sf_ui_lmn_t* sf_row_checkbox(sf_ctx_t *ctx, const char *text, int h, bool init, sf_ui_cb cb, void *userdata) {
-  _SF_ROW_BOUNDS(h)
-  return _sf_row_tag(ctx, sf_add_checkbox(ctx, text, _rv0, _rv1, init, cb, userdata));
+sf_ui_lmn_t* sf_panel_checkbox(sf_panel_t *p, const char *text, int h, bool init, sf_ui_cb cb, void *ud) {
+  sf_ivec2_t v0, v1; _sf_panel_bounds(p, h, &v0, &v1);
+  return _sf_panel_add(p, sf_add_checkbox(p->ctx, text, v0, v1, init, cb, ud));
 }
-sf_ui_lmn_t* sf_row_label(sf_ctx_t *ctx, const char *text, int h, sf_pkd_clr_t bg) {
-  _SF_ROW_BOUNDS(h)
-  return _sf_row_tag(ctx, sf_add_label(ctx, text, _rv0, _rv1, bg));
+sf_ui_lmn_t* sf_panel_label(sf_panel_t *p, const char *text, int h, sf_pkd_clr_t bg) {
+  sf_ivec2_t v0, v1; _sf_panel_bounds(p, h, &v0, &v1);
+  return _sf_panel_add(p, sf_add_label(p->ctx, text, v0, v1, bg));
 }
-sf_ui_lmn_t* sf_row_progress(sf_ctx_t *ctx, const char *label, int h, float init) {
-  _SF_ROW_BOUNDS(h)
-  return _sf_row_tag(ctx, sf_add_progress(ctx, label, init, _rv0, _rv1));
+sf_ui_lmn_t* sf_panel_progress(sf_panel_t *p, const char *label, int h, float init) {
+  sf_ivec2_t v0, v1; _sf_panel_bounds(p, h, &v0, &v1);
+  return _sf_panel_add(p, sf_add_progress(p->ctx, label, init, v0, v1));
 }
-sf_ui_lmn_t* sf_row_textinput(sf_ctx_t *ctx, const char *placeholder, int h, int max_len, sf_ui_cb cb, void *userdata) {
-  _SF_ROW_BOUNDS(h)
-  return _sf_row_tag(ctx, sf_add_textinput(ctx, placeholder, max_len, _rv0, _rv1, cb, userdata));
+sf_ui_lmn_t* sf_panel_textinput(sf_panel_t *p, const char *placeholder, int h, int max_len, sf_ui_cb cb, void *ud) {
+  sf_ivec2_t v0, v1; _sf_panel_bounds(p, h, &v0, &v1);
+  return _sf_panel_add(p, sf_add_textinput(p->ctx, placeholder, max_len, v0, v1, cb, ud));
 }
-sf_ui_lmn_t* sf_row_dropdown(sf_ctx_t *ctx, int count, const char **items, int sel, int h, sf_ui_cb cb, void *userdata) {
-  _SF_ROW_BOUNDS(h)
-  return _sf_row_tag(ctx, sf_add_dropdown(ctx, count, items, sel, _rv0, _rv1, cb, userdata));
+sf_ui_lmn_t* sf_panel_dropdown(sf_panel_t *p, int count, const char **items, int sel, int h, sf_ui_cb cb, void *ud) {
+  sf_ivec2_t v0, v1; _sf_panel_bounds(p, h, &v0, &v1);
+  return _sf_panel_add(p, sf_add_dropdown(p->ctx, count, items, sel, v0, v1, cb, ud));
 }
 
 /* SF_LOG_FUNCTIONS */

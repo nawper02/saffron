@@ -139,35 +139,40 @@ int main(int argc, char* argv[]) {
     }
 
     /* --- INITIALIZE UI ELEMENTS --- */
+    sf_panel_t panel;
+    sf_panel_begin(&sf_ctx, &panel, "Controls", 5, 5, 160, 4);
 
-    /* sf_ui_begin_panel creates the panel and sets up the internal layout.
-       All sf_row_* calls between begin and end are automatically positioned
-       and parented to the panel (so it can be dragged as a unit). */
-    sf_ui_begin_panel(&sf_ctx, "Controls", 5, 5, 160, 4);
+    /* Live FPS label — text pointer to fps_buf, updated each frame */
+    sf_panel_label(&panel, fps_buf, 14, 0);
 
-    /* Live FPS label — text pointer points to fps_buf, updated each frame */
-    sf_row_label(&sf_ctx, fps_buf, 14, 0);
+    sf_panel_button(&panel, "Random Theme", 24, btn_test_cb, NULL);
 
-    sf_row_button(&sf_ctx, "Random Theme", 24, btn_test_cb, NULL);
-
-    sf_ui_lmn_t *sldr = sf_row_slider(&sf_ctx, "Speed", 20, 0.0f, 5.0f, teapot_speed, slider_test_cb, NULL);
+    sf_ui_lmn_t *sldr = sf_panel_slider(&panel, "Speed", 20, 0.0f, 5.0f, teapot_speed, slider_test_cb, NULL);
     sldr->slider.userdata = sldr;
 
-    sf_row_progress(&sf_ctx, "Power", 20, teapot_speed / 5.0f);
+    sf_panel_progress(&panel, "Power", 20, teapot_speed / 5.0f);
 
-    sf_ui_lmn_t *chk = sf_row_checkbox(&sf_ctx, "Debug Overlay", 20, draw_axes, checkbox_test_cb, NULL);
+    sf_ui_lmn_t *chk = sf_panel_checkbox(&panel, "Debug Overlay", 20, draw_axes, checkbox_test_cb, NULL);
     chk->checkbox.userdata = chk;
 
-    sf_row_label(&sf_ctx, "-- Scene --", 14, 0);
+    sf_panel_space(&panel, 4);
+    sf_panel_label(&panel, "-- Scene --", 14, 0);
 
     const char *mesh_names[] = {"tux", "teapot", "cube"};
-    sf_ui_lmn_t *ddwn = sf_row_dropdown(&sf_ctx, 3, mesh_names, 0, 20, dropdown_cb, NULL);
+    sf_ui_lmn_t *ddwn = sf_panel_dropdown(&panel, 3, mesh_names, 0, 20, dropdown_cb, NULL);
     ddwn->dropdown.userdata = ddwn;
 
-    sf_ui_lmn_t *ti = sf_row_textinput(&sf_ctx, "Enter name...", 20, 32, textinput_cb, NULL);
+    sf_ui_lmn_t *ti = sf_panel_textinput(&panel, "Enter name...", 20, 32, textinput_cb, NULL);
     ti->textinput.userdata = ti;
 
-    sf_ui_end_panel(&sf_ctx);
+    /* Example of a horizontal row — two equal-width buttons side by side */
+    sf_panel_space(&panel, 4);
+    sf_panel_row_begin(&panel, 24);
+      sf_panel_button(&panel, "OK",     0, NULL, NULL);
+      sf_panel_button(&panel, "Cancel", 0, NULL, NULL);
+    sf_panel_row_end(&panel);
+
+    sf_panel_end(&panel);
 
 
     SDL_Event event;
