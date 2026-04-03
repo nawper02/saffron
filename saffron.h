@@ -108,6 +108,8 @@ struct sf_frame_t_ {
   bool                              is_dirty;
   bool                              is_root;
 
+  const char                       *name;
+
   sf_frame_t                       *parent;
   sf_frame_t                       *first_child;
   sf_frame_t                       *next_sibling;
@@ -508,6 +510,8 @@ bool           _sf_sfw_read_kv      (FILE *f, char *key, size_t ksz, char *val, 
 void           _sf_sfw_trim         (char *s);
 sf_fvec3_t     _sf_sfw_prse_vec3    (const char *s);
 int            _sf_sfw_prse_list    (const char *s, char out[][64], int max);
+sf_frame_t*    _sf_sfw_get_frame_   (sf_ctx_t *ctx, const char *name);
+void           _sf_sfw_prse_frame   (sf_ctx_t *ctx, FILE *f, const char *name, int *frame_count);
 void           _sf_sfw_prse_cam     (sf_ctx_t *ctx, FILE *f, const char *name, int *cam_count);
 void           _sf_sfw_prse_enti    (sf_ctx_t *ctx, FILE *f, const char *name, int *enti_count);
 void           _sf_sfw_prse_light   (sf_ctx_t *ctx, FILE *f, const char *name, int *light_count);
@@ -1226,7 +1230,10 @@ sf_emitr_t* sf_add_emitr(sf_ctx_t *ctx, const char *emitrname, sf_emitr_type_t t
 
   size_t name_len = strlen(emitrname) + 1;
   em->name = (const char*)sf_arena_alloc(ctx, &ctx->arena, name_len);
-  if (em->name) memcpy((void*)em->name, emitrname, name_len);
+  if (em->name) {
+    memcpy((void*)em->name, emitrname, name_len);
+    if (em->frame) em->frame->name = em->name;
+  }
 
   em->spawn_rate = 10.0f; 
   em->particle_life = 2.0f;
@@ -1424,6 +1431,7 @@ sf_enti_t* sf_add_enti(sf_ctx_t *ctx, sf_obj_t *obj, const char *entiname) {
   enti->name = (const char*)sf_arena_alloc(ctx, &ctx->arena, name_len);
   if (enti->name) {
     memcpy((void*)enti->name, entiname, name_len);
+    if (enti->frame) enti->frame->name = enti->name;
   }
 
   SF_LOG(ctx, SF_LOG_INFO,
@@ -1482,6 +1490,7 @@ sf_cam_t* sf_add_cam(sf_ctx_t *ctx, const char *camname, int w, int h, float fov
   cam->name = (const char*)sf_arena_alloc(ctx, &ctx->arena, name_len);
   if (cam->name) {
     memcpy((void*)cam->name, camname, name_len);
+    if (cam->frame) cam->frame->name = cam->name;
   }
 
   SF_LOG(ctx, SF_LOG_INFO,
@@ -1533,7 +1542,10 @@ sf_light_t* sf_add_light(sf_ctx_t *ctx, const char *lightname, sf_light_type_t t
 
   size_t name_len = strlen(lightname) + 1;
   l->name = (const char*)sf_arena_alloc(ctx, &ctx->arena, name_len);
-  if (l->name) memcpy((void*)l->name, lightname, name_len);
+  if (l->name) {
+    memcpy((void*)l->name, lightname, name_len);
+    if (l->frame) l->frame->name = l->name;
+  }
 
   SF_LOG(ctx, SF_LOG_INFO,
               SF_LOG_INDENT "name   : %s\n"
@@ -1611,7 +1623,7 @@ void sf_load_world(sf_ctx_t *ctx, const char *filename, const char *worldname) {
     return;
   }
   char line[512];
-  int obj_count = 0, enti_count = 0, light_count = 0, cam_count = 0, tex_count = 0, sprite_count = 0, emitr_count = 0;
+  int obj_count = 0, enti_count = 0, light_count = 0, cam_count = 0, tex_count = 0, sprite_count = 0, emitr_count = 0, frame_count = 0;
   while (fgets(line, sizeof(line), file)) {
     _sf_sfw_trim(line);
     if (line[0] == '#' || line[0] == '\0') continue;
@@ -1620,7 +1632,8 @@ void sf_load_world(sf_ctx_t *ctx, const char *filename, const char *worldname) {
 
     if (sscanf(line, "%31s %63[^ \t{] {", keyword, name) == 2 && strchr(line, '{')) {
       _sf_sfw_trim(name);
-      if      (strcmp(keyword, "camera")  == 0) _sf_sfw_prse_cam(ctx, file, name, &cam_count);
+      if      (strcmp(keyword, "frame")   == 0) _sf_sfw_prse_frame(ctx, file, name, &frame_count);
+      else if (strcmp(keyword, "camera")  == 0) _sf_sfw_prse_cam(ctx, file, name, &cam_count);
       else if (strcmp(keyword, "entity")  == 0) _sf_sfw_prse_enti(ctx, file, name, &enti_count);
       else if (strcmp(keyword, "light")   == 0) _sf_sfw_prse_light(ctx, file, name, &light_count);
       else if (strcmp(keyword, "sprite")  == 0) _sf_sfw_prse_sprit(ctx, file, name, &sprite_count);
@@ -1647,8 +1660,9 @@ void sf_load_world(sf_ctx_t *ctx, const char *filename, const char *worldname) {
               SF_LOG_INDENT "cams   : %d\n"
               SF_LOG_INDENT "texs   : %d\n"
               SF_LOG_INDENT "sprits : %d\n"
-              SF_LOG_INDENT "emitrs : %d\n",
-              filename, obj_count, enti_count, light_count, cam_count, tex_count, sprite_count, emitr_count);
+              SF_LOG_INDENT "emitrs : %d\n"
+              SF_LOG_INDENT "frames : %d\n",
+              filename, obj_count, enti_count, light_count, cam_count, tex_count, sprite_count, emitr_count, frame_count);
 }
 
 void sf_camera_set_psp(sf_ctx_t *ctx, sf_cam_t *cam, float fov, float near_plane, float far_plane) {
@@ -2631,7 +2645,6 @@ void _sf_swap_fvec3(sf_fvec3_t *v0, sf_fvec3_t *v1) {
     sf_fvec3_t t = *v0; *v0 = *v1; *v1 = t;
 }
 
-
 float _sf_lerp_f(float a, float b, float t) {
   return a + (b - a) * t;
 }
@@ -2833,8 +2846,41 @@ int _sf_sfw_prse_list(const char *s, char out[][64], int max) {
   return count;
 }
 
+sf_frame_t* _sf_sfw_get_frame_(sf_ctx_t *ctx, const char *name) {
+  for (int i = 0; i < ctx->frames_count; i++) {
+    if (ctx->frames[i].name && strcmp(ctx->frames[i].name, name) == 0)
+      return &ctx->frames[i];
+  }
+  return NULL;
+}
+
+void _sf_sfw_prse_frame(sf_ctx_t *ctx, FILE *f, const char *name, int *frame_count) {
+  char key[64], val[256];
+  char parent_name[64] = {0};
+  sf_fvec3_t pos = {0,0,0}, rot = {0,0,0}, scale = {1,1,1};
+  while (_sf_sfw_read_kv(f, key, sizeof(key), val, sizeof(val))) {
+    if      (strcmp(key, "pos")    == 0) pos   = _sf_sfw_prse_vec3(val);
+    else if (strcmp(key, "rot")    == 0) rot   = _sf_sfw_prse_vec3(val);
+    else if (strcmp(key, "scale")  == 0) scale = _sf_sfw_prse_vec3(val);
+    else if (strcmp(key, "parent") == 0) snprintf(parent_name, sizeof(parent_name), "%s", val);
+  }
+  sf_frame_t *parent = NULL;
+  if (parent_name[0]) parent = _sf_sfw_get_frame_(ctx, parent_name);
+  sf_frame_t *fr = sf_add_frame(ctx, parent);
+  if (!fr) return;
+  fr->pos   = pos;
+  fr->rot   = rot;
+  fr->scale = scale;
+  fr->is_dirty = true;
+  size_t name_len = strlen(name) + 1;
+  fr->name = (const char*)sf_arena_alloc(ctx, &ctx->arena, name_len);
+  if (fr->name) memcpy((void*)fr->name, name, name_len);
+  (*frame_count)++;
+}
+
 void _sf_sfw_prse_cam(sf_ctx_t *ctx, FILE *f, const char *name, int *cam_count) {
   char key[64], val[256];
+  char parent_frame[64] = {0};
   sf_fvec3_t pos = {0,0,0}, target = {0,0,0};
   float fov = 60.0f;
   int w = 0, h = 0;
@@ -2843,6 +2889,7 @@ void _sf_sfw_prse_cam(sf_ctx_t *ctx, FILE *f, const char *name, int *cam_count) 
     if      (strcmp(key, "pos")    == 0) pos    = _sf_sfw_prse_vec3(val);
     else if (strcmp(key, "target") == 0) { target = _sf_sfw_prse_vec3(val); has_target = true; }
     else if (strcmp(key, "fov")    == 0) sscanf(val, "%f", &fov);
+    else if (strcmp(key, "frame")  == 0) snprintf(parent_frame, sizeof(parent_frame), "%s", val);
     else if (strcmp(key, "size")   == 0) { sf_fvec3_t s = _sf_sfw_prse_vec3(val); w = (int)s.x; h = (int)s.y; }
   }
   if (strcmp(name, "main") == 0) {
@@ -2850,6 +2897,10 @@ void _sf_sfw_prse_cam(sf_ctx_t *ctx, FILE *f, const char *name, int *cam_count) 
     if (has_target) sf_camera_look_at(ctx, &ctx->main_camera, target);
     ctx->main_camera.fov = fov;
     ctx->main_camera.is_proj_dirty = true;
+    if (parent_frame[0]) {
+      sf_frame_t *pf = _sf_sfw_get_frame_(ctx, parent_frame);
+      if (pf) sf_frame_set_parent(ctx->main_camera.frame, pf);
+    }
   } else {
     if (w == 0) w = ctx->main_camera.w;
     if (h == 0) h = ctx->main_camera.h;
@@ -2857,6 +2908,10 @@ void _sf_sfw_prse_cam(sf_ctx_t *ctx, FILE *f, const char *name, int *cam_count) 
     if (cam) {
       sf_camera_set_pos(ctx, cam, pos.x, pos.y, pos.z);
       if (has_target) sf_camera_look_at(ctx, cam, target);
+      if (parent_frame[0]) {
+        sf_frame_t *pf = _sf_sfw_get_frame_(ctx, parent_frame);
+        if (pf) sf_frame_set_parent(cam->frame, pf);
+      }
     }
   }
   (*cam_count)++;
@@ -2864,11 +2919,12 @@ void _sf_sfw_prse_cam(sf_ctx_t *ctx, FILE *f, const char *name, int *cam_count) 
 
 void _sf_sfw_prse_enti(sf_ctx_t *ctx, FILE *f, const char *name, int *enti_count) {
   char key[64], val[256];
-  char mesh_name[64] = {0}, tex_name[64] = {0};
+  char mesh_name[64] = {0}, tex_name[64] = {0}, parent_frame[64] = {0};
   sf_fvec3_t pos = {0,0,0}, rot = {0,0,0}, scale = {1,1,1};
   while (_sf_sfw_read_kv(f, key, sizeof(key), val, sizeof(val))) {
     if      (strcmp(key, "mesh")    == 0) snprintf(mesh_name, sizeof(mesh_name), "%s", val);
     else if (strcmp(key, "texture") == 0) snprintf(tex_name, sizeof(tex_name), "%s", val);
+    else if (strcmp(key, "frame")   == 0) snprintf(parent_frame, sizeof(parent_frame), "%s", val);
     else if (strcmp(key, "pos")     == 0) pos   = _sf_sfw_prse_vec3(val);
     else if (strcmp(key, "rot")     == 0) rot   = _sf_sfw_prse_vec3(val);
     else if (strcmp(key, "scale")   == 0) scale = _sf_sfw_prse_vec3(val);
@@ -2881,26 +2937,36 @@ void _sf_sfw_prse_enti(sf_ctx_t *ctx, FILE *f, const char *name, int *enti_count
   sf_enti_set_rot(ctx, enti, rot.x, rot.y, rot.z);
   sf_enti_set_scale(ctx, enti, scale.x, scale.y, scale.z);
   if (tex_name[0]) enti->tex = sf_get_texture_(ctx, tex_name, true);
+  if (parent_frame[0]) {
+    sf_frame_t *pf = _sf_sfw_get_frame_(ctx, parent_frame);
+    if (pf) sf_frame_set_parent(enti->frame, pf);
+  }
   (*enti_count)++;
 }
 
 void _sf_sfw_prse_light(sf_ctx_t *ctx, FILE *f, const char *name, int *light_count) {
   char key[64], val[256];
-  char type_str[16] = "point";
+  char type_str[16] = "point", parent_frame[64] = {0};
   sf_fvec3_t pos = {0,0,0}, color = {1,1,1};
   float intensity = 1.0f;
   while (_sf_sfw_read_kv(f, key, sizeof(key), val, sizeof(val))) {
     if      (strcmp(key, "type")      == 0) snprintf(type_str, sizeof(type_str), "%s", val);
+    else if (strcmp(key, "frame")     == 0) snprintf(parent_frame, sizeof(parent_frame), "%s", val);
     else if (strcmp(key, "pos")       == 0) pos       = _sf_sfw_prse_vec3(val);
     else if (strcmp(key, "color")     == 0) color     = _sf_sfw_prse_vec3(val);
     else if (strcmp(key, "intensity") == 0) sscanf(val, "%f", &intensity);
   }
+  sf_light_t *l = NULL;
   if (strcmp(type_str, "dir") == 0) {
-    sf_light_t *l = sf_add_light(ctx, name, SF_LIGHT_DIR, color, intensity);
+    l = sf_add_light(ctx, name, SF_LIGHT_DIR, color, intensity);
     if (l) sf_frame_look_at(l->frame, pos);
   } else {
-    sf_light_t *l = sf_add_light(ctx, name, SF_LIGHT_POINT, color, intensity);
+    l = sf_add_light(ctx, name, SF_LIGHT_POINT, color, intensity);
     if (l) l->frame->pos = pos;
+  }
+  if (l && parent_frame[0]) {
+    sf_frame_t *pf = _sf_sfw_get_frame_(ctx, parent_frame);
+    if (pf) sf_frame_set_parent(l->frame, pf);
   }
   (*light_count)++;
 }
@@ -2933,7 +2999,7 @@ void _sf_sfw_prse_sprit(sf_ctx_t *ctx, FILE *f, const char *name, int *sprite_co
 
 void _sf_sfw_prse_emitr(sf_ctx_t *ctx, FILE *f, const char *name, int *emitr_count) {
   char key[64], val[256];
-  char type_str[16] = "omni", spr_name[64] = {0};
+  char type_str[16] = "omni", spr_name[64] = {0}, parent_frame[64] = {0};
   int max_p = 100;
   float spawn_rate = 10.0f, life = 1.0f, speed = 1.0f, spread = 0.0f;
   sf_fvec3_t pos = {0,0,0}, dir = {0,1,0}, volume = {1,1,1};
@@ -2942,6 +3008,7 @@ void _sf_sfw_prse_emitr(sf_ctx_t *ctx, FILE *f, const char *name, int *emitr_cou
     if      (strcmp(key, "type")       == 0) snprintf(type_str, sizeof(type_str), "%s", val);
     else if (strcmp(key, "sprite")     == 0) snprintf(spr_name, sizeof(spr_name), "%s", val);
     else if (strcmp(key, "max")        == 0) sscanf(val, "%d", &max_p);
+    else if (strcmp(key, "frame")      == 0) snprintf(parent_frame, sizeof(parent_frame), "%s", val);
     else if (strcmp(key, "pos")        == 0) pos        = _sf_sfw_prse_vec3(val);
     else if (strcmp(key, "spawn_rate") == 0) sscanf(val, "%f", &spawn_rate);
     else if (strcmp(key, "life")       == 0) sscanf(val, "%f", &life);
@@ -2963,6 +3030,10 @@ void _sf_sfw_prse_emitr(sf_ctx_t *ctx, FILE *f, const char *name, int *emitr_cou
   em->speed = speed;
   if (type == SF_EMITR_DIR || has_dir) { em->dir = sf_fvec3_norm(dir); em->spread = spread; }
   if (type == SF_EMITR_VOLUME || has_vol) em->volume_size = volume;
+  if (parent_frame[0]) {
+    sf_frame_t *pf = _sf_sfw_get_frame_(ctx, parent_frame);
+    if (pf) sf_frame_set_parent(em->frame, pf);
+  }
   (*emitr_count)++;
 }
 

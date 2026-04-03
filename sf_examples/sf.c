@@ -109,21 +109,6 @@ int main(int argc, char* argv[]) {
     sf_cam_t* pip_cam = sf_get_cam(&sf_ctx, "pip_cam");
     sf_camera_look_at(&sf_ctx, pip_cam, (sf_fvec3_t){0.0f, 0.0f, 0.0f});
 
-    sf_enti_t *tux1 = sf_get_enti(&sf_ctx, "tux");
-    sf_enti_t *tux2 = sf_get_enti(&sf_ctx, "tux2");
-    sf_emitr_t *spray = sf_get_emitr(&sf_ctx, "em_fire");
-    sf_enti_t *teapot = sf_get_enti(&sf_ctx, "teapot");
-
-    if (tux1 && tux2) {
-      sf_frame_set_parent(tux2->frame, tux1->frame);
-
-      if (spray && teapot)
-        sf_frame_set_parent(spray->frame, teapot->frame);
-
-      tux2->frame->pos = (sf_fvec3_t){ 20.0f, 10.0f, 0.0f };
-      tux2->frame->is_dirty = true;
-    }
-
     sf_light_t *rainbow = sf_add_light(&sf_ctx, "rainbow", SF_LIGHT_POINT, (sf_fvec3_t){1.0f, 0.0f, 0.0f}, 8.0f);
     if (rainbow) {
       rainbow->frame->pos = (sf_fvec3_t){3.0f, -4.0f, 0.0f};

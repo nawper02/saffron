@@ -31,9 +31,11 @@ entity tux {
     texture = elements
 }
 
+# tux2 is a child of tux, offset (20, 10, 0) in tux's local space
 entity tux2 {
     mesh    = tux
-    pos     = (8, 0, -10)
+    frame   = tux
+    pos     = (20, 10, 0)
     scale   = (0.5, 0.5, 0.5)
     texture = elements2
 }
@@ -85,9 +87,10 @@ emitter em_sparks {
     speed      = 3.0
 }
 
-# Directional: Rises UP with a 0.2 spread
+# Directional: Rises UP with a 0.2 spread, parented to teapot
 emitter em_fire {
     type       = dir
+    frame      = teapot
     sprite     = spr_fire
     max        = 100
     pos        = (3, 3, 0)
