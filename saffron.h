@@ -441,6 +441,7 @@ void           sf_enti_set_rot      (sf_ctx_t *ctx, sf_enti_t *enti, float rx, f
 void           sf_enti_rotate       (sf_ctx_t *ctx, sf_enti_t *enti, float drx, float dry, float drz);
 void           sf_enti_set_scale    (sf_ctx_t *ctx, sf_enti_t *enti, float sx, float sy, float sz);
 void           sf_enti_set_tex      (sf_ctx_t *ctx, const char *entiname, const char *texname);
+void           sf_obj_recenter      (sf_obj_t *obj);
 void           sf_load_world        (sf_ctx_t *ctx, const char *filename, const char *worldname);
 void           sf_camera_set_psp    (sf_ctx_t *ctx, sf_cam_t *cam, float fov, float near_plane, float far_plane);
 void           sf_camera_set_pos    (sf_ctx_t *ctx, sf_cam_t *cam, float x, float y, float z);
@@ -1388,6 +1389,17 @@ sf_obj_t* sf_load_obj(sf_ctx_t *ctx, const char *filename, const char *objname) 
   return obj;
 }
 
+void sf_obj_recenter(sf_obj_t *obj) {
+  if (!obj || obj->v_cnt == 0) return;
+  sf_fvec3_t c = obj->bs_center;
+  for (int i = 0; i < obj->v_cnt; i++) {
+    obj->v[i].x -= c.x;
+    obj->v[i].y -= c.y;
+    obj->v[i].z -= c.z;
+  }
+  obj->bs_center = (sf_fvec3_t){0.0f, 0.0f, 0.0f};
+}
+
 sf_obj_t* sf_get_obj_(sf_ctx_t *ctx, const char *objname, bool should_log_failure) {
   for (int32_t i = 0; i < ctx->obj_count; ++i) {
     if (ctx->objs[i].name && strcmp(ctx->objs[i].name, objname) == 0) {
@@ -1642,7 +1654,8 @@ void sf_load_world(sf_ctx_t *ctx, const char *filename, const char *worldname) {
     else if (sscanf(line, "mesh %63s \"%255[^\"]\"", name, filepath) == 2) {
       char r_path[512];
       if (_sf_resolve_asset(filepath, r_path, sizeof(r_path))) {
-        sf_load_obj(ctx, r_path, name);
+        sf_obj_t *obj = sf_load_obj(ctx, r_path, name);
+        if (obj && strstr(line, "recenter")) sf_obj_recenter(obj);
         obj_count++;
       }
     }

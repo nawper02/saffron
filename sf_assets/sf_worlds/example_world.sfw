@@ -16,6 +16,7 @@ camera pip_cam {
 mesh tux      "tux.obj"
 mesh teapot   "teapot.obj"
 mesh cube     "cube.obj"
+mesh skull    "skull.obj" recenter
 
 texture brick_tex   "Brick_01-128x128.bmp"
 texture elements    "Elements_09-128x128.bmp"
@@ -29,6 +30,12 @@ entity tux {
     pos     = (3, 0, -10)
     scale   = (0.1, 0.1, 0.1)
     texture = elements
+}
+
+entity cube {
+    mesh    = cube
+    pos     = (0, -2, 0)
+    texture = brick_tex
 }
 
 # tux2 is a child of tux, offset (20, 10, 0) in tux's local space
@@ -46,10 +53,10 @@ entity teapot {
     scale = (0.8, 0.8, 0.8)
 }
 
-entity cube {
-    mesh    = cube
-    pos     = (0, 1, 0)
-    texture = brick_tex
+entity skull {
+    mesh    = skull
+    pos     = (0, 3, 0)
+    scale   = (0.01, 0.01, 0.01)
 }
 
 sprite spr_fire {
