@@ -27,16 +27,18 @@ int main(int argc, char **argv) {
         unsigned char b = img_data[i * 4 + 2];
         unsigned char a = img_data[i * 4 + 3];
 
-        if (a < 128) {
-            // If transparent, paint it Magic Pink (Magenta)
+        if (a < 16) {
+            // Fully transparent → Magic Pink (key color)
             rgb_data[i * 3 + 0] = 255;
             rgb_data[i * 3 + 1] = 0;
             rgb_data[i * 3 + 2] = 255;
         } else {
-            // Keep original color
+            // Straight-alpha: keep stored color as-is, treat as fully opaque.
             rgb_data[i * 3 + 0] = r;
             rgb_data[i * 3 + 1] = g;
             rgb_data[i * 3 + 2] = b;
+            // Avoid colliding with the key color itself.
+            if (r == 255 && g == 0 && b == 255) rgb_data[i * 3 + 1] = 1;
         }
     }
 

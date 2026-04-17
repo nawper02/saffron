@@ -59,12 +59,20 @@ static sf_key_t _sf_sdl_map_key(SDL_Scancode code) {
     case SDL_SCANCODE_8: return SF_KEY_8;
     case SDL_SCANCODE_9: return SF_KEY_9;
 
-    case SDL_SCANCODE_SPACE:  return SF_KEY_SPACE;
-    case SDL_SCANCODE_LSHIFT: return SF_KEY_LSHIFT;
-    case SDL_SCANCODE_UP:     return SF_KEY_UP;
-    case SDL_SCANCODE_DOWN:   return SF_KEY_DOWN;
-    case SDL_SCANCODE_LEFT:   return SF_KEY_LEFT;
-    case SDL_SCANCODE_RIGHT:  return SF_KEY_RIGHT;
+    case SDL_SCANCODE_SPACE:     return SF_KEY_SPACE;
+    case SDL_SCANCODE_LSHIFT:    return SF_KEY_LSHIFT;
+    case SDL_SCANCODE_LCTRL:     return SF_KEY_LCTRL;
+    case SDL_SCANCODE_UP:        return SF_KEY_UP;
+    case SDL_SCANCODE_DOWN:      return SF_KEY_DOWN;
+    case SDL_SCANCODE_LEFT:      return SF_KEY_LEFT;
+    case SDL_SCANCODE_RIGHT:     return SF_KEY_RIGHT;
+    case SDL_SCANCODE_BACKSPACE: return SF_KEY_BACKSPACE;
+    case SDL_SCANCODE_RETURN:    return SF_KEY_RETURN;
+    case SDL_SCANCODE_ESCAPE:    return SF_KEY_ESC;
+    case SDL_SCANCODE_TAB:       return SF_KEY_TAB;
+    case SDL_SCANCODE_DELETE:    return SF_KEY_DEL;
+    case SDL_SCANCODE_HOME:      return SF_KEY_HOME;
+    case SDL_SCANCODE_END:       return SF_KEY_END;
 
     default: return SF_KEY_UNKNOWN;
   }
@@ -92,6 +100,12 @@ void sf_sdl_process_event(sf_ctx_t *ctx, const SDL_Event *event) {
   else if (event->type == SDL_MOUSEBUTTONDOWN || event->type == SDL_MOUSEBUTTONUP) {
     sf_mouse_btn_t btn = _sf_sdl_map_mouse(event->button.button);
     sf_input_set_mouse_b(ctx, btn, event->type == SDL_MOUSEBUTTONDOWN);
+  }
+  else if (event->type == SDL_MOUSEWHEEL) {
+    sf_input_set_wheel(ctx, event->wheel.y);
+  }
+  else if (event->type == SDL_TEXTINPUT) {
+    sf_input_set_text(ctx, event->text.text);
   }
 }
 

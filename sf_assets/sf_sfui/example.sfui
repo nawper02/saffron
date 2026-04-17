@@ -1,0 +1,28 @@
+# Saffron UI File
+
+ui button {
+    name = "theme_btn"
+    v0 = (10, 50)
+    v1 = (140, 80)
+    visible = 1
+    text = "Random Theme"
+}
+
+ui slider {
+    name = "speed"
+    v0 = (10, 90)
+    v1 = (140, 110)
+    visible = 1
+    min = 0.0000
+    max = 5.0000
+    value = 1.0000
+}
+
+ui checkbox {
+    name = "debug_ovrlay"
+    v0 = (10, 120)
+    v1 = (140, 140)
+    visible = 1
+    text = "Draw Debug Overlay"
+    checked = 1
+}
