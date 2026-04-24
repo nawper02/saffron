@@ -9,15 +9,16 @@
 
 #include <SDL2/SDL.h>
 
-typedef enum { SEL_NONE = 0, SEL_ENTI, SEL_LIGHT, SEL_CAM, SEL_EMITR } sel_kind_t;
+typedef enum { SEL_NONE = 0, SEL_ENTI, SEL_LIGHT, SEL_CAM, SEL_EMITR, SEL_PUPPET } sel_kind_t;
 typedef enum { TAB_SFF = 0, TAB_SFUI } tab_t;
 
-static sf_ctx_t     sf_ctx;
-static sel_kind_t   g_sel_kind      = SEL_NONE;
-static sf_enti_t   *g_sel           = NULL;
-static sf_light_t  *g_sel_light     = NULL;
-static sf_cam_t    *g_sel_cam       = NULL;
-static sf_emitr_t  *g_sel_emitr     = NULL;
+static sf_ctx_t         sf_ctx;
+static sel_kind_t       g_sel_kind      = SEL_NONE;
+static sf_enti_t       *g_sel           = NULL;
+static sf_light_t      *g_sel_light     = NULL;
+static sf_cam_t        *g_sel_cam       = NULL;
+static sf_emitr_t      *g_sel_emitr     = NULL;
+static sf_puppet_inst_t*g_sel_puppet    = NULL;
 static int          g_new_prim      = 0;
 static float        g_orbit_yaw     = 0.8f;
 static float        g_orbit_pitch   = 0.5f;
@@ -33,6 +34,16 @@ static int          g_h             = 1080;
 static char         g_save_path[SF_MAX_TEXT_INPUT_LEN] = "studio_out.sff";
 static char         g_sfui_path[SF_MAX_TEXT_INPUT_LEN] = "studio_out.sfui";
 static tab_t        g_tab = TAB_SFF;
+
+#define STUDIO_MAX_PUPPETS 32
+static int          g_puppet_sel    = 0;
+static char         g_puppet_files[STUDIO_MAX_PUPPETS][64];
+static const char  *g_puppet_items[STUDIO_MAX_PUPPETS];
+static int          g_puppet_count  = 0;
+
+static int          g_anim_clip_sel = 0;
+static bool         g_anim_scrub    = false;
+static float        g_anim_scrub_t  = 0.0f;
 
 /* Translate gizmo state (SFF tab, selected entity/light/cam/emitter) */
 typedef enum { GZ_AX_NONE = -1, GZ_AX_X = 0, GZ_AX_Y = 1, GZ_AX_Z = 2 } gz_axis_t;
@@ -107,12 +118,12 @@ static int          g_tex_count     = 0;
 
 static const char *k_emitr_items[3] = { "dir", "omni", "vol" };
 
-static const char *k_spawn_labels[9]    = { "Pln", "Box", "Sph", "Cyl", "Ter", "Lt", "Cam", "Em", "Mdl" };
-static const char *k_spawn_icon_bmp[9]  = { "plane.bmp", "box.bmp", "sphere.bmp", "cylinder.bmp", "terrain.bmp", "light.bmp", "camera.bmp", "emitter.bmp", "model.bmp" };
-static sf_tex_t   *g_spawn_icon_tex[9]  = { 0 };
-static sf_ivec2_t  g_spawn_btn_pos[9];  /* filled in build_spawn_buttons, read post-render */
+static const char *k_spawn_labels[10]   = { "Pln", "Box", "Sph", "Cyl", "Ter", "Lt", "Cam", "Em", "Mdl", "Ppt" };
+static const char *k_spawn_icon_bmp[10] = { "plane.bmp", "box.bmp", "sphere.bmp", "cylinder.bmp", "terrain.bmp", "light.bmp", "camera.bmp", "emitter.bmp", "model.bmp", "puppet.bmp" };
+static sf_tex_t   *g_spawn_icon_tex[10] = { 0 };
+static sf_ivec2_t  g_spawn_btn_pos[10];
 static bool        g_spawn_btn_has_pos  = false;
-static sf_ui_lmn_t *g_spawn_btn_el[9]   = { 0 };
+static sf_ui_lmn_t *g_spawn_btn_el[10]  = { 0 };
 
 /* Generic icon registry: per-frame list of (button, icon) to overlay after ui render */
 typedef enum {
@@ -179,27 +190,30 @@ static prim_meta_t* sel_meta(void) {
 
 static sf_frame_t* sel_frame(void) {
   switch (g_sel_kind) {
-    case SEL_ENTI:  return g_sel        ? g_sel->frame        : NULL;
-    case SEL_LIGHT: return g_sel_light  ? g_sel_light->frame  : NULL;
-    case SEL_CAM:   return g_sel_cam    ? g_sel_cam->frame    : NULL;
-    case SEL_EMITR: return g_sel_emitr  ? g_sel_emitr->frame  : NULL;
-    default:        return NULL;
+    case SEL_ENTI:   return g_sel         ? g_sel->frame         : NULL;
+    case SEL_LIGHT:  return g_sel_light   ? g_sel_light->frame   : NULL;
+    case SEL_CAM:    return g_sel_cam     ? g_sel_cam->frame     : NULL;
+    case SEL_EMITR:  return g_sel_emitr   ? g_sel_emitr->frame   : NULL;
+    case SEL_PUPPET: return g_sel_puppet  ? g_sel_puppet->frame  : NULL;
+    default:         return NULL;
   }
 }
 
 static const char* sel_name(void) {
   switch (g_sel_kind) {
-    case SEL_ENTI:  return g_sel       && g_sel->name        ? g_sel->name        : "?";
-    case SEL_LIGHT: return g_sel_light && g_sel_light->name  ? g_sel_light->name  : "?";
-    case SEL_CAM:   return g_sel_cam   && g_sel_cam->name    ? g_sel_cam->name    : "?";
-    case SEL_EMITR: return g_sel_emitr && g_sel_emitr->name  ? g_sel_emitr->name  : "?";
-    default:        return "?";
+    case SEL_ENTI:   return g_sel        && g_sel->name         ? g_sel->name         : "?";
+    case SEL_LIGHT:  return g_sel_light  && g_sel_light->name   ? g_sel_light->name   : "?";
+    case SEL_CAM:    return g_sel_cam    && g_sel_cam->name     ? g_sel_cam->name     : "?";
+    case SEL_EMITR:  return g_sel_emitr  && g_sel_emitr->name   ? g_sel_emitr->name   : "?";
+    case SEL_PUPPET: return g_sel_puppet && g_sel_puppet->name  ? g_sel_puppet->name  : "?";
+    default:         return "?";
   }
 }
 
 static void sel_clear(void) {
   g_sel_kind = SEL_NONE;
-  g_sel = NULL; g_sel_light = NULL; g_sel_cam = NULL; g_sel_emitr = NULL;
+  g_sel = NULL; g_sel_light = NULL; g_sel_cam = NULL;
+  g_sel_emitr = NULL; g_sel_puppet = NULL;
 }
 
 static void scan_models(void) {
@@ -219,6 +233,27 @@ static void scan_models(void) {
       snprintf(g_model_files[g_model_count], sizeof(g_model_files[0]), "%s", e->d_name);
       g_model_items[g_model_count] = g_model_files[g_model_count];
       g_model_count++;
+    }
+    closedir(d);
+  }
+}
+
+static void scan_puppets(void) {
+  g_puppet_count = 0;
+  const char *paths[2] = { SF_ASSET_PATH "/sf_puppets", "./sf_assets/sf_puppets" };
+  for (int p = 0; p < 2 && g_puppet_count < STUDIO_MAX_PUPPETS; p++) {
+    DIR *d = opendir(paths[p]);
+    if (!d) continue;
+    struct dirent *e;
+    while ((e = readdir(d)) != NULL && g_puppet_count < STUDIO_MAX_PUPPETS) {
+      const char *dot = strrchr(e->d_name, '.');
+      if (!dot || strcmp(dot, ".sfp") != 0) continue;
+      bool dup = false;
+      for (int i = 0; i < g_puppet_count; i++) if (strcmp(g_puppet_files[i], e->d_name) == 0) { dup = true; break; }
+      if (dup) continue;
+      snprintf(g_puppet_files[g_puppet_count], sizeof(g_puppet_files[0]), "%s", e->d_name);
+      g_puppet_items[g_puppet_count] = g_puppet_files[g_puppet_count];
+      g_puppet_count++;
     }
     closedir(d);
   }
@@ -352,6 +387,7 @@ static void spawn_primitive(int kind) {
     }
     case 6: spawn_camera();  return;
     case 7: spawn_emitter(); return;
+    case 9: spawn_puppet();  return;
     default: break;
   }
 
@@ -421,6 +457,37 @@ static void spawn_emitter(void) {
   g_ui_dirty = true;
 }
 
+static void spawn_puppet(void) {
+  if (g_puppet_count == 0) {
+    SF_LOG(&sf_ctx, SF_LOG_WARN, "No .sfp files found (look in sf_assets/sf_puppets/).\n");
+    return;
+  }
+  int idx = (g_puppet_sel >= 0 && g_puppet_sel < g_puppet_count) ? g_puppet_sel : 0;
+  const char *fname = g_puppet_files[idx];
+  char rpath[512];
+  /* try both search paths */
+  snprintf(rpath, sizeof(rpath), "./sf_assets/sf_puppets/%s", fname);
+  if (access(rpath, R_OK) != 0)
+    snprintf(rpath, sizeof(rpath), SF_ASSET_PATH "/sf_puppets/%s", fname);
+
+  sf_puppet_t *p = NULL;
+  for (int i = 0; i < sf_ctx.puppet_count; i++) {
+    if (sf_ctx.puppets[i].name && strcmp(sf_ctx.puppets[i].name, fname) == 0) { p = &sf_ctx.puppets[i]; break; }
+  }
+  if (!p) p = sf_puppet_load(&sf_ctx, rpath);
+  if (!p) return;
+
+  char iname[32];
+  snprintf(iname, sizeof(iname), "puppet_%d", sf_ctx.puppet_inst_count);
+  sf_puppet_inst_t *pi = sf_puppet_add_inst(&sf_ctx, p, iname);
+  if (!pi) return;
+  if (pi->frame) { pi->frame->pos = g_orbit_target; pi->frame->is_dirty = true; }
+  sel_clear();
+  g_sel_kind   = SEL_PUPPET;
+  g_sel_puppet = pi;
+  g_ui_dirty   = true;
+}
+
 static void spawn_camera(void) {
   char name[32];
   snprintf(name, sizeof(name), "cam_%d", sf_ctx.cam_count);
@@ -473,6 +540,12 @@ static void cb_delete(sf_ctx_t *ctx, void *ud) {
     sf_remove_frame(&sf_ctx, g_sel_emitr->frame);
     for (int i = idx; i < sf_ctx.emitr_count - 1; i++) sf_ctx.emitrs[i] = sf_ctx.emitrs[i + 1];
     sf_ctx.emitr_count--;
+  } else if (g_sel_kind == SEL_PUPPET && g_sel_puppet) {
+    int idx = (int)(g_sel_puppet - sf_ctx.puppet_insts);
+    if (idx < 0 || idx >= sf_ctx.puppet_inst_count) return;
+    sf_remove_frame(&sf_ctx, g_sel_puppet->frame);
+    for (int i = idx; i < sf_ctx.puppet_inst_count - 1; i++) sf_ctx.puppet_insts[i] = sf_ctx.puppet_insts[i+1];
+    sf_ctx.puppet_inst_count--;
   } else {
     return;
   }
@@ -783,7 +856,8 @@ static void cb_apply_tex(sf_ctx_t *ctx, void *ud) {
     if (sf_ctx.textures[i].name && strcmp(sf_ctx.textures[i].name, texname) == 0) { tex = &sf_ctx.textures[i]; break; }
   }
   if (!tex) tex = sf_load_texture_bmp(&sf_ctx, fname, texname);
-  if (tex && g_sel_kind == SEL_ENTI && g_sel) g_sel->tex = tex;
+  if (tex && g_sel_kind == SEL_ENTI   && g_sel)        g_sel->tex        = tex;
+  if (tex && g_sel_kind == SEL_PUPPET && g_sel_puppet) g_sel_puppet->tex = tex;
 }
 
 static void cb_tex_page_prev(sf_ctx_t *ctx, void *ud) {
@@ -833,7 +907,8 @@ static void cb_apply_emitr_sprite(sf_ctx_t *ctx, void *ud) {
 
 static void cb_clear_tex(sf_ctx_t *ctx, void *ud) {
   (void)ctx; (void)ud;
-  if (g_sel_kind == SEL_ENTI && g_sel) g_sel->tex = NULL;
+  if (g_sel_kind == SEL_ENTI   && g_sel)        g_sel->tex        = NULL;
+  if (g_sel_kind == SEL_PUPPET && g_sel_puppet)  g_sel_puppet->tex = NULL;
 }
 
 static void rebuild_parent_list(void) {
@@ -887,10 +962,11 @@ static void cb_apply_rename(sf_ctx_t *ctx, void *ud) {
   sf_frame_t *f = sel_frame();
   if (f) f->name = mem;
   switch (g_sel_kind) {
-    case SEL_ENTI:  if (g_sel)       g_sel->name       = mem; break;
-    case SEL_LIGHT: if (g_sel_light) g_sel_light->name = mem; break;
-    case SEL_CAM:   if (g_sel_cam)   g_sel_cam->name   = mem; break;
-    case SEL_EMITR: if (g_sel_emitr) g_sel_emitr->name = mem; break;
+    case SEL_ENTI:   if (g_sel)        g_sel->name        = mem; break;
+    case SEL_LIGHT:  if (g_sel_light)  g_sel_light->name  = mem; break;
+    case SEL_CAM:    if (g_sel_cam)    g_sel_cam->name    = mem; break;
+    case SEL_EMITR:  if (g_sel_emitr)  g_sel_emitr->name  = mem; break;
+    case SEL_PUPPET: if (g_sel_puppet) g_sel_puppet->name = mem; break;
     default: break;
   }
   g_ui_dirty = true;
@@ -909,6 +985,41 @@ static void cb_dbg_axes  (sf_ctx_t *c, void *ud) { (void)c; (void)ud; g_dbg_axes
 static void cb_dbg_frames(sf_ctx_t *c, void *ud) { (void)c; (void)ud; g_dbg_frames = !g_dbg_frames; }
 static void cb_dbg_lights(sf_ctx_t *c, void *ud) { (void)c; (void)ud; g_dbg_lights = !g_dbg_lights; }
 static void cb_dbg_cams  (sf_ctx_t *c, void *ud) { (void)c; (void)ud; g_dbg_cams   = !g_dbg_cams; }
+
+static void cb_anim_play(sf_ctx_t *c, void *ud) {
+  (void)c; (void)ud;
+  if (!g_sel_puppet) return;
+  if (g_sel_puppet->is_playing) {
+    sf_puppet_stop(g_sel_puppet);
+  } else {
+    sf_puppet_play(g_sel_puppet, g_anim_clip_sel);
+    g_anim_scrub = false;
+  }
+  g_ui_dirty = true;
+}
+
+static void cb_anim_clip_sel(sf_ctx_t *c, void *ud) {
+  (void)c; (void)ud;
+  if (!g_sel_puppet) return;
+  sf_puppet_play(g_sel_puppet, g_anim_clip_sel);
+  g_anim_scrub = false;
+  g_ui_dirty = true;
+}
+
+static void cb_anim_rewind(sf_ctx_t *c, void *ud) {
+  (void)c; (void)ud;
+  if (!g_sel_puppet) return;
+  g_sel_puppet->anim_time = 0.0f;
+  g_anim_scrub_t = 0.0f;
+}
+
+static void cb_anim_scrub(sf_ctx_t *c, void *ud) {
+  (void)c; (void)ud;
+  if (!g_sel_puppet) return;
+  g_anim_scrub = true;
+  g_sel_puppet->anim_time = g_anim_scrub_t;
+  sf_puppet_update(c, g_sel_puppet, 0.0f);
+}
 
 /* --- UI REBUILD --- */
 
@@ -943,10 +1054,11 @@ static outl_item_t g_outl_items[OUTL_MAX];
 static int         g_outl_count = 0;
 
 static sel_kind_t _outl_kind_of_frame(sf_frame_t *f, void **out_ptr) {
-  for (int i = 0; i < sf_ctx.enti_count; i++) if (sf_ctx.entities[i].frame == f) { *out_ptr = &sf_ctx.entities[i]; return SEL_ENTI; }
-  for (int i = 0; i < sf_ctx.light_count; i++) if (sf_ctx.lights[i].frame   == f) { *out_ptr = &sf_ctx.lights[i];   return SEL_LIGHT; }
-  for (int i = 0; i < sf_ctx.cam_count;   i++) if (sf_ctx.cameras[i].frame  == f) { *out_ptr = &sf_ctx.cameras[i];  return SEL_CAM; }
-  for (int i = 0; i < sf_ctx.emitr_count; i++) if (sf_ctx.emitrs[i].frame   == f) { *out_ptr = &sf_ctx.emitrs[i];   return SEL_EMITR; }
+  for (int i = 0; i < sf_ctx.enti_count;        i++) if (sf_ctx.entities[i].frame     == f) { *out_ptr = &sf_ctx.entities[i];     return SEL_ENTI; }
+  for (int i = 0; i < sf_ctx.light_count;        i++) if (sf_ctx.lights[i].frame       == f) { *out_ptr = &sf_ctx.lights[i];       return SEL_LIGHT; }
+  for (int i = 0; i < sf_ctx.cam_count;          i++) if (sf_ctx.cameras[i].frame      == f) { *out_ptr = &sf_ctx.cameras[i];      return SEL_CAM; }
+  for (int i = 0; i < sf_ctx.emitr_count;        i++) if (sf_ctx.emitrs[i].frame       == f) { *out_ptr = &sf_ctx.emitrs[i];       return SEL_EMITR; }
+  for (int i = 0; i < sf_ctx.puppet_inst_count;  i++) if (sf_ctx.puppet_insts[i].frame == f) { *out_ptr = &sf_ctx.puppet_insts[i]; return SEL_PUPPET; }
   *out_ptr = NULL;
   return SEL_NONE;
 }
@@ -1000,10 +1112,11 @@ static void cb_outliner_pick(sf_ctx_t *c, void *ud) {
   sel_clear();
   g_sel_kind = it->kind;
   switch (it->kind) {
-    case SEL_ENTI:  g_sel       = (sf_enti_t*) it->ptr; break;
-    case SEL_LIGHT: g_sel_light = (sf_light_t*)it->ptr; break;
-    case SEL_CAM:   g_sel_cam   = (sf_cam_t*)  it->ptr; break;
-    case SEL_EMITR: g_sel_emitr = (sf_emitr_t*)it->ptr; break;
+    case SEL_ENTI:   g_sel        = (sf_enti_t*)        it->ptr; break;
+    case SEL_LIGHT:  g_sel_light  = (sf_light_t*)       it->ptr; break;
+    case SEL_CAM:    g_sel_cam    = (sf_cam_t*)         it->ptr; break;
+    case SEL_EMITR:  g_sel_emitr  = (sf_emitr_t*)       it->ptr; break;
+    case SEL_PUPPET: g_sel_puppet = (sf_puppet_inst_t*) it->ptr; break;
     default: break;
   }
   g_ui_dirty = true;
@@ -1029,8 +1142,8 @@ static void build_outliner_panel(int rx0, int rx1, int top, int bottom) {
   for (int i = 0; i < visible && (g_outl_scroll + i) < g_outl_count; i++) {
     int idx = g_outl_scroll + i;
     outl_item_t *it = &g_outl_items[idx];
-    const char *kind_glyph = (it->kind == SEL_ENTI) ? "[E]" : (it->kind == SEL_LIGHT) ? "[L]"
-                           : (it->kind == SEL_CAM)  ? "[C]" : "[M]";
+    const char *kind_glyph = (it->kind == SEL_ENTI)   ? "[E]" : (it->kind == SEL_LIGHT) ? "[L]"
+                           : (it->kind == SEL_CAM)   ? "[C]" : (it->kind == SEL_PUPPET) ? "[P]" : "[M]";
     /* sanitize name: only printable ASCII, cap length */
     char safe_nm[32] = "?";
     if (it->frame && it->frame->name) {
@@ -1101,7 +1214,7 @@ static int build_spawn_buttons(int y) {
   const int BTN = 34, GAP = 2;
   int cols = 5;
   int y0 = y;
-  for (int i = 0; i < 9; i++) {
+  for (int i = 0; i < 10; i++) {
     int row = i / cols;
     int col = i % cols;
     int x0 = 22 + col * (BTN + GAP);
@@ -1312,6 +1425,7 @@ static void gizmo_end_drag(void) {
 
 /* draw icons over the spawn buttons (called after sf_render_ui) */
 static bool _spawn_btn_visible(int i) {
+  if (i < 0 || i >= 10) return false;
   sf_ui_lmn_t *el = g_spawn_btn_el[i];
   if (!el || !el->is_visible) return false;
   for (sf_ui_lmn_t *p = el->parent_panel; p; p = p->parent_panel) {
@@ -1323,7 +1437,7 @@ static bool _spawn_btn_visible(int i) {
 static void draw_spawn_icons(void) {
   if (!g_spawn_btn_has_pos) return;
   const int BTN = 34;
-  for (int i = 0; i < 9; i++) {
+  for (int i = 0; i < 10; i++) {
     if (!g_spawn_icon_tex[i]) continue;
     if (!_spawn_btn_visible(i)) continue;
     int x = g_spawn_btn_pos[i].x + 1;
@@ -1430,7 +1544,8 @@ static void build_inspector(int y_start) {
     return;
   }
 
-  const char *tag = (g_sel_kind == SEL_ENTI) ? "entity" : (g_sel_kind == SEL_LIGHT) ? "light" : (g_sel_kind == SEL_CAM) ? "camera" : "emitter";
+  const char *tag = (g_sel_kind == SEL_ENTI) ? "entity" : (g_sel_kind == SEL_LIGHT) ? "light"
+                  : (g_sel_kind == SEL_CAM)  ? "camera" : (g_sel_kind == SEL_PUPPET) ? "puppet" : "emitter";
   snprintf(s_tagline, sizeof(s_tagline), "%s: %s", tag, sel_name());
   sf_add_label(&sf_ctx, s_tagline, (sf_ivec2_t){20, y}, SF_CLR_WHITE); y += 14;
 
@@ -1606,6 +1721,67 @@ static void build_inspector(int y_start) {
     y = build_texture_section(y);
   }
 
+  if (g_sel_kind == SEL_PUPPET && g_sel_puppet && g_sel_puppet->puppet) {
+    sf_puppet_t *p = g_sel_puppet->puppet;
+    y += 6;
+    build_section_sep(y, "~ Animation ~"); y += 16;
+
+    /* texture */
+    y = build_texture_section(y);
+    if (g_sel_puppet->tex == NULL && sf_ctx.tex_count > 0) {/* hint only */}
+
+    /* clip selector */
+    static const char *s_clip_names[16];
+    int nc = p->clip_cnt < 16 ? p->clip_cnt : 16;
+    for (int ci = 0; ci < nc; ci++) s_clip_names[ci] = p->clips[ci].name;
+    if (nc == 0) {
+      sf_add_label(&sf_ctx, "(no clips)", (sf_ivec2_t){20, y}, 0xFFAAAAAA); y += 14;
+    } else {
+      sf_add_label(&sf_ctx, "clip", (sf_ivec2_t){20, y}, SF_CLR_WHITE); y += 14;
+      if (g_anim_clip_sel >= nc) g_anim_clip_sel = 0;
+      sf_add_dropdown(&sf_ctx, (sf_ivec2_t){20, y}, (sf_ivec2_t){210, y+20}, s_clip_names, nc, &g_anim_clip_sel, cb_anim_clip_sel, NULL);
+      y += 26;
+
+      /* transport */
+      const char *play_lbl = g_sel_puppet->is_playing ? "| |" : "|>";
+      sf_add_button(&sf_ctx, "|<", (sf_ivec2_t){20, y}, (sf_ivec2_t){62, y+20}, cb_anim_rewind, NULL);
+      sf_add_button(&sf_ctx, play_lbl, (sf_ivec2_t){66, y}, (sf_ivec2_t){210, y+20}, cb_anim_play, NULL);
+      y += 26;
+
+      /* scrubber */
+      float dur = p->clips[g_anim_clip_sel].duration;
+      if (dur > 0.0f) {
+        sf_add_label(&sf_ctx, "time", (sf_ivec2_t){20, y}, SF_CLR_WHITE); y += 14;
+        if (!g_sel_puppet->is_playing) {
+          g_anim_scrub_t = g_sel_puppet->anim_time;
+        }
+        sf_add_drag_float(&sf_ctx, (sf_ivec2_t){20, y}, (sf_ivec2_t){210, y+20}, &g_anim_scrub_t, 0.01f, cb_anim_scrub, NULL);
+        if (g_anim_scrub_t < 0.0f) g_anim_scrub_t = 0.0f;
+        if (g_anim_scrub_t > dur)  g_anim_scrub_t = dur;
+        y += 26;
+
+        static char s_timeinfo[32];
+        snprintf(s_timeinfo, sizeof(s_timeinfo), "%.2fs / %.2fs", g_sel_puppet->anim_time, dur);
+        sf_add_label(&sf_ctx, s_timeinfo, (sf_ivec2_t){20, y}, 0xFFAAAAAA); y += 16;
+      }
+
+      /* bone list */
+      sf_add_label(&sf_ctx, "bones", (sf_ivec2_t){20, y}, SF_CLR_WHITE); y += 14;
+      int show = p->bone_cnt < 8 ? p->bone_cnt : 8;
+      static char s_bname[8][48];
+      for (int b = 0; b < show; b++) {
+        snprintf(s_bname[b], sizeof(s_bname[0]), "  %d %s", b, p->bones[b].name);
+        sf_add_label(&sf_ctx, s_bname[b], (sf_ivec2_t){20, y}, 0xFFAAAAAA); y += 12;
+      }
+      if (p->bone_cnt > 8) {
+        static char s_more[24];
+        snprintf(s_more, sizeof(s_more), "  ...+%d more", p->bone_cnt-8);
+        sf_add_label(&sf_ctx, s_more, (sf_ivec2_t){20, y}, 0xFF666666); y += 12;
+      }
+      y += 4;
+    }
+  }
+
   y += 6;
   build_section_sep(y, "~ Parenting ~"); y += 16;
   const char *pn = (sf->parent && sf->parent->name) ? sf->parent->name : "(none)";
@@ -1640,7 +1816,7 @@ static void build_sfui_tab(void);
 static void rebuild_ui(void) {
   sf_ui_clear(&sf_ctx);
   g_spawn_btn_has_pos = false;
-  for (int i = 0; i < 9; i++) g_spawn_btn_el[i] = NULL;
+  for (int i = 0; i < 10; i++) g_spawn_btn_el[i] = NULL;
   g_icon_reg_n = 0;
   rebuild_parent_list();
   build_tab_bar();
@@ -2029,7 +2205,8 @@ int main(int argc, char *argv[]) {
   sf_init(&sf_ctx, g_w, g_h);
   scan_models();
   scan_textures();
-  for (int i = 0; i < 9; i++) {
+  scan_puppets();
+  for (int i = 0; i < 10; i++) {
     char nm[32];
     snprintf(nm, sizeof(nm), "icon_%d", i);
     g_spawn_icon_tex[i] = sf_load_texture_bmp(&sf_ctx, k_spawn_icon_bmp[i], nm);
@@ -2090,6 +2267,13 @@ int main(int argc, char *argv[]) {
     if (g_tab == TAB_SFF) update_camera();
 
     if (g_tab == TAB_SFF) {
+      for (int i = 0; i < sf_ctx.puppet_inst_count; i++) {
+        sf_puppet_inst_t *pi = &sf_ctx.puppet_insts[i];
+        if (pi->is_playing) {
+          sf_puppet_update(&sf_ctx, pi, sf_ctx.delta_time);
+          if (g_sel_puppet == pi) g_ui_dirty = true;
+        }
+      }
       sf_render_ctx(&sf_ctx);
       if (g_dbg_frames) sf_draw_debug_frames(&sf_ctx, &sf_ctx.main_camera, 1.0f);
       if (g_dbg_lights) sf_draw_debug_lights(&sf_ctx, &sf_ctx.main_camera, 0.3f);
