@@ -75,16 +75,14 @@ typedef enum {
   SF_RUN_STATE_STOPPED
 } sf_run_state_t;
 
-typedef void  (*sf_log_fn    )(const char* message, void* userdata);
-typedef float (*sf_height_fn )(float x, float z, void *ud);
-typedef void  (*sf_event_cb  )(struct sf_ctx_t_ *ctx, const sf_event_t *event, void *userdata);
-
 typedef enum {
   SF_LOG_DEBUG,
   SF_LOG_INFO,
   SF_LOG_WARN,
   SF_LOG_ERROR
 } sf_log_level_t;
+
+typedef void  (*sf_log_fn    )(const char* message, void* userdata);
 
 typedef uint32_t sf_pkd_clr_t;
 typedef struct { uint8_t  r, g, b, a; } sf_unpkd_clr_t;
@@ -244,6 +242,8 @@ typedef struct {
   uint8_t                          *buffer;
 } sf_arena_t;
 
+typedef float (*sf_height_fn )(float x, float z, void *ud);
+
 typedef enum {
   SF_KEY_UNKNOWN = 0,
   SF_KEY_A, SF_KEY_B, SF_KEY_C, SF_KEY_D, SF_KEY_E, SF_KEY_F, SF_KEY_G, SF_KEY_H,
@@ -289,6 +289,8 @@ typedef struct {
     struct { char text[8]; }       text;
   };
 } sf_event_t;
+
+typedef void  (*sf_event_cb  )(struct sf_ctx_t_ *ctx, const sf_event_t *event, void *userdata);
 
 typedef struct {
   sf_event_cb                       cb;
