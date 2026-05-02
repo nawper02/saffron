@@ -75,7 +75,10 @@ typedef enum {
   SF_RUN_STATE_STOPPED
 } sf_run_state_t;
 
-typedef void (*sf_log_fn)(const char* message, void* userdata);
+typedef void  (*sf_log_fn    )(const char* message, void* userdata);
+typedef float (*sf_height_fn )(float x, float z, void *ud);
+typedef void  (*sf_event_cb  )(struct sf_ctx_t_ *ctx, const sf_event_t *event, void *userdata);
+
 typedef enum {
   SF_LOG_DEBUG,
   SF_LOG_INFO,
@@ -91,6 +94,7 @@ typedef struct { int      x, y, z;    } sf_svec3_t;
 typedef struct { float    x, y, z;    } sf_fvec3_t;
 typedef struct { int      x, y, z;    } sf_ivec3_t;
 typedef struct { float m[4][4];       } sf_fmat4_t;
+typedef struct { sf_fvec3_t o, d;     } sf_ray_t;
 
 typedef enum {
   SF_CONV_DEFAULT = 0,
@@ -285,8 +289,6 @@ typedef struct {
     struct { char text[8]; }       text;
   };
 } sf_event_t;
-
-typedef void (*sf_event_cb)(struct sf_ctx_t_ *ctx, const sf_event_t *event, void *userdata);
 
 typedef struct {
   sf_event_cb                       cb;
@@ -558,7 +560,6 @@ bool           sf_save_sfui         (sf_ctx_t *ctx, sf_ui_t *ui, const char *fil
 sf_ui_t*       sf_load_sfui         (sf_ctx_t *ctx, const char *filepath);
 
 /* SF_MESH_AUTHORING_FUNCTIONS */
-typedef float  (*sf_height_fn)      (float x, float z, void *ud);
 sf_obj_t*      sf_obj_create_empty  (sf_ctx_t *ctx, const char *objname, int max_v, int max_vt, int max_f);
 int            sf_obj_add_vert      (sf_obj_t *obj, sf_fvec3_t p);
 int            sf_obj_add_uv        (sf_obj_t *obj, sf_fvec2_t uv);
@@ -574,7 +575,6 @@ float          sf_noise_fbm         (float x, float z, int oct, float lac, float
 bool           sf_obj_save_obj      (sf_ctx_t *ctx, sf_obj_t *obj, const char *filepath);
 
 /* SF_PICKING_FUNCTIONS */
-typedef struct { sf_fvec3_t o, d; } sf_ray_t;
 sf_ray_t       sf_ray_from_screen   (sf_ctx_t *ctx, sf_cam_t *cam, int sx, int sy);
 sf_enti_t*     sf_raycast_entities  (sf_ctx_t *ctx, sf_ray_t ray, float *out_t);
 bool           sf_ray_triangle      (sf_ray_t r, sf_fvec3_t a, sf_fvec3_t b, sf_fvec3_t c, float *out_t);
