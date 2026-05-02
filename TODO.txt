@@ -1,5 +1,4 @@
 TODO
-  ** Clean up claude's style -- some function names too long, he put stuff under sf_font_data including new sections (sigh, idiot)
   **Add fog
   .mtl parsing and rendering
   Orbit camera (takes in entity, automatically handles mouse pan)
