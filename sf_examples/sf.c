@@ -134,7 +134,7 @@ int main(int argc, char* argv[]) {
 
         sf_time_update(&sf_ctx);
 
-        sf_update_ui(&sf_ctx, sf_ctx.ui);
+        sf_ui_update(&sf_ctx, sf_ctx.ui);
 
         sf_render_ctx(&sf_ctx);
         sf_rect(&sf_ctx, &sf_ctx.main_camera, SF_CLR_WHITE, (sf_ivec2_t){width-pip_cam->w-22, height-pip_cam->h-22}, (sf_ivec2_t){width-19, height-19});
@@ -144,7 +144,7 @@ int main(int argc, char* argv[]) {
             sf_draw_debug_ovrlay(&sf_ctx, &sf_ctx.main_camera);
         }
 
-        sf_render_ui(&sf_ctx, &sf_ctx.main_camera, sf_ctx.ui);
+        sf_ui_render(&sf_ctx, &sf_ctx.main_camera, sf_ctx.ui);
 
         SDL_UpdateTexture(texture, NULL, sf_ctx.main_camera.buffer, sf_ctx.main_camera.w * sizeof(sf_pkd_clr_t));
         SDL_RenderCopy(renderer, texture, NULL, NULL);

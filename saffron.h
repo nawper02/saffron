@@ -470,6 +470,8 @@ sf_arena_t     sf_arena_init        (sf_ctx_t *ctx, size_t size);
 void*          sf_arena_alloc       (sf_ctx_t *ctx, sf_arena_t *arena, size_t size);
 size_t         sf_arena_save        (sf_ctx_t *ctx, sf_arena_t *arena);
 void           sf_arena_restore     (sf_ctx_t *ctx, sf_arena_t *arena, size_t mark);
+size_t         _sf_obj_memusg       (sf_obj_t *obj);
+char*          _sf_arena_strdup     (sf_ctx_t *ctx, const char *s);
 
 /* SF_EVENT_FUNCTIONS */
 void           sf_event_reg         (sf_ctx_t *ctx, sf_event_type_t type, sf_event_cb cb, void *userdata);
@@ -505,13 +507,24 @@ void           sf_enti_rotate       (sf_ctx_t *ctx, sf_enti_t *enti, float drx, 
 void           sf_enti_set_scale    (sf_ctx_t *ctx, sf_enti_t *enti, float sx, float sy, float sz);
 void           sf_enti_set_tex      (sf_ctx_t *ctx, const char *entiname, const char *texname);
 void           sf_obj_recenter      (sf_obj_t *obj);
-void           sf_load_sff          (sf_ctx_t *ctx, const char *filename, const char *worldname);
-bool           sf_save_sff          (sf_ctx_t *ctx, const char *filepath);
 void           sf_camera_set_psp    (sf_ctx_t *ctx, sf_cam_t *cam, float fov, float near_plane, float far_plane);
 void           sf_camera_set_pos    (sf_ctx_t *ctx, sf_cam_t *cam, float x, float y, float z);
 void           sf_camera_move_loc   (sf_ctx_t *ctx, sf_cam_t *cam, float fwd, float right, float up);
 void           sf_camera_look_at    (sf_ctx_t *ctx, sf_cam_t *cam, sf_fvec3_t target);
 void           sf_camera_add_yp     (sf_ctx_t *ctx, sf_cam_t *cam, float yaw_offset, float pitch_offset);
+void           sf_load_sff          (sf_ctx_t *ctx, const char *filename, const char *worldname);
+bool           sf_save_sff          (sf_ctx_t *ctx, const char *filepath);
+bool           _sf_sff_read_kv      (FILE *f, char *key, size_t ksz, char *val, size_t vsz);
+void           _sf_sff_trim         (char *s);
+sf_fvec3_t     _sf_sff_prse_vec3    (const char *s);
+int            _sf_sff_prse_list    (const char *s, char out[][64], int max);
+sf_frame_t*    _sf_sff_get_frame_   (sf_ctx_t *ctx, const char *name);
+void           _sf_sff_prse_frame   (sf_ctx_t *ctx, FILE *f, const char *name, int *frame_count);
+void           _sf_sff_prse_cam     (sf_ctx_t *ctx, FILE *f, const char *name, int *cam_count);
+void           _sf_sff_prse_enti    (sf_ctx_t *ctx, FILE *f, const char *name, int *enti_count);
+void           _sf_sff_prse_light   (sf_ctx_t *ctx, FILE *f, const char *name, int *light_count);
+void           _sf_sff_prse_sprit   (sf_ctx_t *ctx, FILE *f, const char *name, int *sprite_count);
+void           _sf_sff_prse_emitr   (sf_ctx_t *ctx, FILE *f, const char *name, int *emitr_count);
 
 /* SF_FRAME_FUNCTIONS */
 sf_frame_t*    sf_get_root          (sf_ctx_t *ctx, sf_convention_t conv);
@@ -520,6 +533,9 @@ void           sf_update_frames     (sf_ctx_t *ctx);
 void           sf_frame_look_at     (sf_frame_t *f, sf_fvec3_t target);
 void           sf_frame_set_parent  (sf_frame_t *child, sf_frame_t *new_parent);
 void           sf_remove_frame      (sf_ctx_t *ctx, sf_frame_t *f);
+void           _sf_set_up_frames    (sf_ctx_t *ctx);
+void           _sf_calc_frame_tree  (sf_frame_t *f, sf_fmat4_t parent_global_M, bool force_dirty);
+void           _sf_write_frame_ref  (FILE *f, sf_frame_t *fr, sf_ctx_t *ctx);
 
 /* SF_DRAWING_FUNCTIONS */
 void           sf_fill              (sf_ctx_t *ctx, sf_cam_t *cam, sf_pkd_clr_t c);
@@ -541,25 +557,42 @@ void           sf_draw_debug_perf   (sf_ctx_t *ctx, sf_cam_t *cam);
 void           sf_draw_sprite       (sf_ctx_t *ctx, sf_cam_t *cam, sf_sprite_t *spr, sf_fvec3_t pos_w, float anim_time, float scale_mult);
 
 /* SF_UI_FUNCTIONS */
-sf_ui_t*       sf_create_ui         (sf_ctx_t *ctx);
-void           sf_update_ui         (sf_ctx_t *ctx, sf_ui_t *ui);
-void           sf_render_ui         (sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_t *ui);
-sf_ui_lmn_t*   sf_add_button        (sf_ctx_t *ctx, const char *text, sf_ivec2_t v0, sf_ivec2_t v1, sf_ui_cb cb, void *userdata);
-sf_ui_lmn_t*   sf_add_slider        (sf_ctx_t *ctx, sf_ivec2_t v0, sf_ivec2_t v1, float min_val, float max_val, float init_val, sf_ui_cb cb, void *userdata);
-sf_ui_lmn_t*   sf_add_checkbox      (sf_ctx_t *ctx, const char *text, sf_ivec2_t v0, sf_ivec2_t v1, bool init_state, sf_ui_cb cb, void *userdata);
-void           draw_button          (sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_lmn_t *el);
-void           draw_slider          (sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_lmn_t *el);
-void           draw_checkbox        (sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_lmn_t *el);
-sf_ui_lmn_t*   sf_add_label         (sf_ctx_t *ctx, const char *text, sf_ivec2_t pos, sf_pkd_clr_t color);
-sf_ui_lmn_t*   sf_add_text_input    (sf_ctx_t *ctx, sf_ivec2_t v0, sf_ivec2_t v1, char *buf, int buflen, sf_ui_cb cb, void *ud);
-sf_ui_lmn_t*   sf_add_drag_float    (sf_ctx_t *ctx, sf_ivec2_t v0, sf_ivec2_t v1, float *target, float step, sf_ui_cb cb, void *ud);
-sf_ui_lmn_t*   sf_add_dropdown      (sf_ctx_t *ctx, sf_ivec2_t v0, sf_ivec2_t v1, const char **items, int n, int *selected, sf_ui_cb cb, void *ud);
-sf_ui_lmn_t*   sf_add_panel         (sf_ctx_t *ctx, const char *title, sf_ivec2_t v0, sf_ivec2_t v1);
+sf_ui_t*       sf_ui_create         (sf_ctx_t *ctx);
+void           sf_ui_update         (sf_ctx_t *ctx, sf_ui_t *ui);
+void           sf_ui_render         (sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_t *ui);
 void           sf_ui_clear          (sf_ctx_t *ctx);
 sf_ui_lmn_t*   sf_ui_get_by_name    (sf_ui_t *ui, const char *name);
 void           sf_ui_set_callback   (sf_ui_lmn_t *el, sf_ui_cb cb, void *userdata);
+sf_ui_lmn_t*   sf_ui_add_button     (sf_ctx_t *ctx, const char *text, sf_ivec2_t v0, sf_ivec2_t v1, sf_ui_cb cb, void *userdata);
+sf_ui_lmn_t*   sf_ui_add_slider     (sf_ctx_t *ctx, sf_ivec2_t v0, sf_ivec2_t v1, float min_val, float max_val, float init_val, sf_ui_cb cb, void *userdata);
+sf_ui_lmn_t*   sf_ui_add_checkbox   (sf_ctx_t *ctx, const char *text, sf_ivec2_t v0, sf_ivec2_t v1, bool init_state, sf_ui_cb cb, void *userdata);
+sf_ui_lmn_t*   sf_ui_add_label      (sf_ctx_t *ctx, const char *text, sf_ivec2_t pos, sf_pkd_clr_t color);
+sf_ui_lmn_t*   sf_ui_add_text_input (sf_ctx_t *ctx, sf_ivec2_t v0, sf_ivec2_t v1, char *buf, int buflen, sf_ui_cb cb, void *ud);
+sf_ui_lmn_t*   sf_ui_add_drag_float (sf_ctx_t *ctx, sf_ivec2_t v0, sf_ivec2_t v1, float *target, float step, sf_ui_cb cb, void *ud);
+sf_ui_lmn_t*   sf_ui_add_dropdown   (sf_ctx_t *ctx, sf_ivec2_t v0, sf_ivec2_t v1, const char **items, int n, int *selected, sf_ui_cb cb, void *ud);
+sf_ui_lmn_t*   sf_ui_add_panel      (sf_ctx_t *ctx, const char *title, sf_ivec2_t v0, sf_ivec2_t v1);
 bool           sf_save_sfui         (sf_ctx_t *ctx, sf_ui_t *ui, const char *filepath);
 sf_ui_t*       sf_load_sfui         (sf_ctx_t *ctx, const char *filepath);
+sf_ui_lmn_t*   _sf_ui_find_prnt_pnl (sf_ctx_t *ctx, sf_ivec2_t v0, sf_ivec2_t v1);
+bool           _sf_ui_eff_visible   (sf_ui_lmn_t *el);
+void           _sf_draw_button      (sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_lmn_t *el);
+void           _sf_draw_slider      (sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_lmn_t *el);
+void           _sf_draw_checkbox    (sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_lmn_t *el);
+void           _sf_draw_label       (sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_lmn_t *el);
+void           _sf_draw_text_input  (sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_lmn_t *el);
+void           _sf_draw_drag_float  (sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_lmn_t *el);
+void           _sf_draw_dropdown    (sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_lmn_t *el);
+void           _sf_draw_drpdwn_popup(sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_lmn_t *el);
+void           _sf_draw_panel       (sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_lmn_t *el);
+void           _sf_update_text_input(sf_ctx_t *ctx, sf_ui_lmn_t *el, bool m_pressed);
+void           _sf_update_drag_float(sf_ctx_t *ctx, sf_ui_lmn_t *el, bool m_down, bool m_pressed);
+void           _sf_update_dropdown  (sf_ctx_t *ctx, sf_ui_lmn_t *el, bool m_pressed);
+void           _sf_update_panel     (sf_ctx_t *ctx, sf_ui_lmn_t *el, bool m_pressed);
+void           _sf_update_button    (sf_ctx_t *ctx, sf_ui_lmn_t *el, bool m_down, bool m_pressed, bool m_released);
+void           _sf_update_checkbox  (sf_ctx_t *ctx, sf_ui_lmn_t *el, bool m_down, bool m_pressed, bool m_released);
+void           _sf_update_slider    (sf_ctx_t *ctx, sf_ui_lmn_t *el, bool m_down, bool m_pressed, bool m_released);
+const char*    _sf_ui_type_str      (sf_ui_type_t t);
+int            _sf_ui_type_from_str (const char *s);
 
 /* SF_MESH_AUTHORING_FUNCTIONS */
 sf_obj_t*      sf_obj_create_empty  (sf_ctx_t *ctx, const char *objname, int max_v, int max_vt, int max_f);
@@ -573,8 +606,8 @@ sf_obj_t*      sf_obj_make_box      (sf_ctx_t *ctx, const char *objname, float s
 sf_obj_t*      sf_obj_make_sphere   (sf_ctx_t *ctx, const char *objname, float radius, int segs);
 sf_obj_t*      sf_obj_make_cyl      (sf_ctx_t *ctx, const char *objname, float radius, float height, int segs);
 sf_obj_t*      sf_obj_make_heightmap(sf_ctx_t *ctx, const char *objname, float size_x, float size_z, int res, sf_height_fn fn, void *ud);
-float          sf_noise_fbm         (float x, float z, int oct, float lac, float gain, uint32_t seed);
 bool           sf_obj_save_obj      (sf_ctx_t *ctx, sf_obj_t *obj, const char *filepath);
+float          sf_noise_fbm         (float x, float z, int oct, float lac, float gain, uint32_t seed);
 
 /* SF_PICKING_FUNCTIONS */
 sf_ray_t       sf_ray_from_screen   (sf_ctx_t *ctx, sf_cam_t *cam, int sx, int sy);
@@ -587,8 +620,9 @@ bool           sf_ray_aabb          (sf_ray_t r, sf_fvec3_t bmin, sf_fvec3_t bma
 void           sf_log_              (sf_ctx_t *ctx, sf_log_level_t level, const char* func, const char* fmt, ...);
 void           sf_set_logger        (sf_ctx_t *ctx, sf_log_fn log_cb, void* userdata);
 void           sf_logger_console    (const char* message, void* userdata);
+const char*    _sf_log_lvl_to_str   (sf_log_level_t level);
 
-/* SF_LA_FUNCTIONS */
+/* SF_MATH_FUNCTIONS */
 sf_fmat4_t     sf_fmat4_mul_fmat4   (sf_fmat4_t m0, sf_fmat4_t m1);
 sf_fvec3_t     sf_fmat4_mul_vec3    (sf_fmat4_t m, sf_fvec3_t v);
 sf_fvec3_t     sf_fvec3_sub         (sf_fvec3_t v0, sf_fvec3_t v1);
@@ -602,8 +636,6 @@ sf_fmat4_t     sf_make_psp_fmat4    (float fov_deg, float aspect, float near, fl
 sf_fmat4_t     sf_make_idn_fmat4    (void);
 sf_fmat4_t     sf_make_view_fmat4   (sf_fvec3_t eye, sf_fvec3_t target, sf_fvec3_t up);
 sf_fmat4_t     sf_make_scale_fmat4  (sf_fvec3_t scale);
-
-/* SF_IMPLEMENTATION_HELPERS */
 uint32_t       _sf_vec_to_index     (sf_ctx_t *ctx, sf_cam_t *cam, sf_ivec2_t v);
 void           _sf_swap_svec2       (sf_ivec2_t *v0, sf_ivec2_t *v1);
 void           _sf_swap_fvec3       (sf_fvec3_t *v0, sf_fvec3_t *v1);
@@ -611,49 +643,17 @@ float          _sf_lerp_f           (float a, float b, float t);
 sf_fvec3_t     _sf_lerp_fvec3       (sf_fvec3_t a, sf_fvec3_t b, float t);
 sf_fvec3_t     _sf_intersect_near   (sf_fvec3_t v0, sf_fvec3_t v1, float near);
 sf_fvec3_t     _sf_project_vertex   (sf_ctx_t *ctx, sf_cam_t *cam, sf_fvec3_t v, sf_fmat4_t P);
-const char*    _sf_log_lvl_to_str   (sf_log_level_t level);
+float          _sf_hash_2d          (int x, int z, uint32_t seed);
+float          _sf_smooth_noise     (float x, float z, uint32_t seed);
+
+/* SF_IMPLEMENTATION_HELPERS */
 bool           _sf_resolve_asset    (const char* filename, char* out_path, size_t max_len);
+const char*    _sf_basename         (const char *path);
 uint64_t       _sf_get_ticks        (void);
 sf_pkd_clr_t   _sf_pack_color       (sf_unpkd_clr_t);
 sf_unpkd_clr_t _sf_unpack_color     (sf_pkd_clr_t);
-size_t         _sf_obj_memusg       (sf_obj_t *obj);
-void           _sf_set_up_frames    (sf_ctx_t *ctx);
-void           _sf_calc_frame_tree  (sf_frame_t *f, sf_fmat4_t parent_global_M, bool force_dirty);
-bool           _sf_sff_read_kv      (FILE *f, char *key, size_t ksz, char *val, size_t vsz);
-void           _sf_sff_trim         (char *s);
-sf_fvec3_t     _sf_sff_prse_vec3    (const char *s);
-int            _sf_sff_prse_list    (const char *s, char out[][64], int max);
-sf_frame_t*    _sf_sff_get_frame_   (sf_ctx_t *ctx, const char *name);
-void           _sf_sff_prse_frame   (sf_ctx_t *ctx, FILE *f, const char *name, int *frame_count);
-void           _sf_sff_prse_cam     (sf_ctx_t *ctx, FILE *f, const char *name, int *cam_count);
-void           _sf_sff_prse_enti    (sf_ctx_t *ctx, FILE *f, const char *name, int *enti_count);
-void           _sf_sff_prse_light   (sf_ctx_t *ctx, FILE *f, const char *name, int *light_count);
-void           _sf_sff_prse_sprit   (sf_ctx_t *ctx, FILE *f, const char *name, int *sprite_count);
-void           _sf_sff_prse_emitr   (sf_ctx_t *ctx, FILE *f, const char *name, int *emitr_count);
-const char*    _sf_basename         (const char *path);
-void           _sf_write_frame_ref  (FILE *f, sf_frame_t *fr, sf_ctx_t *ctx);
-const char*    _sf_ui_type_str      (sf_ui_type_t t);
-int            _sf_ui_type_from_str (const char *s);
 void           _sf_write_qstr       (FILE *f, const char *s);
-char*          _sf_arena_strdup     (sf_ctx_t *ctx, const char *s);
 bool           _sf_parse_qstr       (const char *line, const char *key, char *out, size_t outsz);
-sf_ui_lmn_t*   _sf_ui_find_prnt_pnl (sf_ctx_t *ctx, sf_ivec2_t v0, sf_ivec2_t v1);
-bool           _sf_ui_eff_visible   (sf_ui_lmn_t *el);
-void           _sf_update_button    (sf_ctx_t *ctx, sf_ui_lmn_t *el, bool m_down, bool m_pressed, bool m_released);
-void           _sf_update_checkbox  (sf_ctx_t *ctx, sf_ui_lmn_t *el, bool m_down, bool m_pressed, bool m_released);
-void           _sf_update_slider    (sf_ctx_t *ctx, sf_ui_lmn_t *el, bool m_down, bool m_pressed, bool m_released);
-void           _sf_draw_label       (sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_lmn_t *el);
-void           _sf_draw_text_input  (sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_lmn_t *el);
-void           _sf_draw_drag_float  (sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_lmn_t *el);
-void           _sf_draw_dropdown    (sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_lmn_t *el);
-void           _sf_draw_drpdwn_popup(sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_lmn_t *el);
-void           _sf_draw_panel       (sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_lmn_t *el);
-void           _sf_update_text_input(sf_ctx_t *ctx, sf_ui_lmn_t *el, bool m_pressed);
-void           _sf_update_drag_float(sf_ctx_t *ctx, sf_ui_lmn_t *el, bool m_down, bool m_pressed);
-void           _sf_update_dropdown  (sf_ctx_t *ctx, sf_ui_lmn_t *el, bool m_pressed);
-void           _sf_update_panel     (sf_ctx_t *ctx, sf_ui_lmn_t *el, bool m_pressed);
-float          _sf_hash_2d          (int x, int z, uint32_t seed);
-float          _sf_smooth_noise     (float x, float z, uint32_t seed);
 
 /* SF_GAMMA_LUT */
 static const uint8_t                _sf_gamma_lut[256];
@@ -710,7 +710,7 @@ void sf_init(sf_ctx_t *ctx, int w, int h) {
   ctx->elapsed_time                 = 0.0f;
   ctx->fps                          = 0.0f;
   ctx->frame_count                  = 0;
-  ctx->ui                           = sf_create_ui(ctx);
+  ctx->ui                           = sf_ui_create(ctx);
   _sf_set_up_frames(ctx);
   ctx->main_camera.frame                = sf_add_frame(ctx, NULL);
 
@@ -1113,6 +1113,23 @@ size_t sf_arena_save(sf_ctx_t *ctx, sf_arena_t *arena) {
 
 void sf_arena_restore(sf_ctx_t *ctx, sf_arena_t *arena, size_t mark) {
   arena->offset = mark;
+}
+
+size_t _sf_obj_memusg(sf_obj_t *obj) {
+  if (!obj) return 0;
+  size_t v_size  = obj->v_cnt * sizeof(sf_fvec3_t);
+  size_t vt_size = obj->vt_cnt * sizeof(sf_fvec2_t);
+  size_t vn_size = obj->vn_cnt * sizeof(sf_fvec3_t);
+  size_t f_size  = obj->f_cnt * sizeof(sf_face_t);
+  return v_size + vt_size + vn_size + f_size;
+}
+
+char* _sf_arena_strdup(sf_ctx_t *ctx, const char *s) {
+  if (!s) return NULL;
+  size_t n = strlen(s) + 1;
+  char *m = (char*)sf_arena_alloc(ctx, &ctx->arena, n);
+  if (m) memcpy(m, s, n);
+  return m;
 }
 
 /* SF_EVENT_FUNCTIONS */
@@ -1799,6 +1816,43 @@ void sf_enti_set_tex(sf_ctx_t *ctx, const char *entiname, const char *texname) {
   }
 }
 
+void sf_camera_set_psp(sf_ctx_t *ctx, sf_cam_t *cam, float fov, float near_plane, float far_plane) {
+  cam->fov        = fov;
+  cam->near_plane = near_plane;
+  cam->far_plane  = far_plane;
+  cam->is_proj_dirty = true;
+}
+
+void sf_camera_set_pos(sf_ctx_t *ctx, sf_cam_t *cam, float x, float y, float z) {
+  cam->frame->pos = (sf_fvec3_t){x, y, z};
+  cam->frame->is_dirty = true;
+}
+
+void sf_camera_move_loc(sf_ctx_t *ctx, sf_cam_t *cam, float fwd, float right, float up) {
+  if (!cam || !cam->frame) return;
+  sf_fmat4_t m = cam->frame->global_M;
+  sf_fvec3_t m_fwd = {-m.m[2][0] * fwd, -m.m[2][1] * fwd, -m.m[2][2] * fwd};
+  sf_fvec3_t m_rgt = { m.m[0][0] * right, m.m[0][1] * right, m.m[0][2] * right};
+  sf_fvec3_t m_up  = { m.m[1][0] * up,  m.m[1][1] * up,  m.m[1][2] * up};
+  cam->frame->pos = sf_fvec3_add(cam->frame->pos, m_fwd);
+  cam->frame->pos = sf_fvec3_add(cam->frame->pos, m_rgt);
+  cam->frame->pos = sf_fvec3_add(cam->frame->pos, m_up);
+  cam->frame->is_dirty = true;
+}
+
+void sf_camera_look_at(sf_ctx_t *ctx, sf_cam_t *cam, sf_fvec3_t target) {
+  if (cam && cam->frame) sf_frame_look_at(cam->frame, target);
+}
+
+void sf_camera_add_yp(sf_ctx_t *ctx, sf_cam_t *cam, float yaw_offset, float pitch_offset) {
+  if (!cam || !cam->frame) return;
+  cam->frame->rot.y -= SF_DEG2RAD(yaw_offset);
+  cam->frame->rot.x += SF_DEG2RAD(pitch_offset);
+  if (cam->frame->rot.x >  SF_DEG2RAD(89.0f)) cam->frame->rot.x =  SF_DEG2RAD(89.0f);
+  if (cam->frame->rot.x < -SF_DEG2RAD(89.0f)) cam->frame->rot.x = -SF_DEG2RAD(89.0f);
+  cam->frame->is_dirty = true;
+}
+
 void sf_load_sff(sf_ctx_t *ctx, const char *filename, const char *worldname) {
   char r_path[512];
   const char *open_path = filename;
@@ -1947,41 +2001,247 @@ bool sf_save_sff(sf_ctx_t *ctx, const char *filepath) {
   return true;
 }
 
-void sf_camera_set_psp(sf_ctx_t *ctx, sf_cam_t *cam, float fov, float near_plane, float far_plane) {
-  cam->fov        = fov;
-  cam->near_plane = near_plane;
-  cam->far_plane  = far_plane;
-  cam->is_proj_dirty = true;
+bool _sf_sff_read_kv(FILE *f, char *key, size_t ksz, char *val, size_t vsz) {
+  char line[512];
+  while (fgets(line, sizeof(line), f)) {
+    _sf_sff_trim(line);
+    if (line[0] == '#' || line[0] == '\0') continue;
+    if (line[0] == '}') return false;
+    char *eq = strchr(line, '=');
+    if (!eq) continue;
+    *eq = '\0';
+    char *k = line;  _sf_sff_trim(k);
+    char *v = eq + 1; _sf_sff_trim(v);
+    snprintf(key, ksz, "%s", k);
+    snprintf(val, vsz, "%s", v);
+    return true;
+  }
+  return false;
 }
 
-void sf_camera_set_pos(sf_ctx_t *ctx, sf_cam_t *cam, float x, float y, float z) {
-  cam->frame->pos = (sf_fvec3_t){x, y, z};
-  cam->frame->is_dirty = true;
+void _sf_sff_trim(char *s) {
+  while (*s == ' ' || *s == '\t') { char *d = s; while ((*d = *(d+1))) d++; }
+  size_t len = strlen(s);
+  while (len > 0 && (s[len-1] == ' ' || s[len-1] == '\t' || s[len-1] == '\n' || s[len-1] == '\r')) s[--len] = '\0';
 }
 
-void sf_camera_move_loc(sf_ctx_t *ctx, sf_cam_t *cam, float fwd, float right, float up) {
-  if (!cam || !cam->frame) return;
-  sf_fmat4_t m = cam->frame->global_M;
-  sf_fvec3_t m_fwd = {-m.m[2][0] * fwd, -m.m[2][1] * fwd, -m.m[2][2] * fwd};
-  sf_fvec3_t m_rgt = { m.m[0][0] * right, m.m[0][1] * right, m.m[0][2] * right};
-  sf_fvec3_t m_up  = { m.m[1][0] * up,  m.m[1][1] * up,  m.m[1][2] * up};
-  cam->frame->pos = sf_fvec3_add(cam->frame->pos, m_fwd);
-  cam->frame->pos = sf_fvec3_add(cam->frame->pos, m_rgt);
-  cam->frame->pos = sf_fvec3_add(cam->frame->pos, m_up);
-  cam->frame->is_dirty = true;
+sf_fvec3_t _sf_sff_prse_vec3(const char *s) {
+  sf_fvec3_t v = {0, 0, 0};
+  sscanf(s, " ( %f , %f , %f )", &v.x, &v.y, &v.z);
+  return v;
 }
 
-void sf_camera_look_at(sf_ctx_t *ctx, sf_cam_t *cam, sf_fvec3_t target) {
-  if (cam && cam->frame) sf_frame_look_at(cam->frame, target);
+int _sf_sff_prse_list(const char *s, char out[][64], int max) {
+  const char *p = strchr(s, '[');
+  if (!p) return 0;
+  p++;
+  int count = 0;
+  while (count < max) {
+    while (*p == ' ' || *p == '\t') p++;
+    if (*p == ']' || *p == '\0') break;
+    int i = 0;
+    while (*p && *p != ',' && *p != ']' && *p != ' ' && *p != '\t' && i < 63) out[count][i++] = *p++;
+    out[count][i] = '\0';
+    count++;
+    while (*p == ' ' || *p == '\t') p++;
+    if (*p == ',') p++;
+  }
+  return count;
 }
 
-void sf_camera_add_yp(sf_ctx_t *ctx, sf_cam_t *cam, float yaw_offset, float pitch_offset) {
-  if (!cam || !cam->frame) return;
-  cam->frame->rot.y -= SF_DEG2RAD(yaw_offset);
-  cam->frame->rot.x += SF_DEG2RAD(pitch_offset);
-  if (cam->frame->rot.x >  SF_DEG2RAD(89.0f)) cam->frame->rot.x =  SF_DEG2RAD(89.0f);
-  if (cam->frame->rot.x < -SF_DEG2RAD(89.0f)) cam->frame->rot.x = -SF_DEG2RAD(89.0f);
-  cam->frame->is_dirty = true;
+sf_frame_t* _sf_sff_get_frame_(sf_ctx_t *ctx, const char *name) {
+  for (int i = 0; i < ctx->frames_count; i++) {
+    if (ctx->frames[i].name && strcmp(ctx->frames[i].name, name) == 0)
+      return &ctx->frames[i];
+  }
+  return NULL;
+}
+
+void _sf_sff_prse_frame(sf_ctx_t *ctx, FILE *f, const char *name, int *frame_count) {
+  char key[64], val[256];
+  char parent_name[64] = {0};
+  sf_fvec3_t pos = {0,0,0}, rot = {0,0,0}, scale = {1,1,1};
+  while (_sf_sff_read_kv(f, key, sizeof(key), val, sizeof(val))) {
+    if      (strcmp(key, "pos")    == 0) pos   = _sf_sff_prse_vec3(val);
+    else if (strcmp(key, "rot")    == 0) rot   = _sf_sff_prse_vec3(val);
+    else if (strcmp(key, "scale")  == 0) scale = _sf_sff_prse_vec3(val);
+    else if (strcmp(key, "parent") == 0) snprintf(parent_name, sizeof(parent_name), "%s", val);
+  }
+  sf_frame_t *parent = NULL;
+  if (parent_name[0]) parent = _sf_sff_get_frame_(ctx, parent_name);
+  sf_frame_t *fr = sf_add_frame(ctx, parent);
+  if (!fr) return;
+  fr->pos   = pos;
+  fr->rot   = rot;
+  fr->scale = scale;
+  fr->is_dirty = true;
+  size_t name_len = strlen(name) + 1;
+  fr->name = (const char*)sf_arena_alloc(ctx, &ctx->arena, name_len);
+  if (fr->name) memcpy((void*)fr->name, name, name_len);
+  (*frame_count)++;
+}
+
+void _sf_sff_prse_cam(sf_ctx_t *ctx, FILE *f, const char *name, int *cam_count) {
+  char key[64], val[256];
+  char parent_frame[64] = {0};
+  sf_fvec3_t pos = {0,0,0}, target = {0,0,0};
+  float fov = 60.0f;
+  int w = 0, h = 0;
+  bool has_target = false;
+  while (_sf_sff_read_kv(f, key, sizeof(key), val, sizeof(val))) {
+    if      (strcmp(key, "pos")    == 0) pos    = _sf_sff_prse_vec3(val);
+    else if (strcmp(key, "target") == 0) { target = _sf_sff_prse_vec3(val); has_target = true; }
+    else if (strcmp(key, "fov")    == 0) sscanf(val, "%f", &fov);
+    else if (strcmp(key, "frame")  == 0) snprintf(parent_frame, sizeof(parent_frame), "%s", val);
+    else if (strcmp(key, "size")   == 0) { sf_fvec3_t s = _sf_sff_prse_vec3(val); w = (int)s.x; h = (int)s.y; }
+  }
+  if (strcmp(name, "main") == 0) {
+    sf_camera_set_pos(ctx, &ctx->main_camera, pos.x, pos.y, pos.z);
+    if (has_target) sf_camera_look_at(ctx, &ctx->main_camera, target);
+    ctx->main_camera.fov = fov;
+    ctx->main_camera.is_proj_dirty = true;
+    if (parent_frame[0]) {
+      sf_frame_t *pf = _sf_sff_get_frame_(ctx, parent_frame);
+      if (pf) sf_frame_set_parent(ctx->main_camera.frame, pf);
+    }
+  } else {
+    if (w == 0) w = ctx->main_camera.w;
+    if (h == 0) h = ctx->main_camera.h;
+    sf_cam_t *cam = sf_add_cam(ctx, name, w, h, fov);
+    if (cam) {
+      sf_camera_set_pos(ctx, cam, pos.x, pos.y, pos.z);
+      if (has_target) sf_camera_look_at(ctx, cam, target);
+      if (parent_frame[0]) {
+        sf_frame_t *pf = _sf_sff_get_frame_(ctx, parent_frame);
+        if (pf) sf_frame_set_parent(cam->frame, pf);
+      }
+    }
+  }
+  (*cam_count)++;
+}
+
+void _sf_sff_prse_enti(sf_ctx_t *ctx, FILE *f, const char *name, int *enti_count) {
+  char key[64], val[256];
+  char mesh_name[64] = {0}, tex_name[64] = {0}, parent_frame[64] = {0};
+  sf_fvec3_t pos = {0,0,0}, rot = {0,0,0}, scale = {1,1,1};
+  sf_fvec2_t tex_scale = {1.0f, 1.0f};
+  bool has_tex_scale = false;
+  while (_sf_sff_read_kv(f, key, sizeof(key), val, sizeof(val))) {
+    if      (strcmp(key, "mesh")      == 0) snprintf(mesh_name, sizeof(mesh_name), "%s", val);
+    else if (strcmp(key, "texture")   == 0) snprintf(tex_name, sizeof(tex_name), "%s", val);
+    else if (strcmp(key, "tex_scale") == 0) { sf_fvec3_t v = _sf_sff_prse_vec3(val); tex_scale = (sf_fvec2_t){v.x, v.y}; has_tex_scale = true; }
+    else if (strcmp(key, "frame")     == 0) snprintf(parent_frame, sizeof(parent_frame), "%s", val);
+    else if (strcmp(key, "pos")       == 0) pos   = _sf_sff_prse_vec3(val);
+    else if (strcmp(key, "rot")       == 0) rot   = _sf_sff_prse_vec3(val);
+    else if (strcmp(key, "scale")     == 0) scale = _sf_sff_prse_vec3(val);
+  }
+  sf_obj_t *obj = sf_get_obj_(ctx, mesh_name, true);
+  if (!obj) return;
+  sf_enti_t *enti = sf_add_enti(ctx, obj, name);
+  if (!enti) return;
+  sf_enti_set_pos(ctx, enti, pos.x, pos.y, pos.z);
+  sf_enti_set_rot(ctx, enti, rot.x, rot.y, rot.z);
+  sf_enti_set_scale(ctx, enti, scale.x, scale.y, scale.z);
+  if (tex_name[0]) enti->tex = sf_get_texture_(ctx, tex_name, true);
+  if (has_tex_scale) enti->tex_scale = tex_scale;
+  if (parent_frame[0]) {
+    sf_frame_t *pf = _sf_sff_get_frame_(ctx, parent_frame);
+    if (pf) sf_frame_set_parent(enti->frame, pf);
+  }
+  (*enti_count)++;
+}
+
+void _sf_sff_prse_light(sf_ctx_t *ctx, FILE *f, const char *name, int *light_count) {
+  char key[64], val[256];
+  char type_str[16] = "point", parent_frame[64] = {0};
+  sf_fvec3_t pos = {0,0,0}, color = {1,1,1};
+  float intensity = 1.0f;
+  while (_sf_sff_read_kv(f, key, sizeof(key), val, sizeof(val))) {
+    if      (strcmp(key, "type")      == 0) snprintf(type_str, sizeof(type_str), "%s", val);
+    else if (strcmp(key, "frame")     == 0) snprintf(parent_frame, sizeof(parent_frame), "%s", val);
+    else if (strcmp(key, "pos")       == 0) pos       = _sf_sff_prse_vec3(val);
+    else if (strcmp(key, "color")     == 0) color     = _sf_sff_prse_vec3(val);
+    else if (strcmp(key, "intensity") == 0) sscanf(val, "%f", &intensity);
+  }
+  sf_light_t *l = NULL;
+  if (strcmp(type_str, "dir") == 0) {
+    l = sf_add_light(ctx, name, SF_LIGHT_DIR, color, intensity);
+    if (l) sf_frame_look_at(l->frame, pos);
+  } else {
+    l = sf_add_light(ctx, name, SF_LIGHT_POINT, color, intensity);
+    if (l) l->frame->pos = pos;
+  }
+  if (l && parent_frame[0]) {
+    sf_frame_t *pf = _sf_sff_get_frame_(ctx, parent_frame);
+    if (pf) sf_frame_set_parent(l->frame, pf);
+  }
+  (*light_count)++;
+}
+
+void _sf_sff_prse_sprit(sf_ctx_t *ctx, FILE *f, const char *name, int *sprite_count) {
+  char key[64], val[256];
+  float duration = 1.0f, scale = 1.0f;
+  char frame_names[SF_MAX_SPRITE_FRAMES][64] = {{0}};
+  int frame_count = 0;
+  while (_sf_sff_read_kv(f, key, sizeof(key), val, sizeof(val))) {
+    if      (strcmp(key, "duration") == 0) sscanf(val, "%f", &duration);
+    else if (strcmp(key, "scale")    == 0) sscanf(val, "%f", &scale);
+    else if (strcmp(key, "frames")   == 0) frame_count = _sf_sff_prse_list(val, frame_names, SF_MAX_SPRITE_FRAMES);
+  }
+  if (frame_count == 0) return;
+  if (ctx->sprite_count >= SF_MAX_SPRITES) return;
+  if (NULL != sf_get_sprite_(ctx, name, false)) return;
+  sf_sprite_t *spr = &ctx->sprites[ctx->sprite_count++];
+  spr->id = ctx->sprite_count - 1;
+  spr->frame_count = frame_count;
+  spr->frame_duration = duration;
+  spr->base_scale = scale;
+  size_t name_len = strlen(name) + 1;
+  spr->name = (const char*)sf_arena_alloc(ctx, &ctx->arena, name_len);
+  if (spr->name) memcpy((void*)spr->name, name, name_len);
+  for (int i = 0; i < frame_count; i++)
+    spr->frames[i] = sf_get_texture_(ctx, frame_names[i], true);
+  (*sprite_count)++;
+}
+
+void _sf_sff_prse_emitr(sf_ctx_t *ctx, FILE *f, const char *name, int *emitr_count) {
+  char key[64], val[256];
+  char type_str[16] = "omni", spr_name[64] = {0}, parent_frame[64] = {0};
+  int max_p = 100;
+  float spawn_rate = 10.0f, life = 1.0f, speed = 1.0f, spread = 0.0f;
+  sf_fvec3_t pos = {0,0,0}, dir = {0,1,0}, volume = {1,1,1};
+  bool has_dir = false, has_vol = false;
+  while (_sf_sff_read_kv(f, key, sizeof(key), val, sizeof(val))) {
+    if      (strcmp(key, "type")       == 0) snprintf(type_str, sizeof(type_str), "%s", val);
+    else if (strcmp(key, "sprite")     == 0) snprintf(spr_name, sizeof(spr_name), "%s", val);
+    else if (strcmp(key, "max")        == 0) sscanf(val, "%d", &max_p);
+    else if (strcmp(key, "frame")      == 0) snprintf(parent_frame, sizeof(parent_frame), "%s", val);
+    else if (strcmp(key, "pos")        == 0) pos        = _sf_sff_prse_vec3(val);
+    else if (strcmp(key, "spawn_rate") == 0) sscanf(val, "%f", &spawn_rate);
+    else if (strcmp(key, "life")       == 0) sscanf(val, "%f", &life);
+    else if (strcmp(key, "speed")      == 0) sscanf(val, "%f", &speed);
+    else if (strcmp(key, "dir")        == 0) { dir    = _sf_sff_prse_vec3(val); has_dir = true; }
+    else if (strcmp(key, "spread")     == 0) sscanf(val, "%f", &spread);
+    else if (strcmp(key, "volume")     == 0) { volume = _sf_sff_prse_vec3(val); has_vol = true; }
+  }
+  sf_emitr_type_t type = SF_EMITR_OMNI;
+  if      (strcmp(type_str, "dir") == 0) type = SF_EMITR_DIR;
+  else if (strcmp(type_str, "vol") == 0) type = SF_EMITR_VOLUME;
+  sf_sprite_t *spr = sf_get_sprite_(ctx, spr_name, true);
+  if (!spr) return;
+  sf_emitr_t *em = sf_add_emitr(ctx, name, type, spr, max_p);
+  if (!em) return;
+  em->frame->pos = pos;
+  em->spawn_rate = spawn_rate;
+  em->particle_life = life;
+  em->speed = speed;
+  if (type == SF_EMITR_DIR || has_dir) { em->dir = sf_fvec3_norm(dir); em->spread = spread; }
+  if (type == SF_EMITR_VOLUME || has_vol) em->volume_size = volume;
+  if (parent_frame[0]) {
+    sf_frame_t *pf = _sf_sff_get_frame_(ctx, parent_frame);
+    if (pf) sf_frame_set_parent(em->frame, pf);
+  }
+  (*emitr_count)++;
 }
 
 /* SF_FRAME_FUNCTIONS */
@@ -2072,6 +2332,60 @@ void sf_remove_frame(sf_ctx_t *ctx, sf_frame_t *f) {
   f->first_child = NULL;
   f->next_sibling = ctx->free_frames;
   ctx->free_frames = f;
+}
+
+void _sf_set_up_frames(sf_ctx_t *ctx) {
+  ctx->roots[SF_CONV_DEFAULT] = &ctx->frames[ctx->frames_count++];
+  memset(ctx->roots[SF_CONV_DEFAULT], 0, sizeof(sf_frame_t));
+  ctx->roots[SF_CONV_DEFAULT]->local_M  = sf_make_idn_fmat4();
+  ctx->roots[SF_CONV_DEFAULT]->global_M = sf_make_idn_fmat4();
+  ctx->roots[SF_CONV_DEFAULT]->is_root  = true;
+
+  ctx->roots[SF_CONV_NED] = &ctx->frames[ctx->frames_count++];
+  memset(ctx->roots[SF_CONV_NED], 0, sizeof(sf_frame_t));
+  sf_fmat4_t ned_M = sf_make_idn_fmat4();
+  ned_M.m[0][0]= 0; ned_M.m[0][1]= 1; ned_M.m[0][2]= 0; 
+  ned_M.m[1][0]= 0; ned_M.m[1][1]= 0; ned_M.m[1][2]=-1; 
+  ned_M.m[2][0]=-1; ned_M.m[2][1]= 0; ned_M.m[2][2]= 0; 
+  ctx->roots[SF_CONV_NED]->local_M  = ned_M;
+  ctx->roots[SF_CONV_NED]->global_M = ned_M;
+  ctx->roots[SF_CONV_NED]->is_root  = true;
+
+  ctx->roots[SF_CONV_FLU] = &ctx->frames[ctx->frames_count++];
+  memset(ctx->roots[SF_CONV_FLU], 0, sizeof(sf_frame_t));
+  sf_fmat4_t flu_M = sf_make_idn_fmat4();
+  flu_M.m[0][0]= 0; flu_M.m[0][1]=-1; flu_M.m[0][2]= 0; 
+  flu_M.m[1][0]= 0; flu_M.m[1][1]= 0; flu_M.m[1][2]= 1; 
+  flu_M.m[2][0]=-1; flu_M.m[2][1]= 0; flu_M.m[2][2]= 0; 
+  ctx->roots[SF_CONV_FLU]->local_M  = flu_M;
+  ctx->roots[SF_CONV_FLU]->global_M = flu_M;
+  ctx->roots[SF_CONV_FLU]->is_root  = true;
+}
+
+void _sf_calc_frame_tree(sf_frame_t *f, sf_fmat4_t parent_global_M, bool force_dirty) {
+  if (!f) return;
+  bool current_dirty = f->is_dirty || force_dirty;
+
+  if (current_dirty) {
+    if (!f->is_root) {
+      sf_fmat4_t t_mat  = sf_make_tsl_fmat4(f->pos.x, f->pos.y, f->pos.z);
+      sf_fmat4_t r_mat  = sf_make_rot_fmat4(f->rot);
+      sf_fmat4_t s_mat  = sf_make_scale_fmat4(f->scale);
+      sf_fmat4_t rs_mat = sf_fmat4_mul_fmat4(r_mat, s_mat);
+      f->local_M = sf_fmat4_mul_fmat4(rs_mat, t_mat);
+    }
+    f->global_M = sf_fmat4_mul_fmat4(f->local_M, parent_global_M);
+    f->is_dirty = false;
+  }
+ 
+  _sf_calc_frame_tree(f->first_child, f->global_M, current_dirty);
+  _sf_calc_frame_tree(f->next_sibling, parent_global_M, force_dirty);
+}
+
+void _sf_write_frame_ref(FILE *f, sf_frame_t *fr, sf_ctx_t *ctx) {
+  (void)ctx;
+  if (!fr || !fr->parent || fr->parent->is_root || !fr->parent->name) return;
+  fprintf(f, "    frame     = %s\n", fr->parent->name);
 }
 
 /* SF_DRAWING_FUNCTIONS */
@@ -2626,7 +2940,7 @@ void sf_draw_sprite(sf_ctx_t *ctx, sf_cam_t *cam, sf_sprite_t *spr, sf_fvec3_t p
 }
 
 /* SF_UI_FUNCTIONS */
-sf_ui_t* sf_create_ui (sf_ctx_t *ctx) {
+sf_ui_t* sf_ui_create (sf_ctx_t *ctx) {
   sf_ui_t *ui = (sf_ui_t*)sf_arena_alloc(ctx, &ctx->arena, sizeof(sf_ui_t));
   ui->elements = sf_arena_alloc(ctx, &ctx->arena, SF_MAX_UI_ELEMENTS * sizeof(sf_ui_lmn_t));
   ui->count = 0;
@@ -2642,7 +2956,7 @@ sf_ui_t* sf_create_ui (sf_ctx_t *ctx) {
   return ui;
 }
 
-sf_ui_lmn_t* sf_add_button(sf_ctx_t *ctx, const char *text, sf_ivec2_t v0, sf_ivec2_t v1, void (*cb)(sf_ctx_t*, void*), void *userdata) {
+sf_ui_lmn_t* sf_ui_add_button(sf_ctx_t *ctx, const char *text, sf_ivec2_t v0, sf_ivec2_t v1, void (*cb)(sf_ctx_t*, void*), void *userdata) {
   if (!ctx->ui || ctx->ui->count >= SF_MAX_UI_ELEMENTS) return NULL;
 
   sf_ui_lmn_t *parent = _sf_ui_find_prnt_pnl(ctx, v0, v1);
@@ -2669,7 +2983,7 @@ sf_ui_lmn_t* sf_add_button(sf_ctx_t *ctx, const char *text, sf_ivec2_t v0, sf_iv
   return el;
 }
 
-sf_ui_lmn_t* sf_add_slider(sf_ctx_t *ctx, sf_ivec2_t v0, sf_ivec2_t v1, float min_val, float max_val, float init_val, sf_ui_cb cb, void *userdata) {
+sf_ui_lmn_t* sf_ui_add_slider(sf_ctx_t *ctx, sf_ivec2_t v0, sf_ivec2_t v1, float min_val, float max_val, float init_val, sf_ui_cb cb, void *userdata) {
   if (!ctx->ui || ctx->ui->count >= SF_MAX_UI_ELEMENTS) return NULL;
 
   sf_ui_lmn_t *parent = _sf_ui_find_prnt_pnl(ctx, v0, v1);
@@ -2698,7 +3012,7 @@ sf_ui_lmn_t* sf_add_slider(sf_ctx_t *ctx, sf_ivec2_t v0, sf_ivec2_t v1, float mi
   return el;
 }
 
-sf_ui_lmn_t* sf_add_checkbox(sf_ctx_t *ctx, const char *text, sf_ivec2_t v0, sf_ivec2_t v1, bool init_state, sf_ui_cb cb, void *userdata) {
+sf_ui_lmn_t* sf_ui_add_checkbox(sf_ctx_t *ctx, const char *text, sf_ivec2_t v0, sf_ivec2_t v1, bool init_state, sf_ui_cb cb, void *userdata) {
   if (!ctx->ui || ctx->ui->count >= SF_MAX_UI_ELEMENTS) return NULL;
 
   sf_ui_lmn_t *parent = _sf_ui_find_prnt_pnl(ctx, v0, v1);
@@ -2726,115 +3040,15 @@ sf_ui_lmn_t* sf_add_checkbox(sf_ctx_t *ctx, const char *text, sf_ivec2_t v0, sf_
   return el;
 }
 
-void draw_button(sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_lmn_t *btn) {
-  if (!btn->is_visible) return;
-  sf_pkd_clr_t bg_color = btn->style.color_base; 
-
-  if (btn->is_disabled) {
-    bg_color = (sf_pkd_clr_t)0xFF555555;
-  } else if (btn->is_pressed) {
-    bg_color = btn->style.color_active;
-  } else if (btn->is_hovered) {
-    bg_color = btn->style.color_hover;
-  }
-
-  sf_rect(ctx, cam, bg_color, btn->v0, btn->v1);
-
-  if (btn->button.text) {
-    int text_len = strlen(btn->button.text);
-    int text_w = text_len * 8; 
-    int text_h = 8;
-    int box_w = btn->v1.x - btn->v0.x;
-    int box_h = btn->v1.y - btn->v0.y;
-    sf_ivec2_t text_pos = {
-      btn->v0.x + (box_w - text_w) / 2,
-      btn->v0.y + (box_h - text_h) / 2
-    };
-    sf_put_text(ctx, cam, btn->button.text, text_pos, btn->style.color_text, 1);
-  }
-}
-
-void draw_slider(sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_lmn_t *el) {
-  if (!el->is_visible) return;
-
-  sf_pkd_clr_t fill_color = el->style.color_base; 
-  if (el->is_disabled) {
-    fill_color = (sf_pkd_clr_t)0xFF555555;
-  } else if (el->is_pressed) {
-    fill_color = el->style.color_active;
-  } else if (el->is_hovered) {
-    fill_color = el->style.color_hover;
-  }
-
-  sf_pkd_clr_t track_color = (sf_pkd_clr_t)0xFF222222;
-  sf_rect(ctx, cam, track_color, el->v0, el->v1);
-
-  float range = el->slider.max_val - el->slider.min_val;
-  float t = (range > 0.0f) ? (el->slider.value - el->slider.min_val) / range : 0.0f;
-  if (t < 0.0f) t = 0.0f;
-  if (t > 1.0f) t = 1.0f;
-
-  int total_w = el->v1.x - el->v0.x;
-  int fill_w = (int)(total_w * t);
-
-  if (fill_w > 0) {
-    sf_ivec2_t fill_v1 = { el->v0.x + fill_w, el->v1.y };
-    sf_rect(ctx, cam, fill_color, el->v0, fill_v1);
-  }
-
-  char val_str[32];
-  snprintf(val_str, sizeof(val_str), "%.2f", el->slider.value);
-  int text_w = strlen(val_str) * 8;
-  sf_ivec2_t text_pos = {
-    el->v0.x + (total_w - text_w) / 2,
-    el->v0.y + ((el->v1.y - el->v0.y) - 8) / 2
-  };
-  sf_put_text(ctx, cam, val_str, text_pos, el->style.color_text, 1);
-}
-
-void draw_checkbox(sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_lmn_t *el) {
-  if (!el->is_visible) return;
-
-  sf_pkd_clr_t box_color = el->style.color_base; 
-  if (el->is_disabled) {
-    box_color = (sf_pkd_clr_t)0xFF555555;
-  } else if (el->is_pressed) {
-    box_color = el->style.color_active;
-  } else if (el->is_hovered) {
-    box_color = el->style.color_hover;
-  }
-
-  int h = el->v1.y - el->v0.y;
-  int box_size = h < 16 ? h : 16; 
-  sf_ivec2_t box_v0 = { el->v0.x, el->v0.y + (h - box_size)/2 };
-  sf_ivec2_t box_v1 = { box_v0.x + box_size, box_v0.y + box_size };
-
-  sf_rect(ctx, cam, box_color, box_v0, box_v1);
-
-  if (el->checkbox.is_checked) {
-    sf_ivec2_t inner_v0 = { box_v0.x + 3, box_v0.y + 3 };
-    sf_ivec2_t inner_v1 = { box_v1.x - 3, box_v1.y - 3 };
-    sf_rect(ctx, cam, el->style.color_text, inner_v0, inner_v1);
-  }
-
-  if (el->checkbox.text) {
-    sf_ivec2_t text_pos = {
-      box_v1.x + 8,
-      el->v0.y + (h - 8) / 2
-    };
-    sf_put_text(ctx, cam, el->checkbox.text, text_pos, el->style.color_text, 1);
-  }
-}
-
-void sf_render_ui(sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_t *ui) {
+void sf_ui_render(sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_t *ui) {
   if (!ui) return;
   for (int i = 0; i < ui->count; ++i) {
     sf_ui_lmn_t *el = &ui->elements[i];
     if (!_sf_ui_eff_visible(el)) continue;
     switch (el->type) {
-      case SF_UI_BUTTON:      draw_button(ctx, cam, el);          break;
-      case SF_UI_SLIDER:      draw_slider(ctx, cam, el);          break;
-      case SF_UI_CHECKBOX:    draw_checkbox(ctx, cam, el);        break;
+      case SF_UI_BUTTON:      _sf_draw_button(ctx, cam, el);          break;
+      case SF_UI_SLIDER:      _sf_draw_slider(ctx, cam, el);          break;
+      case SF_UI_CHECKBOX:    _sf_draw_checkbox(ctx, cam, el);        break;
       case SF_UI_LABEL:       _sf_draw_label(ctx, cam, el);       break;
       case SF_UI_TEXT_INPUT:  _sf_draw_text_input(ctx, cam, el);  break;
       case SF_UI_DRAG_FLOAT:  _sf_draw_drag_float(ctx, cam, el);  break;
@@ -2851,7 +3065,7 @@ void sf_render_ui(sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_t *ui) {
   }
 }
 
-void sf_update_ui(sf_ctx_t *ctx, sf_ui_t *ui) {
+void sf_ui_update(sf_ctx_t *ctx, sf_ui_t *ui) {
   if (!ui) return;
 
   int mx = ctx->input.mouse_x;
@@ -2893,98 +3107,6 @@ void sf_update_ui(sf_ctx_t *ctx, sf_ui_t *ui) {
   }
 }
 
-sf_ui_lmn_t* sf_add_label(sf_ctx_t *ctx, const char *text, sf_ivec2_t pos, sf_pkd_clr_t color) {
-  if (!ctx->ui || ctx->ui->count >= SF_MAX_UI_ELEMENTS) return NULL;
-  sf_ivec2_t v1 = { pos.x + (int)strlen(text) * 8, pos.y + 8 };
-  sf_ui_lmn_t *parent = _sf_ui_find_prnt_pnl(ctx, pos, v1);
-  sf_ui_lmn_t *el = &ctx->ui->elements[ctx->ui->count++];
-  memset(el, 0, sizeof(sf_ui_lmn_t));
-  el->parent_panel = parent;
-  el->type       = SF_UI_LABEL;
-  el->style      = ctx->ui->default_style;
-  el->v0         = pos;
-  el->v1         = v1;
-  el->is_visible = true;
-  el->label.text  = text;
-  el->label.color = color ? color : el->style.color_text;
-  return el;
-}
-
-sf_ui_lmn_t* sf_add_text_input(sf_ctx_t *ctx, sf_ivec2_t v0, sf_ivec2_t v1, char *buf, int buflen, sf_ui_cb cb, void *ud) {
-  if (!ctx->ui || ctx->ui->count >= SF_MAX_UI_ELEMENTS) return NULL;
-  sf_ui_lmn_t *parent = _sf_ui_find_prnt_pnl(ctx, v0, v1);
-  sf_ui_lmn_t *el = &ctx->ui->elements[ctx->ui->count++];
-  memset(el, 0, sizeof(sf_ui_lmn_t));
-  el->parent_panel = parent;
-  el->type       = SF_UI_TEXT_INPUT;
-  el->style      = ctx->ui->default_style;
-  el->v0         = v0;
-  el->v1         = v1;
-  el->is_visible = true;
-  el->text_input.buf      = buf;
-  el->text_input.buflen   = buflen;
-  el->text_input.caret    = (int)strlen(buf);
-  el->text_input.callback = cb;
-  el->text_input.userdata = ud;
-  return el;
-}
-
-sf_ui_lmn_t* sf_add_drag_float(sf_ctx_t *ctx, sf_ivec2_t v0, sf_ivec2_t v1, float *target, float step, sf_ui_cb cb, void *ud) {
-  if (!ctx->ui || ctx->ui->count >= SF_MAX_UI_ELEMENTS) return NULL;
-  sf_ui_lmn_t *parent = _sf_ui_find_prnt_pnl(ctx, v0, v1);
-  sf_ui_lmn_t *el = &ctx->ui->elements[ctx->ui->count++];
-  memset(el, 0, sizeof(sf_ui_lmn_t));
-  el->parent_panel = parent;
-  el->type       = SF_UI_DRAG_FLOAT;
-  el->style      = ctx->ui->default_style;
-  el->v0         = v0;
-  el->v1         = v1;
-  el->is_visible = true;
-  el->drag_float.target    = target;
-  el->drag_float.step      = step;
-  el->drag_float.callback  = cb;
-  el->drag_float.userdata  = ud;
-  return el;
-}
-
-sf_ui_lmn_t* sf_add_dropdown(sf_ctx_t *ctx, sf_ivec2_t v0, sf_ivec2_t v1, const char **items, int n, int *selected, sf_ui_cb cb, void *ud) {
-  if (!ctx->ui || ctx->ui->count >= SF_MAX_UI_ELEMENTS) return NULL;
-  sf_ui_lmn_t *parent = _sf_ui_find_prnt_pnl(ctx, v0, v1);
-  sf_ui_lmn_t *el = &ctx->ui->elements[ctx->ui->count++];
-  memset(el, 0, sizeof(sf_ui_lmn_t));
-  el->parent_panel = parent;
-  el->type       = SF_UI_DROPDOWN;
-  el->style      = ctx->ui->default_style;
-  el->v0         = v0;
-  el->v1         = v1;
-  el->is_visible = true;
-  el->dropdown.items      = items;
-  el->dropdown.n_items    = n;
-  el->dropdown.selected   = selected;
-  el->dropdown.is_open    = false;
-  el->dropdown.hover_item = -1;
-  el->dropdown.callback   = cb;
-  el->dropdown.userdata   = ud;
-  return el;
-}
-
-sf_ui_lmn_t* sf_add_panel(sf_ctx_t *ctx, const char *title, sf_ivec2_t v0, sf_ivec2_t v1) {
-  if (!ctx->ui || ctx->ui->count >= SF_MAX_UI_ELEMENTS) return NULL;
-  sf_ui_lmn_t *parent = _sf_ui_find_prnt_pnl(ctx, v0, v1);
-  sf_ui_lmn_t *el = &ctx->ui->elements[ctx->ui->count++];
-  memset(el, 0, sizeof(sf_ui_lmn_t));
-  el->parent_panel = parent;
-  el->type       = SF_UI_PANEL;
-  el->style      = ctx->ui->default_style;
-  el->v0         = v0;
-  el->v1         = v1;
-  el->is_visible = true;
-  el->panel.title     = title;
-  el->panel.collapsed = false;
-  el->panel.content_h = v1.y - v0.y - 16;
-  return el;
-}
-
 void sf_ui_clear(sf_ctx_t *ctx) {
   if (!ctx->ui) return;
   ctx->ui->count = 0;
@@ -3012,6 +3134,98 @@ sf_ui_lmn_t* sf_ui_get_by_name(sf_ui_t *ui, const char *name) {
     if (el->name && strcmp(el->name, name) == 0) return el;
   }
   return NULL;
+}
+
+sf_ui_lmn_t* sf_ui_add_label(sf_ctx_t *ctx, const char *text, sf_ivec2_t pos, sf_pkd_clr_t color) {
+  if (!ctx->ui || ctx->ui->count >= SF_MAX_UI_ELEMENTS) return NULL;
+  sf_ivec2_t v1 = { pos.x + (int)strlen(text) * 8, pos.y + 8 };
+  sf_ui_lmn_t *parent = _sf_ui_find_prnt_pnl(ctx, pos, v1);
+  sf_ui_lmn_t *el = &ctx->ui->elements[ctx->ui->count++];
+  memset(el, 0, sizeof(sf_ui_lmn_t));
+  el->parent_panel = parent;
+  el->type       = SF_UI_LABEL;
+  el->style      = ctx->ui->default_style;
+  el->v0         = pos;
+  el->v1         = v1;
+  el->is_visible = true;
+  el->label.text  = text;
+  el->label.color = color ? color : el->style.color_text;
+  return el;
+}
+
+sf_ui_lmn_t* sf_ui_add_text_input(sf_ctx_t *ctx, sf_ivec2_t v0, sf_ivec2_t v1, char *buf, int buflen, sf_ui_cb cb, void *ud) {
+  if (!ctx->ui || ctx->ui->count >= SF_MAX_UI_ELEMENTS) return NULL;
+  sf_ui_lmn_t *parent = _sf_ui_find_prnt_pnl(ctx, v0, v1);
+  sf_ui_lmn_t *el = &ctx->ui->elements[ctx->ui->count++];
+  memset(el, 0, sizeof(sf_ui_lmn_t));
+  el->parent_panel = parent;
+  el->type       = SF_UI_TEXT_INPUT;
+  el->style      = ctx->ui->default_style;
+  el->v0         = v0;
+  el->v1         = v1;
+  el->is_visible = true;
+  el->text_input.buf      = buf;
+  el->text_input.buflen   = buflen;
+  el->text_input.caret    = (int)strlen(buf);
+  el->text_input.callback = cb;
+  el->text_input.userdata = ud;
+  return el;
+}
+
+sf_ui_lmn_t* sf_ui_add_drag_float(sf_ctx_t *ctx, sf_ivec2_t v0, sf_ivec2_t v1, float *target, float step, sf_ui_cb cb, void *ud) {
+  if (!ctx->ui || ctx->ui->count >= SF_MAX_UI_ELEMENTS) return NULL;
+  sf_ui_lmn_t *parent = _sf_ui_find_prnt_pnl(ctx, v0, v1);
+  sf_ui_lmn_t *el = &ctx->ui->elements[ctx->ui->count++];
+  memset(el, 0, sizeof(sf_ui_lmn_t));
+  el->parent_panel = parent;
+  el->type       = SF_UI_DRAG_FLOAT;
+  el->style      = ctx->ui->default_style;
+  el->v0         = v0;
+  el->v1         = v1;
+  el->is_visible = true;
+  el->drag_float.target    = target;
+  el->drag_float.step      = step;
+  el->drag_float.callback  = cb;
+  el->drag_float.userdata  = ud;
+  return el;
+}
+
+sf_ui_lmn_t* sf_ui_add_dropdown(sf_ctx_t *ctx, sf_ivec2_t v0, sf_ivec2_t v1, const char **items, int n, int *selected, sf_ui_cb cb, void *ud) {
+  if (!ctx->ui || ctx->ui->count >= SF_MAX_UI_ELEMENTS) return NULL;
+  sf_ui_lmn_t *parent = _sf_ui_find_prnt_pnl(ctx, v0, v1);
+  sf_ui_lmn_t *el = &ctx->ui->elements[ctx->ui->count++];
+  memset(el, 0, sizeof(sf_ui_lmn_t));
+  el->parent_panel = parent;
+  el->type       = SF_UI_DROPDOWN;
+  el->style      = ctx->ui->default_style;
+  el->v0         = v0;
+  el->v1         = v1;
+  el->is_visible = true;
+  el->dropdown.items      = items;
+  el->dropdown.n_items    = n;
+  el->dropdown.selected   = selected;
+  el->dropdown.is_open    = false;
+  el->dropdown.hover_item = -1;
+  el->dropdown.callback   = cb;
+  el->dropdown.userdata   = ud;
+  return el;
+}
+
+sf_ui_lmn_t* sf_ui_add_panel(sf_ctx_t *ctx, const char *title, sf_ivec2_t v0, sf_ivec2_t v1) {
+  if (!ctx->ui || ctx->ui->count >= SF_MAX_UI_ELEMENTS) return NULL;
+  sf_ui_lmn_t *parent = _sf_ui_find_prnt_pnl(ctx, v0, v1);
+  sf_ui_lmn_t *el = &ctx->ui->elements[ctx->ui->count++];
+  memset(el, 0, sizeof(sf_ui_lmn_t));
+  el->parent_panel = parent;
+  el->type       = SF_UI_PANEL;
+  el->style      = ctx->ui->default_style;
+  el->v0         = v0;
+  el->v1         = v1;
+  el->is_visible = true;
+  el->panel.title     = title;
+  el->panel.collapsed = false;
+  el->panel.content_h = v1.y - v0.y - 16;
+  return el;
 }
 
 bool sf_save_sfui(sf_ctx_t *ctx, sf_ui_t *ui, const char *filepath) {
@@ -3075,7 +3289,7 @@ sf_ui_t* sf_load_sfui(sf_ctx_t *ctx, const char *filepath) {
   if (!f) { SF_LOG(ctx, SF_LOG_ERROR, SF_LOG_INDENT "could not open %s\n", filepath); return NULL; }
 
   sf_ui_t *saved_ui = ctx->ui;
-  sf_ui_t *ui = sf_create_ui(ctx);
+  sf_ui_t *ui = sf_ui_create(ctx);
   ctx->ui = ui;
 
   char line[1024];
@@ -3109,22 +3323,22 @@ sf_ui_t* sf_load_sfui(sf_ctx_t *ctx, const char *filepath) {
     if (*s == '}') {
       if (cur_type < 0) continue;
       switch (cur_type) {
-        case SF_UI_BUTTON:     sf_add_button(ctx, _sf_arena_strdup(ctx, text), v0, v1, NULL, NULL); break;
-        case SF_UI_SLIDER:     sf_add_slider(ctx, v0, v1, slmin, slmax, slval, NULL, NULL); break;
-        case SF_UI_CHECKBOX:   sf_add_checkbox(ctx, _sf_arena_strdup(ctx, text), v0, v1, checked != 0, NULL, NULL); break;
+        case SF_UI_BUTTON:     sf_ui_add_button(ctx, _sf_arena_strdup(ctx, text), v0, v1, NULL, NULL); break;
+        case SF_UI_SLIDER:     sf_ui_add_slider(ctx, v0, v1, slmin, slmax, slval, NULL, NULL); break;
+        case SF_UI_CHECKBOX:   sf_ui_add_checkbox(ctx, _sf_arena_strdup(ctx, text), v0, v1, checked != 0, NULL, NULL); break;
         case SF_UI_LABEL:      {
-          sf_ui_lmn_t *el = sf_add_label(ctx, _sf_arena_strdup(ctx, text), v0, (sf_pkd_clr_t)color);
+          sf_ui_lmn_t *el = sf_ui_add_label(ctx, _sf_arena_strdup(ctx, text), v0, (sf_pkd_clr_t)color);
           if (el) el->v1 = v1;
           break;
         }
         case SF_UI_TEXT_INPUT: {
           char *buf = (char*)sf_arena_alloc(ctx, &ctx->arena, buflen);
-          if (buf) { snprintf(buf, buflen, "%s", text); sf_add_text_input(ctx, v0, v1, buf, buflen, NULL, NULL); }
+          if (buf) { snprintf(buf, buflen, "%s", text); sf_ui_add_text_input(ctx, v0, v1, buf, buflen, NULL, NULL); }
           break;
         }
         case SF_UI_DRAG_FLOAT: {
           float *tgt = (float*)sf_arena_alloc(ctx, &ctx->arena, sizeof(float));
-          if (tgt) { *tgt = 0.0f; sf_add_drag_float(ctx, v0, v1, tgt, df_step, NULL, NULL); }
+          if (tgt) { *tgt = 0.0f; sf_ui_add_drag_float(ctx, v0, v1, tgt, df_step, NULL, NULL); }
           break;
         }
         case SF_UI_DROPDOWN: {
@@ -3132,11 +3346,11 @@ sf_ui_t* sf_load_sfui(sf_ctx_t *ctx, const char *filepath) {
           for (int k = 0; k < dd_count; k++) items[k] = dd_items[k];
           int *sel = (int*)sf_arena_alloc(ctx, &ctx->arena, sizeof(int));
           if (sel) *sel = dd_sel;
-          sf_add_dropdown(ctx, v0, v1, items, dd_count, sel, NULL, NULL);
+          sf_ui_add_dropdown(ctx, v0, v1, items, dd_count, sel, NULL, NULL);
           break;
         }
         case SF_UI_PANEL: {
-          sf_ui_lmn_t *p = sf_add_panel(ctx, _sf_arena_strdup(ctx, title), v0, v1);
+          sf_ui_lmn_t *p = sf_ui_add_panel(ctx, _sf_arena_strdup(ctx, title), v0, v1);
           if (p) p->panel.collapsed = (collapsed != 0);
           break;
         }
@@ -3177,6 +3391,323 @@ sf_ui_t* sf_load_sfui(sf_ctx_t *ctx, const char *filepath) {
   ctx->ui = saved_ui;
   SF_LOG(ctx, SF_LOG_INFO, SF_LOG_INDENT "loaded %s (%d elems)\n", filepath, ui->count);
   return ui;
+}
+
+sf_ui_lmn_t* _sf_ui_find_prnt_pnl(sf_ctx_t *ctx, sf_ivec2_t v0, sf_ivec2_t v1) {
+  if (!ctx->ui) return NULL;
+  for (int i = ctx->ui->count - 1; i >= 0; i--) {
+    sf_ui_lmn_t *p = &ctx->ui->elements[i];
+    if (p->type != SF_UI_PANEL) continue;
+    if (v0.x >= p->v0.x && v1.x <= p->v1.x && v0.y >= p->v0.y && v1.y <= p->v1.y) return p;
+  }
+  return NULL;
+}
+
+bool _sf_ui_eff_visible(sf_ui_lmn_t *el) {
+  if (!el->is_visible) return false;
+  sf_ui_lmn_t *p = el->parent_panel;
+  while (p) {
+    if (!p->is_visible || p->panel.collapsed) return false;
+    p = p->parent_panel;
+  }
+  return true;
+}
+
+void _sf_update_button(sf_ctx_t *ctx, sf_ui_lmn_t *el, bool m_down, bool m_pressed, bool m_released) {
+  if (el->is_hovered && el->is_pressed && m_released) {
+    if (el->button.callback) {
+      el->button.callback(ctx, el->button.userdata);
+    }
+  }
+}
+
+void _sf_draw_button(sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_lmn_t *btn) {
+  if (!btn->is_visible) return;
+  sf_pkd_clr_t bg_color = btn->style.color_base; 
+
+  if (btn->is_disabled) {
+    bg_color = (sf_pkd_clr_t)0xFF555555;
+  } else if (btn->is_pressed) {
+    bg_color = btn->style.color_active;
+  } else if (btn->is_hovered) {
+    bg_color = btn->style.color_hover;
+  }
+
+  sf_rect(ctx, cam, bg_color, btn->v0, btn->v1);
+
+  if (btn->button.text) {
+    int text_len = strlen(btn->button.text);
+    int text_w = text_len * 8; 
+    int text_h = 8;
+    int box_w = btn->v1.x - btn->v0.x;
+    int box_h = btn->v1.y - btn->v0.y;
+    sf_ivec2_t text_pos = {
+      btn->v0.x + (box_w - text_w) / 2,
+      btn->v0.y + (box_h - text_h) / 2
+    };
+    sf_put_text(ctx, cam, btn->button.text, text_pos, btn->style.color_text, 1);
+  }
+}
+
+void _sf_draw_slider(sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_lmn_t *el) {
+  if (!el->is_visible) return;
+
+  sf_pkd_clr_t fill_color = el->style.color_base; 
+  if (el->is_disabled) {
+    fill_color = (sf_pkd_clr_t)0xFF555555;
+  } else if (el->is_pressed) {
+    fill_color = el->style.color_active;
+  } else if (el->is_hovered) {
+    fill_color = el->style.color_hover;
+  }
+
+  sf_pkd_clr_t track_color = (sf_pkd_clr_t)0xFF222222;
+  sf_rect(ctx, cam, track_color, el->v0, el->v1);
+
+  float range = el->slider.max_val - el->slider.min_val;
+  float t = (range > 0.0f) ? (el->slider.value - el->slider.min_val) / range : 0.0f;
+  if (t < 0.0f) t = 0.0f;
+  if (t > 1.0f) t = 1.0f;
+
+  int total_w = el->v1.x - el->v0.x;
+  int fill_w = (int)(total_w * t);
+
+  if (fill_w > 0) {
+    sf_ivec2_t fill_v1 = { el->v0.x + fill_w, el->v1.y };
+    sf_rect(ctx, cam, fill_color, el->v0, fill_v1);
+  }
+
+  char val_str[32];
+  snprintf(val_str, sizeof(val_str), "%.2f", el->slider.value);
+  int text_w = strlen(val_str) * 8;
+  sf_ivec2_t text_pos = {
+    el->v0.x + (total_w - text_w) / 2,
+    el->v0.y + ((el->v1.y - el->v0.y) - 8) / 2
+  };
+  sf_put_text(ctx, cam, val_str, text_pos, el->style.color_text, 1);
+}
+
+void _sf_draw_checkbox(sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_lmn_t *el) {
+  if (!el->is_visible) return;
+
+  sf_pkd_clr_t box_color = el->style.color_base; 
+  if (el->is_disabled) {
+    box_color = (sf_pkd_clr_t)0xFF555555;
+  } else if (el->is_pressed) {
+    box_color = el->style.color_active;
+  } else if (el->is_hovered) {
+    box_color = el->style.color_hover;
+  }
+
+  int h = el->v1.y - el->v0.y;
+  int box_size = h < 16 ? h : 16; 
+  sf_ivec2_t box_v0 = { el->v0.x, el->v0.y + (h - box_size)/2 };
+  sf_ivec2_t box_v1 = { box_v0.x + box_size, box_v0.y + box_size };
+
+  sf_rect(ctx, cam, box_color, box_v0, box_v1);
+
+  if (el->checkbox.is_checked) {
+    sf_ivec2_t inner_v0 = { box_v0.x + 3, box_v0.y + 3 };
+    sf_ivec2_t inner_v1 = { box_v1.x - 3, box_v1.y - 3 };
+    sf_rect(ctx, cam, el->style.color_text, inner_v0, inner_v1);
+  }
+
+  if (el->checkbox.text) {
+    sf_ivec2_t text_pos = {
+      box_v1.x + 8,
+      el->v0.y + (h - 8) / 2
+    };
+    sf_put_text(ctx, cam, el->checkbox.text, text_pos, el->style.color_text, 1);
+  }
+}
+
+void _sf_draw_label(sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_lmn_t *el) {
+  if (!el->is_visible || !el->label.text) return;
+  sf_put_text(ctx, cam, el->label.text, el->v0, el->label.color, 1);
+}
+
+void _sf_draw_text_input(sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_lmn_t *el) {
+  if (!el->is_visible) return;
+  bool focused = (ctx->ui && ctx->ui->focused == el);
+  sf_pkd_clr_t bg = focused ? el->style.color_active : (el->is_hovered ? el->style.color_hover : el->style.color_base);
+  sf_rect(ctx, cam, bg, el->v0, el->v1);
+  sf_rect(ctx, cam, (sf_pkd_clr_t)0xFF222222, (sf_ivec2_t){el->v0.x+1, el->v0.y+1}, (sf_ivec2_t){el->v1.x-1, el->v1.y-1});
+  int h = el->v1.y - el->v0.y;
+  sf_ivec2_t tp = { el->v0.x + 4, el->v0.y + (h - 8) / 2 };
+  if (el->text_input.buf) sf_put_text(ctx, cam, el->text_input.buf, tp, el->style.color_text, 1);
+  if (focused) {
+    int cx = tp.x + el->text_input.caret * 8;
+    sf_line(ctx, cam, el->style.color_text, (sf_ivec2_t){cx, tp.y}, (sf_ivec2_t){cx, tp.y + 8});
+  }
+}
+
+void _sf_draw_drag_float(sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_lmn_t *el) {
+  if (!el->is_visible) return;
+  sf_pkd_clr_t bg = el->is_pressed ? el->style.color_active : (el->is_hovered ? el->style.color_hover : el->style.color_base);
+  sf_rect(ctx, cam, bg, el->v0, el->v1);
+  char buf[32];
+  float v = el->drag_float.target ? *el->drag_float.target : 0.0f;
+  snprintf(buf, sizeof(buf), "%.3f", v);
+  int tw = (int)strlen(buf) * 8;
+  int h = el->v1.y - el->v0.y;
+  int w = el->v1.x - el->v0.x;
+  sf_ivec2_t tp = { el->v0.x + (w - tw)/2, el->v0.y + (h - 8)/2 };
+  sf_put_text(ctx, cam, buf, tp, el->style.color_text, 1);
+}
+
+void _sf_draw_dropdown(sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_lmn_t *el) {
+  if (!el->is_visible) return;
+  sf_pkd_clr_t bg = el->is_hovered ? el->style.color_hover : el->style.color_base;
+  sf_rect(ctx, cam, bg, el->v0, el->v1);
+  const char *lbl = "---";
+  int sel = el->dropdown.selected ? *el->dropdown.selected : -1;
+  if (sel >= 0 && sel < el->dropdown.n_items && el->dropdown.items) lbl = el->dropdown.items[sel];
+  int h = el->v1.y - el->v0.y;
+  sf_ivec2_t tp = { el->v0.x + 4, el->v0.y + (h - 8)/2 };
+  sf_put_text(ctx, cam, lbl, tp, el->style.color_text, 1);
+  sf_put_text(ctx, cam, "v", (sf_ivec2_t){el->v1.x - 12, el->v0.y + (h-8)/2}, el->style.color_text, 1);
+}
+
+void _sf_draw_drpdwn_popup(sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_lmn_t *el) {
+  if (!el->is_visible || !el->dropdown.is_open) return;
+  int h = el->v1.y - el->v0.y;
+  int w = el->v1.x - el->v0.x;
+  for (int i = 0; i < el->dropdown.n_items; i++) {
+    sf_ivec2_t iv0 = { el->v0.x, el->v1.y + i * h };
+    sf_ivec2_t iv1 = { el->v0.x + w, el->v1.y + (i + 1) * h };
+    sf_pkd_clr_t bg = (i == el->dropdown.hover_item) ? el->style.color_hover : el->style.color_base;
+    sf_rect(ctx, cam, bg, iv0, iv1);
+    sf_put_text(ctx, cam, el->dropdown.items[i], (sf_ivec2_t){iv0.x + 4, iv0.y + (h-8)/2}, el->style.color_text, 1);
+  }
+}
+
+void _sf_draw_panel(sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_lmn_t *el) {
+  if (!el->is_visible) return;
+  sf_ivec2_t full_v1 = el->panel.collapsed ? (sf_ivec2_t){ el->v1.x, el->v0.y + 16 } : el->v1;
+  sf_rect(ctx, cam, (sf_pkd_clr_t)0xFF2A2A2A, el->v0, full_v1);
+  sf_rect(ctx, cam, el->style.color_base, el->v0, (sf_ivec2_t){ el->v1.x, el->v0.y + 16 });
+  if (el->panel.title) {
+    const char *pfx = el->panel.collapsed ? "+ " : "- ";
+    char buf[96];
+    snprintf(buf, sizeof(buf), "%s%s", pfx, el->panel.title);
+    sf_put_text(ctx, cam, buf, (sf_ivec2_t){el->v0.x + 4, el->v0.y + 4}, el->style.color_text, 1);
+  }
+}
+
+void _sf_update_text_input(sf_ctx_t *ctx, sf_ui_lmn_t *el, bool m_pressed) {
+  if (!ctx->ui) return;
+  if (el->is_hovered && m_pressed) ctx->ui->focused = el;
+  if (ctx->ui->focused != el || !el->text_input.buf) return;
+  int len = (int)strlen(el->text_input.buf);
+  if (el->text_input.caret > len) el->text_input.caret = len;
+  if (sf_key_pressed(ctx, SF_KEY_BACKSPACE) && el->text_input.caret > 0) {
+    memmove(&el->text_input.buf[el->text_input.caret - 1], &el->text_input.buf[el->text_input.caret], len - el->text_input.caret + 1);
+    el->text_input.caret--;
+    if (el->text_input.callback) el->text_input.callback(ctx, el->text_input.userdata);
+  }
+  if (sf_key_pressed(ctx, SF_KEY_LEFT)  && el->text_input.caret > 0)   el->text_input.caret--;
+  if (sf_key_pressed(ctx, SF_KEY_RIGHT) && el->text_input.caret < len) el->text_input.caret++;
+  if (sf_key_pressed(ctx, SF_KEY_HOME))   el->text_input.caret = 0;
+  if (sf_key_pressed(ctx, SF_KEY_END))    el->text_input.caret = len;
+  if (sf_key_pressed(ctx, SF_KEY_RETURN) || sf_key_pressed(ctx, SF_KEY_ESC)) ctx->ui->focused = NULL;
+}
+
+void _sf_update_drag_float(sf_ctx_t *ctx, sf_ui_lmn_t *el, bool m_down, bool m_pressed) {
+  if (!el->drag_float.target) return;
+  if (el->is_hovered && m_pressed) {
+    el->drag_float.drag_anchor_x  = ctx->input.mouse_x;
+    el->drag_float.drag_anchor_val = *el->drag_float.target;
+  }
+  if (el->is_pressed && m_down) {
+    int dx = ctx->input.mouse_x - el->drag_float.drag_anchor_x;
+    float nv = el->drag_float.drag_anchor_val + (float)dx * el->drag_float.step;
+    if (nv != *el->drag_float.target) {
+      *el->drag_float.target = nv;
+      if (el->drag_float.callback) el->drag_float.callback(ctx, el->drag_float.userdata);
+    }
+  }
+}
+
+void _sf_update_dropdown(sf_ctx_t *ctx, sf_ui_lmn_t *el, bool m_pressed) {
+  int mx = ctx->input.mouse_x, my = ctx->input.mouse_y;
+  int h = el->v1.y - el->v0.y;
+  int w = el->v1.x - el->v0.x;
+  el->dropdown.hover_item = -1;
+  if (el->dropdown.is_open) {
+    for (int i = 0; i < el->dropdown.n_items; i++) {
+      int iy0 = el->v1.y + i * h;
+      int iy1 = el->v1.y + (i + 1) * h;
+      if (mx >= el->v0.x && mx <= el->v0.x + w && my >= iy0 && my <= iy1) {
+        el->dropdown.hover_item = i;
+        if (m_pressed) {
+          if (el->dropdown.selected) *el->dropdown.selected = i;
+          el->dropdown.is_open = false;
+          if (el->dropdown.callback) el->dropdown.callback(ctx, el->dropdown.userdata);
+        }
+      }
+    }
+    if (m_pressed && el->dropdown.hover_item < 0 && !el->is_hovered) el->dropdown.is_open = false;
+  }
+  if (el->is_hovered && m_pressed) el->dropdown.is_open = !el->dropdown.is_open;
+}
+
+void _sf_update_panel(sf_ctx_t *ctx, sf_ui_lmn_t *el, bool m_pressed) {
+  int mx = ctx->input.mouse_x, my = ctx->input.mouse_y;
+  bool header = (mx >= el->v0.x && mx <= el->v1.x && my >= el->v0.y && my <= el->v0.y + 16);
+  if (header && m_pressed) el->panel.collapsed = !el->panel.collapsed;
+}
+
+void _sf_update_checkbox(sf_ctx_t *ctx, sf_ui_lmn_t *el, bool m_down, bool m_pressed, bool m_released) {
+  if (el->is_hovered && el->is_pressed && m_released) {
+    el->checkbox.is_checked = !el->checkbox.is_checked;
+    if (el->checkbox.callback) {
+      el->checkbox.callback(ctx, el->checkbox.userdata);
+    }
+  }
+}
+
+void _sf_update_slider(sf_ctx_t *ctx, sf_ui_lmn_t *el, bool m_down, bool m_pressed, bool m_released) {
+  if (el->is_pressed && m_down) {
+    int mx = ctx->input.mouse_x;
+    float width = (float)(el->v1.x - el->v0.x);
+    float offset = (float)(mx - el->v0.x);
+    float t = offset / width;
+    if (t < 0.0f) t = 0.0f;
+    if (t > 1.0f) t = 1.0f;
+    float new_val = el->slider.min_val + t * (el->slider.max_val - el->slider.min_val);
+    if (new_val != el->slider.value) {
+      el->slider.value = new_val;
+      if (el->slider.callback) {
+        el->slider.callback(ctx, el->slider.userdata);
+      }
+    }
+  }
+}
+
+const char* _sf_ui_type_str(sf_ui_type_t t) {
+  switch (t) {
+    case SF_UI_BUTTON:     return "button";
+    case SF_UI_SLIDER:     return "slider";
+    case SF_UI_CHECKBOX:   return "checkbox";
+    case SF_UI_LABEL:      return "label";
+    case SF_UI_TEXT_INPUT: return "text_input";
+    case SF_UI_DRAG_FLOAT: return "drag_float";
+    case SF_UI_DROPDOWN:   return "dropdown";
+    case SF_UI_PANEL:      return "panel";
+  }
+  return "button";
+}
+
+int _sf_ui_type_from_str(const char *s) {
+  if (strcmp(s, "button")     == 0) return SF_UI_BUTTON;
+  if (strcmp(s, "slider")     == 0) return SF_UI_SLIDER;
+  if (strcmp(s, "checkbox")   == 0) return SF_UI_CHECKBOX;
+  if (strcmp(s, "label")      == 0) return SF_UI_LABEL;
+  if (strcmp(s, "text_input") == 0) return SF_UI_TEXT_INPUT;
+  if (strcmp(s, "drag_float") == 0) return SF_UI_DRAG_FLOAT;
+  if (strcmp(s, "dropdown")   == 0) return SF_UI_DROPDOWN;
+  if (strcmp(s, "panel")      == 0) return SF_UI_PANEL;
+  return -1;
 }
 
 /* SF_MESH_AUTHORING_FUNCTIONS */
@@ -3385,38 +3916,6 @@ sf_obj_t* sf_obj_make_cyl(sf_ctx_t *ctx, const char *objname, float radius, floa
   return obj;
 }
 
-float _sf_hash_2d(int x, int z, uint32_t seed) {
-  uint32_t h = (uint32_t)x * 374761393u + (uint32_t)z * 668265263u + seed * 362437u;
-  h = (h ^ (h >> 13)) * 1274126177u;
-  h = h ^ (h >> 16);
-  return (float)h / (float)0xFFFFFFFFu;
-}
-
-float _sf_smooth_noise(float x, float z, uint32_t seed) {
-  int ix = (int)floorf(x), iz = (int)floorf(z);
-  float fx = x - (float)ix, fz = z - (float)iz;
-  float u = fx * fx * (3.0f - 2.0f * fx);
-  float v = fz * fz * (3.0f - 2.0f * fz);
-  float a = _sf_hash_2d(ix,     iz,     seed);
-  float b = _sf_hash_2d(ix + 1, iz,     seed);
-  float c = _sf_hash_2d(ix,     iz + 1, seed);
-  float d = _sf_hash_2d(ix + 1, iz + 1, seed);
-  float ab = a + (b - a) * u;
-  float cd = c + (d - c) * u;
-  return ab + (cd - ab) * v;
-}
-
-float sf_noise_fbm(float x, float z, int oct, float lac, float gain, uint32_t seed) {
-  float sum = 0.0f, amp = 1.0f, freq = 1.0f, norm = 0.0f;
-  for (int i = 0; i < oct; i++) {
-    sum  += _sf_smooth_noise(x * freq, z * freq, seed + (uint32_t)i) * amp;
-    norm += amp;
-    amp  *= gain;
-    freq *= lac;
-  }
-  return (norm > 0.0f) ? (sum / norm) : 0.0f;
-}
-
 sf_obj_t* sf_obj_make_heightmap(sf_ctx_t *ctx, const char *objname, float size_x, float size_z, int res, sf_height_fn fn, void *ud) {
   if (res < 1) res = 1;
   int nv = (res + 1) * (res + 1);
@@ -3477,6 +3976,17 @@ bool sf_obj_save_obj(sf_ctx_t *ctx, sf_obj_t *obj, const char *filepath) {
               SF_LOG_INDENT "faces  : %d\n",
               filepath, obj->v_cnt, obj->f_cnt);
   return true;
+}
+
+float sf_noise_fbm(float x, float z, int oct, float lac, float gain, uint32_t seed) {
+  float sum = 0.0f, amp = 1.0f, freq = 1.0f, norm = 0.0f;
+  for (int i = 0; i < oct; i++) {
+    sum  += _sf_smooth_noise(x * freq, z * freq, seed + (uint32_t)i) * amp;
+    norm += amp;
+    amp  *= gain;
+    freq *= lac;
+  }
+  return (norm > 0.0f) ? (sum / norm) : 0.0f;
 }
 
 /* SF_PICKING_FUNCTIONS */
@@ -3599,7 +4109,17 @@ void sf_logger_console(const char* message, void* userdata) {
   fprintf(stdout, "%s", message);
 }
 
-/* SF_LA_FUNCTIONS */
+const char* _sf_log_lvl_to_str(sf_log_level_t level) {
+  switch (level) {
+    case SF_LOG_DEBUG: return "debug";
+    case SF_LOG_INFO:  return "info";
+    case SF_LOG_WARN:  return "warn";
+    case SF_LOG_ERROR: return "error";
+    default:           return "unknown";
+  }
+}
+
+/* SF_MATH_FUNCTIONS */
 sf_fmat4_t sf_fmat4_mul_fmat4(sf_fmat4_t m0, sf_fmat4_t m1) {
   sf_fmat4_t result = {0};
   for (int i = 0; i < 4; i++) {
@@ -3745,7 +4265,6 @@ sf_fmat4_t sf_make_scale_fmat4(sf_fvec3_t s) {
   return m;
 }
 
-/* SF_IMPLEMENTATION_HELPERS */
 uint32_t _sf_vec_to_index(sf_ctx_t *ctx, sf_cam_t *cam, sf_ivec2_t v) {
   return v.y * cam->w + v.x;
 }
@@ -3788,15 +4307,28 @@ sf_fvec3_t _sf_project_vertex(sf_ctx_t *ctx, sf_cam_t *cam, sf_fvec3_t v, sf_fma
   };
 }
 
-const char* _sf_log_lvl_to_str(sf_log_level_t level) {
-  switch (level) {
-    case SF_LOG_DEBUG: return "debug";
-    case SF_LOG_INFO:  return "info";
-    case SF_LOG_WARN:  return "warn";
-    case SF_LOG_ERROR: return "error";
-    default:           return "unknown";
-  }
+float _sf_hash_2d(int x, int z, uint32_t seed) {
+  uint32_t h = (uint32_t)x * 374761393u + (uint32_t)z * 668265263u + seed * 362437u;
+  h = (h ^ (h >> 13)) * 1274126177u;
+  h = h ^ (h >> 16);
+  return (float)h / (float)0xFFFFFFFFu;
 }
+
+float _sf_smooth_noise(float x, float z, uint32_t seed) {
+  int ix = (int)floorf(x), iz = (int)floorf(z);
+  float fx = x - (float)ix, fz = z - (float)iz;
+  float u = fx * fx * (3.0f - 2.0f * fx);
+  float v = fz * fz * (3.0f - 2.0f * fz);
+  float a = _sf_hash_2d(ix,     iz,     seed);
+  float b = _sf_hash_2d(ix + 1, iz,     seed);
+  float c = _sf_hash_2d(ix,     iz + 1, seed);
+  float d = _sf_hash_2d(ix + 1, iz + 1, seed);
+  float ab = a + (b - a) * u;
+  float cd = c + (d - c) * u;
+  return ab + (cd - ab) * v;
+}
+
+/* SF_IMPLEMENTATION_HELPERS */
 
 bool _sf_resolve_asset(const char* filename, char* out_path, size_t max_len) {
   char dir_stack[32][512];
@@ -3832,6 +4364,11 @@ bool _sf_resolve_asset(const char* filename, char* out_path, size_t max_len) {
   return false;
 }
 
+const char* _sf_basename(const char *path) {
+  const char *s = strrchr(path, '/');
+  return s ? s + 1 : path;
+}
+
 uint64_t _sf_get_ticks(void) {
   struct timespec ts;
   clock_gettime(CLOCK_MONOTONIC, &ts);
@@ -3854,343 +4391,6 @@ sf_unpkd_clr_t _sf_unpack_color(sf_pkd_clr_t c) {
   return unpkd;
 }
 
-size_t _sf_obj_memusg(sf_obj_t *obj) {
-  if (!obj) return 0;
-  size_t v_size  = obj->v_cnt * sizeof(sf_fvec3_t);
-  size_t vt_size = obj->vt_cnt * sizeof(sf_fvec2_t);
-  size_t vn_size = obj->vn_cnt * sizeof(sf_fvec3_t);
-  size_t f_size  = obj->f_cnt * sizeof(sf_face_t);
-  return v_size + vt_size + vn_size + f_size;
-}
-
-void _sf_set_up_frames(sf_ctx_t *ctx) {
-  ctx->roots[SF_CONV_DEFAULT] = &ctx->frames[ctx->frames_count++];
-  memset(ctx->roots[SF_CONV_DEFAULT], 0, sizeof(sf_frame_t));
-  ctx->roots[SF_CONV_DEFAULT]->local_M  = sf_make_idn_fmat4();
-  ctx->roots[SF_CONV_DEFAULT]->global_M = sf_make_idn_fmat4();
-  ctx->roots[SF_CONV_DEFAULT]->is_root  = true;
-
-  ctx->roots[SF_CONV_NED] = &ctx->frames[ctx->frames_count++];
-  memset(ctx->roots[SF_CONV_NED], 0, sizeof(sf_frame_t));
-  sf_fmat4_t ned_M = sf_make_idn_fmat4();
-  ned_M.m[0][0]= 0; ned_M.m[0][1]= 1; ned_M.m[0][2]= 0; 
-  ned_M.m[1][0]= 0; ned_M.m[1][1]= 0; ned_M.m[1][2]=-1; 
-  ned_M.m[2][0]=-1; ned_M.m[2][1]= 0; ned_M.m[2][2]= 0; 
-  ctx->roots[SF_CONV_NED]->local_M  = ned_M;
-  ctx->roots[SF_CONV_NED]->global_M = ned_M;
-  ctx->roots[SF_CONV_NED]->is_root  = true;
-
-  ctx->roots[SF_CONV_FLU] = &ctx->frames[ctx->frames_count++];
-  memset(ctx->roots[SF_CONV_FLU], 0, sizeof(sf_frame_t));
-  sf_fmat4_t flu_M = sf_make_idn_fmat4();
-  flu_M.m[0][0]= 0; flu_M.m[0][1]=-1; flu_M.m[0][2]= 0; 
-  flu_M.m[1][0]= 0; flu_M.m[1][1]= 0; flu_M.m[1][2]= 1; 
-  flu_M.m[2][0]=-1; flu_M.m[2][1]= 0; flu_M.m[2][2]= 0; 
-  ctx->roots[SF_CONV_FLU]->local_M  = flu_M;
-  ctx->roots[SF_CONV_FLU]->global_M = flu_M;
-  ctx->roots[SF_CONV_FLU]->is_root  = true;
-}
-
-void _sf_calc_frame_tree(sf_frame_t *f, sf_fmat4_t parent_global_M, bool force_dirty) {
-  if (!f) return;
-  bool current_dirty = f->is_dirty || force_dirty;
-
-  if (current_dirty) {
-    if (!f->is_root) {
-      sf_fmat4_t t_mat  = sf_make_tsl_fmat4(f->pos.x, f->pos.y, f->pos.z);
-      sf_fmat4_t r_mat  = sf_make_rot_fmat4(f->rot);
-      sf_fmat4_t s_mat  = sf_make_scale_fmat4(f->scale);
-      sf_fmat4_t rs_mat = sf_fmat4_mul_fmat4(r_mat, s_mat);
-      f->local_M = sf_fmat4_mul_fmat4(rs_mat, t_mat);
-    }
-    f->global_M = sf_fmat4_mul_fmat4(f->local_M, parent_global_M);
-    f->is_dirty = false;
-  }
- 
-  _sf_calc_frame_tree(f->first_child, f->global_M, current_dirty);
-  _sf_calc_frame_tree(f->next_sibling, parent_global_M, force_dirty);
-}
-
-bool _sf_sff_read_kv(FILE *f, char *key, size_t ksz, char *val, size_t vsz) {
-  char line[512];
-  while (fgets(line, sizeof(line), f)) {
-    _sf_sff_trim(line);
-    if (line[0] == '#' || line[0] == '\0') continue;
-    if (line[0] == '}') return false;
-    char *eq = strchr(line, '=');
-    if (!eq) continue;
-    *eq = '\0';
-    char *k = line;  _sf_sff_trim(k);
-    char *v = eq + 1; _sf_sff_trim(v);
-    snprintf(key, ksz, "%s", k);
-    snprintf(val, vsz, "%s", v);
-    return true;
-  }
-  return false;
-}
-
-void _sf_sff_trim(char *s) {
-  while (*s == ' ' || *s == '\t') { char *d = s; while ((*d = *(d+1))) d++; }
-  size_t len = strlen(s);
-  while (len > 0 && (s[len-1] == ' ' || s[len-1] == '\t' || s[len-1] == '\n' || s[len-1] == '\r')) s[--len] = '\0';
-}
-
-sf_fvec3_t _sf_sff_prse_vec3(const char *s) {
-  sf_fvec3_t v = {0, 0, 0};
-  sscanf(s, " ( %f , %f , %f )", &v.x, &v.y, &v.z);
-  return v;
-}
-
-int _sf_sff_prse_list(const char *s, char out[][64], int max) {
-  const char *p = strchr(s, '[');
-  if (!p) return 0;
-  p++;
-  int count = 0;
-  while (count < max) {
-    while (*p == ' ' || *p == '\t') p++;
-    if (*p == ']' || *p == '\0') break;
-    int i = 0;
-    while (*p && *p != ',' && *p != ']' && *p != ' ' && *p != '\t' && i < 63) out[count][i++] = *p++;
-    out[count][i] = '\0';
-    count++;
-    while (*p == ' ' || *p == '\t') p++;
-    if (*p == ',') p++;
-  }
-  return count;
-}
-
-sf_frame_t* _sf_sff_get_frame_(sf_ctx_t *ctx, const char *name) {
-  for (int i = 0; i < ctx->frames_count; i++) {
-    if (ctx->frames[i].name && strcmp(ctx->frames[i].name, name) == 0)
-      return &ctx->frames[i];
-  }
-  return NULL;
-}
-
-void _sf_sff_prse_frame(sf_ctx_t *ctx, FILE *f, const char *name, int *frame_count) {
-  char key[64], val[256];
-  char parent_name[64] = {0};
-  sf_fvec3_t pos = {0,0,0}, rot = {0,0,0}, scale = {1,1,1};
-  while (_sf_sff_read_kv(f, key, sizeof(key), val, sizeof(val))) {
-    if      (strcmp(key, "pos")    == 0) pos   = _sf_sff_prse_vec3(val);
-    else if (strcmp(key, "rot")    == 0) rot   = _sf_sff_prse_vec3(val);
-    else if (strcmp(key, "scale")  == 0) scale = _sf_sff_prse_vec3(val);
-    else if (strcmp(key, "parent") == 0) snprintf(parent_name, sizeof(parent_name), "%s", val);
-  }
-  sf_frame_t *parent = NULL;
-  if (parent_name[0]) parent = _sf_sff_get_frame_(ctx, parent_name);
-  sf_frame_t *fr = sf_add_frame(ctx, parent);
-  if (!fr) return;
-  fr->pos   = pos;
-  fr->rot   = rot;
-  fr->scale = scale;
-  fr->is_dirty = true;
-  size_t name_len = strlen(name) + 1;
-  fr->name = (const char*)sf_arena_alloc(ctx, &ctx->arena, name_len);
-  if (fr->name) memcpy((void*)fr->name, name, name_len);
-  (*frame_count)++;
-}
-
-void _sf_sff_prse_cam(sf_ctx_t *ctx, FILE *f, const char *name, int *cam_count) {
-  char key[64], val[256];
-  char parent_frame[64] = {0};
-  sf_fvec3_t pos = {0,0,0}, target = {0,0,0};
-  float fov = 60.0f;
-  int w = 0, h = 0;
-  bool has_target = false;
-  while (_sf_sff_read_kv(f, key, sizeof(key), val, sizeof(val))) {
-    if      (strcmp(key, "pos")    == 0) pos    = _sf_sff_prse_vec3(val);
-    else if (strcmp(key, "target") == 0) { target = _sf_sff_prse_vec3(val); has_target = true; }
-    else if (strcmp(key, "fov")    == 0) sscanf(val, "%f", &fov);
-    else if (strcmp(key, "frame")  == 0) snprintf(parent_frame, sizeof(parent_frame), "%s", val);
-    else if (strcmp(key, "size")   == 0) { sf_fvec3_t s = _sf_sff_prse_vec3(val); w = (int)s.x; h = (int)s.y; }
-  }
-  if (strcmp(name, "main") == 0) {
-    sf_camera_set_pos(ctx, &ctx->main_camera, pos.x, pos.y, pos.z);
-    if (has_target) sf_camera_look_at(ctx, &ctx->main_camera, target);
-    ctx->main_camera.fov = fov;
-    ctx->main_camera.is_proj_dirty = true;
-    if (parent_frame[0]) {
-      sf_frame_t *pf = _sf_sff_get_frame_(ctx, parent_frame);
-      if (pf) sf_frame_set_parent(ctx->main_camera.frame, pf);
-    }
-  } else {
-    if (w == 0) w = ctx->main_camera.w;
-    if (h == 0) h = ctx->main_camera.h;
-    sf_cam_t *cam = sf_add_cam(ctx, name, w, h, fov);
-    if (cam) {
-      sf_camera_set_pos(ctx, cam, pos.x, pos.y, pos.z);
-      if (has_target) sf_camera_look_at(ctx, cam, target);
-      if (parent_frame[0]) {
-        sf_frame_t *pf = _sf_sff_get_frame_(ctx, parent_frame);
-        if (pf) sf_frame_set_parent(cam->frame, pf);
-      }
-    }
-  }
-  (*cam_count)++;
-}
-
-void _sf_sff_prse_enti(sf_ctx_t *ctx, FILE *f, const char *name, int *enti_count) {
-  char key[64], val[256];
-  char mesh_name[64] = {0}, tex_name[64] = {0}, parent_frame[64] = {0};
-  sf_fvec3_t pos = {0,0,0}, rot = {0,0,0}, scale = {1,1,1};
-  sf_fvec2_t tex_scale = {1.0f, 1.0f};
-  bool has_tex_scale = false;
-  while (_sf_sff_read_kv(f, key, sizeof(key), val, sizeof(val))) {
-    if      (strcmp(key, "mesh")      == 0) snprintf(mesh_name, sizeof(mesh_name), "%s", val);
-    else if (strcmp(key, "texture")   == 0) snprintf(tex_name, sizeof(tex_name), "%s", val);
-    else if (strcmp(key, "tex_scale") == 0) { sf_fvec3_t v = _sf_sff_prse_vec3(val); tex_scale = (sf_fvec2_t){v.x, v.y}; has_tex_scale = true; }
-    else if (strcmp(key, "frame")     == 0) snprintf(parent_frame, sizeof(parent_frame), "%s", val);
-    else if (strcmp(key, "pos")       == 0) pos   = _sf_sff_prse_vec3(val);
-    else if (strcmp(key, "rot")       == 0) rot   = _sf_sff_prse_vec3(val);
-    else if (strcmp(key, "scale")     == 0) scale = _sf_sff_prse_vec3(val);
-  }
-  sf_obj_t *obj = sf_get_obj_(ctx, mesh_name, true);
-  if (!obj) return;
-  sf_enti_t *enti = sf_add_enti(ctx, obj, name);
-  if (!enti) return;
-  sf_enti_set_pos(ctx, enti, pos.x, pos.y, pos.z);
-  sf_enti_set_rot(ctx, enti, rot.x, rot.y, rot.z);
-  sf_enti_set_scale(ctx, enti, scale.x, scale.y, scale.z);
-  if (tex_name[0]) enti->tex = sf_get_texture_(ctx, tex_name, true);
-  if (has_tex_scale) enti->tex_scale = tex_scale;
-  if (parent_frame[0]) {
-    sf_frame_t *pf = _sf_sff_get_frame_(ctx, parent_frame);
-    if (pf) sf_frame_set_parent(enti->frame, pf);
-  }
-  (*enti_count)++;
-}
-
-void _sf_sff_prse_light(sf_ctx_t *ctx, FILE *f, const char *name, int *light_count) {
-  char key[64], val[256];
-  char type_str[16] = "point", parent_frame[64] = {0};
-  sf_fvec3_t pos = {0,0,0}, color = {1,1,1};
-  float intensity = 1.0f;
-  while (_sf_sff_read_kv(f, key, sizeof(key), val, sizeof(val))) {
-    if      (strcmp(key, "type")      == 0) snprintf(type_str, sizeof(type_str), "%s", val);
-    else if (strcmp(key, "frame")     == 0) snprintf(parent_frame, sizeof(parent_frame), "%s", val);
-    else if (strcmp(key, "pos")       == 0) pos       = _sf_sff_prse_vec3(val);
-    else if (strcmp(key, "color")     == 0) color     = _sf_sff_prse_vec3(val);
-    else if (strcmp(key, "intensity") == 0) sscanf(val, "%f", &intensity);
-  }
-  sf_light_t *l = NULL;
-  if (strcmp(type_str, "dir") == 0) {
-    l = sf_add_light(ctx, name, SF_LIGHT_DIR, color, intensity);
-    if (l) sf_frame_look_at(l->frame, pos);
-  } else {
-    l = sf_add_light(ctx, name, SF_LIGHT_POINT, color, intensity);
-    if (l) l->frame->pos = pos;
-  }
-  if (l && parent_frame[0]) {
-    sf_frame_t *pf = _sf_sff_get_frame_(ctx, parent_frame);
-    if (pf) sf_frame_set_parent(l->frame, pf);
-  }
-  (*light_count)++;
-}
-
-void _sf_sff_prse_sprit(sf_ctx_t *ctx, FILE *f, const char *name, int *sprite_count) {
-  char key[64], val[256];
-  float duration = 1.0f, scale = 1.0f;
-  char frame_names[SF_MAX_SPRITE_FRAMES][64] = {{0}};
-  int frame_count = 0;
-  while (_sf_sff_read_kv(f, key, sizeof(key), val, sizeof(val))) {
-    if      (strcmp(key, "duration") == 0) sscanf(val, "%f", &duration);
-    else if (strcmp(key, "scale")    == 0) sscanf(val, "%f", &scale);
-    else if (strcmp(key, "frames")   == 0) frame_count = _sf_sff_prse_list(val, frame_names, SF_MAX_SPRITE_FRAMES);
-  }
-  if (frame_count == 0) return;
-  if (ctx->sprite_count >= SF_MAX_SPRITES) return;
-  if (NULL != sf_get_sprite_(ctx, name, false)) return;
-  sf_sprite_t *spr = &ctx->sprites[ctx->sprite_count++];
-  spr->id = ctx->sprite_count - 1;
-  spr->frame_count = frame_count;
-  spr->frame_duration = duration;
-  spr->base_scale = scale;
-  size_t name_len = strlen(name) + 1;
-  spr->name = (const char*)sf_arena_alloc(ctx, &ctx->arena, name_len);
-  if (spr->name) memcpy((void*)spr->name, name, name_len);
-  for (int i = 0; i < frame_count; i++)
-    spr->frames[i] = sf_get_texture_(ctx, frame_names[i], true);
-  (*sprite_count)++;
-}
-
-void _sf_sff_prse_emitr(sf_ctx_t *ctx, FILE *f, const char *name, int *emitr_count) {
-  char key[64], val[256];
-  char type_str[16] = "omni", spr_name[64] = {0}, parent_frame[64] = {0};
-  int max_p = 100;
-  float spawn_rate = 10.0f, life = 1.0f, speed = 1.0f, spread = 0.0f;
-  sf_fvec3_t pos = {0,0,0}, dir = {0,1,0}, volume = {1,1,1};
-  bool has_dir = false, has_vol = false;
-  while (_sf_sff_read_kv(f, key, sizeof(key), val, sizeof(val))) {
-    if      (strcmp(key, "type")       == 0) snprintf(type_str, sizeof(type_str), "%s", val);
-    else if (strcmp(key, "sprite")     == 0) snprintf(spr_name, sizeof(spr_name), "%s", val);
-    else if (strcmp(key, "max")        == 0) sscanf(val, "%d", &max_p);
-    else if (strcmp(key, "frame")      == 0) snprintf(parent_frame, sizeof(parent_frame), "%s", val);
-    else if (strcmp(key, "pos")        == 0) pos        = _sf_sff_prse_vec3(val);
-    else if (strcmp(key, "spawn_rate") == 0) sscanf(val, "%f", &spawn_rate);
-    else if (strcmp(key, "life")       == 0) sscanf(val, "%f", &life);
-    else if (strcmp(key, "speed")      == 0) sscanf(val, "%f", &speed);
-    else if (strcmp(key, "dir")        == 0) { dir    = _sf_sff_prse_vec3(val); has_dir = true; }
-    else if (strcmp(key, "spread")     == 0) sscanf(val, "%f", &spread);
-    else if (strcmp(key, "volume")     == 0) { volume = _sf_sff_prse_vec3(val); has_vol = true; }
-  }
-  sf_emitr_type_t type = SF_EMITR_OMNI;
-  if      (strcmp(type_str, "dir") == 0) type = SF_EMITR_DIR;
-  else if (strcmp(type_str, "vol") == 0) type = SF_EMITR_VOLUME;
-  sf_sprite_t *spr = sf_get_sprite_(ctx, spr_name, true);
-  if (!spr) return;
-  sf_emitr_t *em = sf_add_emitr(ctx, name, type, spr, max_p);
-  if (!em) return;
-  em->frame->pos = pos;
-  em->spawn_rate = spawn_rate;
-  em->particle_life = life;
-  em->speed = speed;
-  if (type == SF_EMITR_DIR || has_dir) { em->dir = sf_fvec3_norm(dir); em->spread = spread; }
-  if (type == SF_EMITR_VOLUME || has_vol) em->volume_size = volume;
-  if (parent_frame[0]) {
-    sf_frame_t *pf = _sf_sff_get_frame_(ctx, parent_frame);
-    if (pf) sf_frame_set_parent(em->frame, pf);
-  }
-  (*emitr_count)++;
-}
-
-const char* _sf_basename(const char *path) {
-  const char *s = strrchr(path, '/');
-  return s ? s + 1 : path;
-}
-
-void _sf_write_frame_ref(FILE *f, sf_frame_t *fr, sf_ctx_t *ctx) {
-  (void)ctx;
-  if (!fr || !fr->parent || fr->parent->is_root || !fr->parent->name) return;
-  fprintf(f, "    frame     = %s\n", fr->parent->name);
-}
-
-const char* _sf_ui_type_str(sf_ui_type_t t) {
-  switch (t) {
-    case SF_UI_BUTTON:     return "button";
-    case SF_UI_SLIDER:     return "slider";
-    case SF_UI_CHECKBOX:   return "checkbox";
-    case SF_UI_LABEL:      return "label";
-    case SF_UI_TEXT_INPUT: return "text_input";
-    case SF_UI_DRAG_FLOAT: return "drag_float";
-    case SF_UI_DROPDOWN:   return "dropdown";
-    case SF_UI_PANEL:      return "panel";
-  }
-  return "button";
-}
-
-int _sf_ui_type_from_str(const char *s) {
-  if (strcmp(s, "button")     == 0) return SF_UI_BUTTON;
-  if (strcmp(s, "slider")     == 0) return SF_UI_SLIDER;
-  if (strcmp(s, "checkbox")   == 0) return SF_UI_CHECKBOX;
-  if (strcmp(s, "label")      == 0) return SF_UI_LABEL;
-  if (strcmp(s, "text_input") == 0) return SF_UI_TEXT_INPUT;
-  if (strcmp(s, "drag_float") == 0) return SF_UI_DRAG_FLOAT;
-  if (strcmp(s, "dropdown")   == 0) return SF_UI_DROPDOWN;
-  if (strcmp(s, "panel")      == 0) return SF_UI_PANEL;
-  return -1;
-}
-
 void _sf_write_qstr(FILE *f, const char *s) {
   fputc('"', f);
   if (s) for (const char *p = s; *p; p++) {
@@ -4198,14 +4398,6 @@ void _sf_write_qstr(FILE *f, const char *s) {
     fputc(*p, f);
   }
   fputc('"', f);
-}
-
-char* _sf_arena_strdup(sf_ctx_t *ctx, const char *s) {
-  if (!s) return NULL;
-  size_t n = strlen(s) + 1;
-  char *m = (char*)sf_arena_alloc(ctx, &ctx->arena, n);
-  if (m) memcpy(m, s, n);
-  return m;
 }
 
 bool _sf_parse_qstr(const char *line, const char *key, char *out, size_t outsz) {
@@ -4224,197 +4416,6 @@ bool _sf_parse_qstr(const char *line, const char *key, char *out, size_t outsz) 
   }
   out[n] = '\0';
   return true;
-}
-
-sf_ui_lmn_t* _sf_ui_find_prnt_pnl(sf_ctx_t *ctx, sf_ivec2_t v0, sf_ivec2_t v1) {
-  if (!ctx->ui) return NULL;
-  for (int i = ctx->ui->count - 1; i >= 0; i--) {
-    sf_ui_lmn_t *p = &ctx->ui->elements[i];
-    if (p->type != SF_UI_PANEL) continue;
-    if (v0.x >= p->v0.x && v1.x <= p->v1.x && v0.y >= p->v0.y && v1.y <= p->v1.y) return p;
-  }
-  return NULL;
-}
-
-bool _sf_ui_eff_visible(sf_ui_lmn_t *el) {
-  if (!el->is_visible) return false;
-  sf_ui_lmn_t *p = el->parent_panel;
-  while (p) {
-    if (!p->is_visible || p->panel.collapsed) return false;
-    p = p->parent_panel;
-  }
-  return true;
-}
-
-void _sf_update_button(sf_ctx_t *ctx, sf_ui_lmn_t *el, bool m_down, bool m_pressed, bool m_released) {
-  if (el->is_hovered && el->is_pressed && m_released) {
-    if (el->button.callback) {
-      el->button.callback(ctx, el->button.userdata);
-    }
-  }
-}
-
-void _sf_update_checkbox(sf_ctx_t *ctx, sf_ui_lmn_t *el, bool m_down, bool m_pressed, bool m_released) {
-  if (el->is_hovered && el->is_pressed && m_released) {
-    el->checkbox.is_checked = !el->checkbox.is_checked;
-    if (el->checkbox.callback) {
-      el->checkbox.callback(ctx, el->checkbox.userdata);
-    }
-  }
-}
-
-void _sf_update_slider(sf_ctx_t *ctx, sf_ui_lmn_t *el, bool m_down, bool m_pressed, bool m_released) {
-  if (el->is_pressed && m_down) {
-    int mx = ctx->input.mouse_x;
-    float width = (float)(el->v1.x - el->v0.x);
-    float offset = (float)(mx - el->v0.x);
-    float t = offset / width;
-    if (t < 0.0f) t = 0.0f;
-    if (t > 1.0f) t = 1.0f;
-    float new_val = el->slider.min_val + t * (el->slider.max_val - el->slider.min_val);
-    if (new_val != el->slider.value) {
-      el->slider.value = new_val;
-      if (el->slider.callback) {
-        el->slider.callback(ctx, el->slider.userdata);
-      }
-    }
-  }
-}
-
-void _sf_draw_label(sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_lmn_t *el) {
-  if (!el->is_visible || !el->label.text) return;
-  sf_put_text(ctx, cam, el->label.text, el->v0, el->label.color, 1);
-}
-
-void _sf_draw_text_input(sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_lmn_t *el) {
-  if (!el->is_visible) return;
-  bool focused = (ctx->ui && ctx->ui->focused == el);
-  sf_pkd_clr_t bg = focused ? el->style.color_active : (el->is_hovered ? el->style.color_hover : el->style.color_base);
-  sf_rect(ctx, cam, bg, el->v0, el->v1);
-  sf_rect(ctx, cam, (sf_pkd_clr_t)0xFF222222, (sf_ivec2_t){el->v0.x+1, el->v0.y+1}, (sf_ivec2_t){el->v1.x-1, el->v1.y-1});
-  int h = el->v1.y - el->v0.y;
-  sf_ivec2_t tp = { el->v0.x + 4, el->v0.y + (h - 8) / 2 };
-  if (el->text_input.buf) sf_put_text(ctx, cam, el->text_input.buf, tp, el->style.color_text, 1);
-  if (focused) {
-    int cx = tp.x + el->text_input.caret * 8;
-    sf_line(ctx, cam, el->style.color_text, (sf_ivec2_t){cx, tp.y}, (sf_ivec2_t){cx, tp.y + 8});
-  }
-}
-
-void _sf_draw_drag_float(sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_lmn_t *el) {
-  if (!el->is_visible) return;
-  sf_pkd_clr_t bg = el->is_pressed ? el->style.color_active : (el->is_hovered ? el->style.color_hover : el->style.color_base);
-  sf_rect(ctx, cam, bg, el->v0, el->v1);
-  char buf[32];
-  float v = el->drag_float.target ? *el->drag_float.target : 0.0f;
-  snprintf(buf, sizeof(buf), "%.3f", v);
-  int tw = (int)strlen(buf) * 8;
-  int h = el->v1.y - el->v0.y;
-  int w = el->v1.x - el->v0.x;
-  sf_ivec2_t tp = { el->v0.x + (w - tw)/2, el->v0.y + (h - 8)/2 };
-  sf_put_text(ctx, cam, buf, tp, el->style.color_text, 1);
-}
-
-void _sf_draw_dropdown(sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_lmn_t *el) {
-  if (!el->is_visible) return;
-  sf_pkd_clr_t bg = el->is_hovered ? el->style.color_hover : el->style.color_base;
-  sf_rect(ctx, cam, bg, el->v0, el->v1);
-  const char *lbl = "---";
-  int sel = el->dropdown.selected ? *el->dropdown.selected : -1;
-  if (sel >= 0 && sel < el->dropdown.n_items && el->dropdown.items) lbl = el->dropdown.items[sel];
-  int h = el->v1.y - el->v0.y;
-  sf_ivec2_t tp = { el->v0.x + 4, el->v0.y + (h - 8)/2 };
-  sf_put_text(ctx, cam, lbl, tp, el->style.color_text, 1);
-  sf_put_text(ctx, cam, "v", (sf_ivec2_t){el->v1.x - 12, el->v0.y + (h-8)/2}, el->style.color_text, 1);
-}
-
-void _sf_draw_drpdwn_popup(sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_lmn_t *el) {
-  if (!el->is_visible || !el->dropdown.is_open) return;
-  int h = el->v1.y - el->v0.y;
-  int w = el->v1.x - el->v0.x;
-  for (int i = 0; i < el->dropdown.n_items; i++) {
-    sf_ivec2_t iv0 = { el->v0.x, el->v1.y + i * h };
-    sf_ivec2_t iv1 = { el->v0.x + w, el->v1.y + (i + 1) * h };
-    sf_pkd_clr_t bg = (i == el->dropdown.hover_item) ? el->style.color_hover : el->style.color_base;
-    sf_rect(ctx, cam, bg, iv0, iv1);
-    sf_put_text(ctx, cam, el->dropdown.items[i], (sf_ivec2_t){iv0.x + 4, iv0.y + (h-8)/2}, el->style.color_text, 1);
-  }
-}
-
-void _sf_draw_panel(sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_lmn_t *el) {
-  if (!el->is_visible) return;
-  sf_ivec2_t full_v1 = el->panel.collapsed ? (sf_ivec2_t){ el->v1.x, el->v0.y + 16 } : el->v1;
-  sf_rect(ctx, cam, (sf_pkd_clr_t)0xFF2A2A2A, el->v0, full_v1);
-  sf_rect(ctx, cam, el->style.color_base, el->v0, (sf_ivec2_t){ el->v1.x, el->v0.y + 16 });
-  if (el->panel.title) {
-    const char *pfx = el->panel.collapsed ? "+ " : "- ";
-    char buf[96];
-    snprintf(buf, sizeof(buf), "%s%s", pfx, el->panel.title);
-    sf_put_text(ctx, cam, buf, (sf_ivec2_t){el->v0.x + 4, el->v0.y + 4}, el->style.color_text, 1);
-  }
-}
-
-void _sf_update_text_input(sf_ctx_t *ctx, sf_ui_lmn_t *el, bool m_pressed) {
-  if (!ctx->ui) return;
-  if (el->is_hovered && m_pressed) ctx->ui->focused = el;
-  if (ctx->ui->focused != el || !el->text_input.buf) return;
-  int len = (int)strlen(el->text_input.buf);
-  if (el->text_input.caret > len) el->text_input.caret = len;
-  if (sf_key_pressed(ctx, SF_KEY_BACKSPACE) && el->text_input.caret > 0) {
-    memmove(&el->text_input.buf[el->text_input.caret - 1], &el->text_input.buf[el->text_input.caret], len - el->text_input.caret + 1);
-    el->text_input.caret--;
-    if (el->text_input.callback) el->text_input.callback(ctx, el->text_input.userdata);
-  }
-  if (sf_key_pressed(ctx, SF_KEY_LEFT)  && el->text_input.caret > 0)   el->text_input.caret--;
-  if (sf_key_pressed(ctx, SF_KEY_RIGHT) && el->text_input.caret < len) el->text_input.caret++;
-  if (sf_key_pressed(ctx, SF_KEY_HOME))   el->text_input.caret = 0;
-  if (sf_key_pressed(ctx, SF_KEY_END))    el->text_input.caret = len;
-  if (sf_key_pressed(ctx, SF_KEY_RETURN) || sf_key_pressed(ctx, SF_KEY_ESC)) ctx->ui->focused = NULL;
-}
-
-void _sf_update_drag_float(sf_ctx_t *ctx, sf_ui_lmn_t *el, bool m_down, bool m_pressed) {
-  if (!el->drag_float.target) return;
-  if (el->is_hovered && m_pressed) {
-    el->drag_float.drag_anchor_x  = ctx->input.mouse_x;
-    el->drag_float.drag_anchor_val = *el->drag_float.target;
-  }
-  if (el->is_pressed && m_down) {
-    int dx = ctx->input.mouse_x - el->drag_float.drag_anchor_x;
-    float nv = el->drag_float.drag_anchor_val + (float)dx * el->drag_float.step;
-    if (nv != *el->drag_float.target) {
-      *el->drag_float.target = nv;
-      if (el->drag_float.callback) el->drag_float.callback(ctx, el->drag_float.userdata);
-    }
-  }
-}
-
-void _sf_update_dropdown(sf_ctx_t *ctx, sf_ui_lmn_t *el, bool m_pressed) {
-  int mx = ctx->input.mouse_x, my = ctx->input.mouse_y;
-  int h = el->v1.y - el->v0.y;
-  int w = el->v1.x - el->v0.x;
-  el->dropdown.hover_item = -1;
-  if (el->dropdown.is_open) {
-    for (int i = 0; i < el->dropdown.n_items; i++) {
-      int iy0 = el->v1.y + i * h;
-      int iy1 = el->v1.y + (i + 1) * h;
-      if (mx >= el->v0.x && mx <= el->v0.x + w && my >= iy0 && my <= iy1) {
-        el->dropdown.hover_item = i;
-        if (m_pressed) {
-          if (el->dropdown.selected) *el->dropdown.selected = i;
-          el->dropdown.is_open = false;
-          if (el->dropdown.callback) el->dropdown.callback(ctx, el->dropdown.userdata);
-        }
-      }
-    }
-    if (m_pressed && el->dropdown.hover_item < 0 && !el->is_hovered) el->dropdown.is_open = false;
-  }
-  if (el->is_hovered && m_pressed) el->dropdown.is_open = !el->dropdown.is_open;
-}
-
-void _sf_update_panel(sf_ctx_t *ctx, sf_ui_lmn_t *el, bool m_pressed) {
-  int mx = ctx->input.mouse_x, my = ctx->input.mouse_y;
-  bool header = (mx >= el->v0.x && mx <= el->v1.x && my >= el->v0.y && my <= el->v0.y + 16);
-  if (header && m_pressed) el->panel.collapsed = !el->panel.collapsed;
 }
 
 /* SF_GAMMA_LUT - sqrtf(i/255.0)*255 for linear->sRGB approx */
