@@ -2640,16 +2640,6 @@ sf_ui_t* sf_create_ui (sf_ctx_t *ctx) {
   return ui;
 }
 
-sf_ui_lmn_t* _sf_ui_find_parent_panel(sf_ctx_t *ctx, sf_ivec2_t v0, sf_ivec2_t v1) {
-  if (!ctx->ui) return NULL;
-  for (int i = ctx->ui->count - 1; i >= 0; i--) {
-    sf_ui_lmn_t *p = &ctx->ui->elements[i];
-    if (p->type != SF_UI_PANEL) continue;
-    if (v0.x >= p->v0.x && v1.x <= p->v1.x && v0.y >= p->v0.y && v1.y <= p->v1.y) return p;
-  }
-  return NULL;
-}
-
 sf_ui_lmn_t* sf_add_button(sf_ctx_t *ctx, const char *text, sf_ivec2_t v0, sf_ivec2_t v1, void (*cb)(sf_ctx_t*, void*), void *userdata) {
   if (!ctx->ui || ctx->ui->count >= SF_MAX_UI_ELEMENTS) return NULL;
 
@@ -2832,16 +2822,6 @@ void draw_checkbox(sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_lmn_t *el) {
     };
     sf_put_text(ctx, cam, el->checkbox.text, text_pos, el->style.color_text, 1);
   }
-}
-
-bool _sf_ui_effective_visible(sf_ui_lmn_t *el) {
-  if (!el->is_visible) return false;
-  sf_ui_lmn_t *p = el->parent_panel;
-  while (p) {
-    if (!p->is_visible || p->panel.collapsed) return false;
-    p = p->parent_panel;
-  }
-  return true;
 }
 
 void sf_render_ui(sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_t *ui) {
@@ -4266,6 +4246,26 @@ bool _sf_parse_qstr(const char *line, const char *key, char *out, size_t outsz) 
     out[n++] = *p++;
   }
   out[n] = '\0';
+  return true;
+}
+
+sf_ui_lmn_t* _sf_ui_find_parent_panel(sf_ctx_t *ctx, sf_ivec2_t v0, sf_ivec2_t v1) {
+  if (!ctx->ui) return NULL;
+  for (int i = ctx->ui->count - 1; i >= 0; i--) {
+    sf_ui_lmn_t *p = &ctx->ui->elements[i];
+    if (p->type != SF_UI_PANEL) continue;
+    if (v0.x >= p->v0.x && v1.x <= p->v1.x && v0.y >= p->v0.y && v1.y <= p->v1.y) return p;
+  }
+  return NULL;
+}
+
+bool _sf_ui_effective_visible(sf_ui_lmn_t *el) {
+  if (!el->is_visible) return false;
+  sf_ui_lmn_t *p = el->parent_panel;
+  while (p) {
+    if (!p->is_visible || p->panel.collapsed) return false;
+    p = p->parent_panel;
+  }
   return true;
 }
 
