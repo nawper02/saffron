@@ -97,9 +97,7 @@ def parse_impl_comments(path: Path) -> dict:
     for m in pattern.finditer(impl):
         func_name = m.group(1)
         body      = m.group(2)
-
-        if not is_internal(func_name):
-            comments[func_name] = clean_comment(body)
+        comments[func_name] = clean_comment(body)
 
     return comments
 
@@ -262,8 +260,7 @@ def parse_header(path: Path) -> list:
             if name_m:
                 name = name_m.group(1)
                 decl = re.sub(r'\s+', ' ', decl).strip().rstrip(';')
-                if not is_internal(name):
-                    current_items.append({"kind": "func", "name": name, "decl": decl})
+                current_items.append({"kind": "func", "name": name, "decl": decl})
             i = j + 1
             continue
 

@@ -672,6 +672,7 @@ static const uint8_t                _sf_font_8x8[];
 
 /* SF_CORE_FUNCTIONS */
 void sf_init(sf_ctx_t *ctx, int w, int h) {
+  /* Initialize the engine context: allocate arena, all scene arrays, main camera pixel/z buffers, and default UI. */
   memset(ctx, 0, sizeof(sf_ctx_t));
   ctx->state                        = SF_RUN_STATE_RUNNING;
   ctx->main_camera.w                = w;
@@ -723,7 +724,7 @@ void sf_init(sf_ctx_t *ctx, int w, int h) {
 }
 
 void sf_destroy(sf_ctx_t *ctx) {
-
+  /* Free all heap allocations (pixel buffers, arena) and log session stats. */
   float avg_fps = (ctx->elapsed_time > 0.0f) ? ((float)ctx->frame_count / ctx->elapsed_time) : 0.0f;
   float mem_pct = ((float)ctx->arena.offset / (float)ctx->arena.size) * 100.0f;
   int ui_count  = (ctx->ui) ? ctx->ui->count : 0;
@@ -764,14 +765,17 @@ void sf_destroy(sf_ctx_t *ctx) {
 }
 
 bool sf_running(sf_ctx_t *ctx) {
+  /* Return true while the engine is in the running state; use as the main loop condition. */
   return (ctx->state == SF_RUN_STATE_RUNNING);
 }
 
 void sf_stop(sf_ctx_t *ctx) {
+  /* Signal the engine to stop; sf_running() will return false on the next check. */
   ctx->state = SF_RUN_STATE_STOPPED;
 }
 
 void sf_render_enti(sf_ctx_t *ctx, sf_cam_t *cam, sf_enti_t *enti) {
+  /* Rasterize one entity into cam: frustum-cull, light, near-clip, then draw textured or flat triangles. */
   if (!enti || !enti->frame) return;
 
   sf_fmat4_t M = enti->frame->global_M;
@@ -942,6 +946,7 @@ void sf_render_enti(sf_ctx_t *ctx, sf_cam_t *cam, sf_enti_t *enti) {
 }
 
 void sf_render_ctx(sf_ctx_t *ctx) {
+  /* Update frames and emitters, then render all cameras including the main camera. */
   sf_update_frames(ctx);
   sf_update_emitrs(ctx);
   ctx->_perf_tri_count = 0;
@@ -952,6 +957,7 @@ void sf_render_ctx(sf_ctx_t *ctx) {
 }
 
 void sf_render_cam(sf_ctx_t *ctx, sf_cam_t *cam) {
+  /* Clear and render a single camera: fire RENDER_START/END events, rebuild projection if dirty, draw all entities. */
   sf_event_t ev_start;
   ev_start.type = SF_EVT_RENDER_START;
   sf_event_trigger(ctx, &ev_start);
@@ -988,6 +994,7 @@ void sf_render_cam(sf_ctx_t *ctx, sf_cam_t *cam) {
 }
 
 void sf_render_emitrs(sf_ctx_t *ctx, sf_cam_t *cam) {
+  /* Draw all active particles from every emitter as sprites into cam. */
   for (int i = 0; i < ctx->emitr_count; i++) {
     sf_emitr_t *em = &ctx->emitrs[i];
     for (int p = 0; p < em->max_particles; p++) {
@@ -1000,6 +1007,7 @@ void sf_render_emitrs(sf_ctx_t *ctx, sf_cam_t *cam) {
 }
 
 void sf_update_emitrs(sf_ctx_t *ctx) {
+  /* Advance particle lifetimes, move them by velocity, and spawn new particles according to rate. */
   float dt = ctx->delta_time;
   for (int i = 0; i < ctx->emitr_count; i++) {
     sf_emitr_t *em = &ctx->emitrs[i];
@@ -1067,6 +1075,7 @@ void sf_update_emitrs(sf_ctx_t *ctx) {
 }
 
 void sf_time_update(sf_ctx_t *ctx) {
+  /* Sample the high-resolution clock to compute delta_time, elapsed_time, smoothed FPS, and frame count. */
   uint64_t current_ticks = _sf_get_ticks();
   uint64_t diff = current_ticks - ctx->_last_ticks;
   ctx->delta_time = (float)((double)diff / (double)SF_NANOS_PER_SEC);
@@ -1083,6 +1092,7 @@ void sf_time_update(sf_ctx_t *ctx) {
 
 /* SF_MEMORY_FUNCTIONS */
 sf_arena_t sf_arena_init(sf_ctx_t *ctx, size_t size) {
+  /* Allocate a new arena of the given byte size; all subsequent allocs bump a single pointer. */
   sf_arena_t arena;
   arena.size = size;
   arena.offset = 0;
@@ -1091,6 +1101,7 @@ sf_arena_t sf_arena_init(sf_ctx_t *ctx, size_t size) {
 }
 
 void* sf_arena_alloc(sf_ctx_t *ctx, sf_arena_t *arena, size_t size) {
+  /* Bump-allocate size bytes from arena with alignment; returns NULL and logs error if full. */
   size_t aligned_offset = SF_ALIGN_SIZE(arena->offset);
   if (aligned_offset + size > arena->size) {
     SF_LOG(ctx, SF_LOG_ERROR, SF_LOG_INDENT "failed to allocate, arena out of memory\n");
@@ -1108,14 +1119,17 @@ void* sf_arena_alloc(sf_ctx_t *ctx, sf_arena_t *arena, size_t size) {
 }
 
 size_t sf_arena_save(sf_ctx_t *ctx, sf_arena_t *arena) {
+  /* Return the current arena offset as a rewind mark for temporary allocations. */
   return arena->offset;
 }
 
 void sf_arena_restore(sf_ctx_t *ctx, sf_arena_t *arena, size_t mark) {
+  /* Rewind arena to a previously saved mark, freeing everything allocated since. */
   arena->offset = mark;
 }
 
 size_t _sf_obj_memusg(sf_obj_t *obj) {
+  /* Return the total arena bytes consumed by an obj's vertex, UV, normal, and face arrays. */
   if (!obj) return 0;
   size_t v_size  = obj->v_cnt * sizeof(sf_fvec3_t);
   size_t vt_size = obj->vt_cnt * sizeof(sf_fvec2_t);
@@ -1125,6 +1139,7 @@ size_t _sf_obj_memusg(sf_obj_t *obj) {
 }
 
 char* _sf_arena_strdup(sf_ctx_t *ctx, const char *s) {
+  /* Duplicate a C string into the arena; returns NULL for a NULL input. */
   if (!s) return NULL;
   size_t n = strlen(s) + 1;
   char *m = (char*)sf_arena_alloc(ctx, &ctx->arena, n);
@@ -1134,6 +1149,7 @@ char* _sf_arena_strdup(sf_ctx_t *ctx, const char *s) {
 
 /* SF_EVENT_FUNCTIONS */
 void sf_event_reg(sf_ctx_t *ctx, sf_event_type_t type, sf_event_cb cb, void *userdata) {
+  /* Register a callback to be fired whenever the given event type is triggered. */
   if (type >= SF_EVT_MAX) return;
   for (int i = 0; i < SF_MAX_CB_PER_EVT; ++i) {
     if (ctx->callbacks[type][i].cb == NULL) {
@@ -1146,6 +1162,7 @@ void sf_event_reg(sf_ctx_t *ctx, sf_event_type_t type, sf_event_cb cb, void *use
 }
 
 void sf_event_trigger(sf_ctx_t *ctx, const sf_event_t *event) {
+  /* Invoke all registered callbacks for the given event. */
   if (event->type >= SF_EVT_MAX) return;
   for (int i = 0; i < SF_MAX_CB_PER_EVT; ++i) {
     if (ctx->callbacks[event->type][i].cb) {
@@ -1155,6 +1172,7 @@ void sf_event_trigger(sf_ctx_t *ctx, const sf_event_t *event) {
 }
 
 void sf_input_cycle_state(sf_ctx_t *ctx) {
+  /* Snapshot current key/mouse state to _prev arrays and reset per-frame deltas; call once per frame before polling. */
   memcpy(ctx->input.keys_prev, ctx->input.keys, sizeof(ctx->input.keys));
   memcpy(ctx->input.mouse_btns_prev, ctx->input.mouse_btns, sizeof(ctx->input.mouse_btns));
   ctx->input.mouse_dx = 0;
@@ -1163,6 +1181,7 @@ void sf_input_cycle_state(sf_ctx_t *ctx) {
 }
 
 void sf_input_set_wheel(sf_ctx_t *ctx, int dy) {
+  /* Record a scroll-wheel delta and fire SF_EVT_MOUSE_WHEEL. */
   ctx->input.wheel_dy += dy;
   sf_event_t ev;
   ev.type = SF_EVT_MOUSE_WHEEL;
@@ -1171,6 +1190,7 @@ void sf_input_set_wheel(sf_ctx_t *ctx, int dy) {
 }
 
 void sf_input_set_text(sf_ctx_t *ctx, const char *txt) {
+  /* Feed a text-input string into the engine: fire SF_EVT_TEXT_INPUT and insert printable chars into the focused text-input element. */
   sf_event_t ev;
   ev.type = SF_EVT_TEXT_INPUT;
   int i = 0;
@@ -1200,6 +1220,7 @@ void sf_input_set_text(sf_ctx_t *ctx, const char *txt) {
 }
 
 void sf_input_set_key(sf_ctx_t *ctx, sf_key_t key, bool is_down) {
+  /* Update a key's pressed state and fire SF_EVT_KEY_DOWN or SF_EVT_KEY_UP if it changed. */
   if (key == SF_KEY_UNKNOWN || key >= SF_KEY_MAX) return;
 
   if (ctx->input.keys[key] != is_down) {
@@ -1212,6 +1233,7 @@ void sf_input_set_key(sf_ctx_t *ctx, sf_key_t key, bool is_down) {
 }
 
 void sf_input_set_mouse_p(sf_ctx_t *ctx, int x, int y) {
+  /* Update the mouse position, compute deltas, and fire SF_EVT_MOUSE_MOVE if it moved. */
   ctx->input.mouse_dx = x - ctx->input.mouse_x;
   ctx->input.mouse_dy = y - ctx->input.mouse_y;
   ctx->input.mouse_x  = x;
@@ -1229,6 +1251,7 @@ void sf_input_set_mouse_p(sf_ctx_t *ctx, int x, int y) {
 }
 
 void sf_input_set_mouse_b(sf_ctx_t *ctx, sf_mouse_btn_t btn, bool is_down) {
+  /* Update a mouse button state and fire SF_EVT_MOUSE_DOWN or SF_EVT_MOUSE_UP if it changed. */
   if (btn >= SF_MOUSE_MAX) return;
 
   if (ctx->input.mouse_btns[btn] != is_down) {
@@ -1243,15 +1266,18 @@ void sf_input_set_mouse_b(sf_ctx_t *ctx, sf_mouse_btn_t btn, bool is_down) {
 }
 
 bool sf_key_down(sf_ctx_t *ctx, sf_key_t key) {
+  /* Return true while the key is held down this frame. */
   return ctx->input.keys[key];
 }
 
 bool sf_key_pressed(sf_ctx_t *ctx, sf_key_t key) {
+  /* Return true only on the frame the key transitions from up to down. */
   return ctx->input.keys[key] && !ctx->input.keys_prev[key];
 }
 
 /* SF_SCENE_FUNCTIONS */
 sf_tex_t* sf_load_texture_bmp(sf_ctx_t *ctx, const char *filename, const char *texname) {
+  /* Load a 24-bit BMP file into the texture pool, applying gamma correction and treating magenta as transparent. */
   if (ctx->tex_count >= SF_MAX_TEXTURES) {
     SF_LOG(ctx, SF_LOG_ERROR, SF_LOG_INDENT "failed to load texture '%s', max (%d) reached\n", texname, SF_MAX_TEXTURES);
     return NULL;
@@ -1321,6 +1347,7 @@ sf_tex_t* sf_load_texture_bmp(sf_ctx_t *ctx, const char *filename, const char *t
 }
 
 sf_tex_t* sf_get_texture_(sf_ctx_t *ctx, const char *texname, bool should_log_failure) {
+  /* Linear search for a texture by name; use the sf_get_texture() macro instead. */
   for (int32_t i = 0; i < ctx->tex_count; ++i) {
     if (ctx->textures[i].name && strcmp(ctx->textures[i].name, texname) == 0) {
       return &ctx->textures[i];
@@ -1333,6 +1360,7 @@ sf_tex_t* sf_get_texture_(sf_ctx_t *ctx, const char *texname, bool should_log_fa
 }
 
 sf_sprite_t* sf_load_sprite(sf_ctx_t *ctx, const char *spritename, float duration, float scale, int frame_count, ...) {
+  /* Create a sprite from a variadic list of texture names with per-frame duration and world scale. */
   char auto_name[32];
   if (spritename == NULL) {
     snprintf(auto_name, sizeof(auto_name), "spr_%d", ctx->sprite_count);
@@ -1377,6 +1405,7 @@ sf_sprite_t* sf_load_sprite(sf_ctx_t *ctx, const char *spritename, float duratio
 }
 
 sf_sprite_t* sf_get_sprite_(sf_ctx_t *ctx, const char *spritename, bool should_log_failure) {
+  /* Linear search for a sprite by name; use the sf_get_sprite() macro instead. */
   for (int32_t i = 0; i < ctx->sprite_count; ++i) {
     if (ctx->sprites[i].name && strcmp(ctx->sprites[i].name, spritename) == 0) {
       return &ctx->sprites[i];
@@ -1387,6 +1416,7 @@ sf_sprite_t* sf_get_sprite_(sf_ctx_t *ctx, const char *spritename, bool should_l
 }
 
 sf_emitr_t* sf_add_emitr(sf_ctx_t *ctx, const char *emitrname, sf_emitr_type_t type, sf_sprite_t *sprite, int max_p) {
+  /* Add a particle emitter of the given type with a pre-allocated particle pool; returns its pointer. */
   char auto_name[32];
   if (emitrname == NULL) {
     snprintf(auto_name, sizeof(auto_name), "emitr_%d", ctx->emitr_count);
@@ -1435,6 +1465,7 @@ sf_emitr_t* sf_add_emitr(sf_ctx_t *ctx, const char *emitrname, sf_emitr_type_t t
 }
 
 sf_emitr_t* sf_get_emitr_(sf_ctx_t *ctx, const char *emitrname, bool should_log_failure) {
+  /* Linear search for an emitter by name; use the sf_get_emitr() macro instead. */
   for (int32_t i = 0; i < ctx->emitr_count; ++i) {
     if (ctx->emitrs[i].name && strcmp(ctx->emitrs[i].name, emitrname) == 0) {
       return &ctx->emitrs[i];
@@ -1445,6 +1476,7 @@ sf_emitr_t* sf_get_emitr_(sf_ctx_t *ctx, const char *emitrname, bool should_log_
 }
 
 sf_obj_t* sf_load_obj(sf_ctx_t *ctx, const char *filename, const char *objname) {
+  /* Parse a Wavefront .obj file and store verts, UVs, normals, and faces in the arena. */
   char auto_name[32];
   if (objname == NULL) {
     snprintf(auto_name, sizeof(auto_name), "obj_%d", ctx->obj_count);
@@ -1577,6 +1609,7 @@ sf_obj_t* sf_load_obj(sf_ctx_t *ctx, const char *filename, const char *objname) 
 }
 
 void sf_obj_recenter(sf_obj_t *obj) {
+  /* Shift all vertices so the bounding-sphere center is at the origin. */
   if (!obj || obj->v_cnt == 0) return;
   sf_fvec3_t c = obj->bs_center;
   for (int i = 0; i < obj->v_cnt; i++) {
@@ -1588,6 +1621,7 @@ void sf_obj_recenter(sf_obj_t *obj) {
 }
 
 sf_obj_t* sf_get_obj_(sf_ctx_t *ctx, const char *objname, bool should_log_failure) {
+  /* Linear search for a mesh by name; use the sf_get_obj() macro instead. */
   for (int32_t i = 0; i < ctx->obj_count; ++i) {
     if (ctx->objs[i].name && strcmp(ctx->objs[i].name, objname) == 0) {
       return &ctx->objs[i];
@@ -1601,6 +1635,7 @@ sf_obj_t* sf_get_obj_(sf_ctx_t *ctx, const char *objname, bool should_log_failur
 }
 
 sf_enti_t* sf_add_enti(sf_ctx_t *ctx, sf_obj_t *obj, const char *entiname) {
+  /* Add a renderable entity referencing obj; creates its own scene-graph frame. */
   char auto_name[32];
   if (NULL == entiname) {
     snprintf(auto_name, sizeof(auto_name), "enti_%d", ctx->enti_count);
@@ -1644,6 +1679,7 @@ sf_enti_t* sf_add_enti(sf_ctx_t *ctx, sf_obj_t *obj, const char *entiname) {
 }
 
 sf_enti_t* sf_get_enti_(sf_ctx_t *ctx, const char *entiname, bool should_log_failure) {
+  /* Linear search for an entity by name; use the sf_get_enti() macro instead. */
   for (int32_t i = 0; i < ctx->enti_count; ++i) {
     if (ctx->entities[i].name && strcmp(ctx->entities[i].name, entiname) == 0) {
       return &ctx->entities[i];
@@ -1658,6 +1694,7 @@ sf_enti_t* sf_get_enti_(sf_ctx_t *ctx, const char *entiname, bool should_log_fai
 }
 
 sf_cam_t* sf_add_cam(sf_ctx_t *ctx, const char *camname, int w, int h, float fov) {
+  /* Add a secondary camera with its own pixel and z-buffers; useful for picture-in-picture views. */
   char auto_name[32];
   if (NULL == camname) {
     snprintf(auto_name, sizeof(auto_name), "cam_%d", ctx->cam_count);
@@ -1707,6 +1744,7 @@ sf_cam_t* sf_add_cam(sf_ctx_t *ctx, const char *camname, int w, int h, float fov
 }
 
 sf_cam_t* sf_get_cam_(sf_ctx_t *ctx, const char *camname, bool should_log_failure) {
+  /* Linear search for a camera by name; use the sf_get_cam() macro instead. */
   for (int32_t i = 0; i < ctx->cam_count; ++i) {
     if (ctx->cameras[i].name && strcmp(ctx->cameras[i].name, camname) == 0) {
       return &ctx->cameras[i];
@@ -1719,6 +1757,7 @@ sf_cam_t* sf_get_cam_(sf_ctx_t *ctx, const char *camname, bool should_log_failur
 }
 
 sf_light_t* sf_add_light(sf_ctx_t *ctx, const char *lightname, sf_light_type_t type, sf_fvec3_t color, float intensity) {
+  /* Add a point or directional light with a scene-graph frame for positioning. */
   char auto_name[32];
   if (lightname == NULL) {
     snprintf(auto_name, sizeof(auto_name), "light_%d", ctx->light_count);
@@ -1760,6 +1799,7 @@ sf_light_t* sf_add_light(sf_ctx_t *ctx, const char *lightname, sf_light_type_t t
 }
 
 sf_light_t* sf_get_light_(sf_ctx_t *ctx, const char *lightname, bool should_log_failure) {
+  /* Linear search for a light by name; use the sf_get_light() macro instead. */
   for (int32_t i = 0; i < ctx->light_count; ++i) {
     if (ctx->lights[i].name && strcmp(ctx->lights[i].name, lightname) == 0) {
       return &ctx->lights[i];
@@ -1770,6 +1810,7 @@ sf_light_t* sf_get_light_(sf_ctx_t *ctx, const char *lightname, bool should_log_
 }
 
 void sf_enti_set_pos(sf_ctx_t *ctx, sf_enti_t *enti, float x, float y, float z) {
+  /* Set an entity's world position directly. */
   if (enti && enti->frame) {
       enti->frame->pos = (sf_fvec3_t){x, y, z};
       enti->frame->is_dirty = true;
@@ -1777,6 +1818,7 @@ void sf_enti_set_pos(sf_ctx_t *ctx, sf_enti_t *enti, float x, float y, float z) 
 }
 
 void sf_enti_move(sf_ctx_t *ctx, sf_enti_t *enti, float dx, float dy, float dz) {
+  /* Translate an entity by a world-space delta. */
   if (enti && enti->frame) {
       enti->frame->pos.x += dx;
       enti->frame->pos.y += dy;
@@ -1786,6 +1828,7 @@ void sf_enti_move(sf_ctx_t *ctx, sf_enti_t *enti, float dx, float dy, float dz) 
 }
 
 void sf_enti_set_rot(sf_ctx_t *ctx, sf_enti_t *enti, float rx, float ry, float rz) {
+  /* Set an entity's Euler rotation (radians) directly. */
   if (enti && enti->frame) {
       enti->frame->rot = (sf_fvec3_t){rx, ry, rz};
       enti->frame->is_dirty = true;
@@ -1793,6 +1836,7 @@ void sf_enti_set_rot(sf_ctx_t *ctx, sf_enti_t *enti, float rx, float ry, float r
 }
 
 void sf_enti_rotate(sf_ctx_t *ctx, sf_enti_t *enti, float drx, float dry, float drz) {
+  /* Add delta Euler angles (radians) to an entity's rotation. */
   if (enti && enti->frame) {
       enti->frame->rot.x += drx;
       enti->frame->rot.y += dry;
@@ -1802,6 +1846,7 @@ void sf_enti_rotate(sf_ctx_t *ctx, sf_enti_t *enti, float drx, float dry, float 
 }
 
 void sf_enti_set_scale(sf_ctx_t *ctx, sf_enti_t *enti, float sx, float sy, float sz) {
+  /* Set an entity's per-axis scale. */
   if (enti && enti->frame) {
       enti->frame->scale = (sf_fvec3_t){sx, sy, sz};
       enti->frame->is_dirty = true;
@@ -1809,6 +1854,7 @@ void sf_enti_set_scale(sf_ctx_t *ctx, sf_enti_t *enti, float sx, float sy, float
 }
 
 void sf_enti_set_tex(sf_ctx_t *ctx, const char *entiname, const char *texname) {
+  /* Assign a texture to an entity by name. */
   sf_enti_t *enti = sf_get_enti_(ctx, entiname, true);
   sf_tex_t *tex = sf_get_texture_(ctx, texname, true);
   if (enti && tex) {
@@ -1817,6 +1863,7 @@ void sf_enti_set_tex(sf_ctx_t *ctx, const char *entiname, const char *texname) {
 }
 
 void sf_camera_set_psp(sf_ctx_t *ctx, sf_cam_t *cam, float fov, float near_plane, float far_plane) {
+  /* Update a camera's perspective parameters and mark the projection matrix dirty. */
   cam->fov        = fov;
   cam->near_plane = near_plane;
   cam->far_plane  = far_plane;
@@ -1824,11 +1871,13 @@ void sf_camera_set_psp(sf_ctx_t *ctx, sf_cam_t *cam, float fov, float near_plane
 }
 
 void sf_camera_set_pos(sf_ctx_t *ctx, sf_cam_t *cam, float x, float y, float z) {
+  /* Set a camera's world position directly. */
   cam->frame->pos = (sf_fvec3_t){x, y, z};
   cam->frame->is_dirty = true;
 }
 
 void sf_camera_move_loc(sf_ctx_t *ctx, sf_cam_t *cam, float fwd, float right, float up) {
+  /* Move a camera along its own local axes (forward, right, up). */
   if (!cam || !cam->frame) return;
   sf_fmat4_t m = cam->frame->global_M;
   sf_fvec3_t m_fwd = {-m.m[2][0] * fwd, -m.m[2][1] * fwd, -m.m[2][2] * fwd};
@@ -1841,10 +1890,12 @@ void sf_camera_move_loc(sf_ctx_t *ctx, sf_cam_t *cam, float fwd, float right, fl
 }
 
 void sf_camera_look_at(sf_ctx_t *ctx, sf_cam_t *cam, sf_fvec3_t target) {
+  /* Orient the camera to face a world-space target point. */
   if (cam && cam->frame) sf_frame_look_at(cam->frame, target);
 }
 
 void sf_camera_add_yp(sf_ctx_t *ctx, sf_cam_t *cam, float yaw_offset, float pitch_offset) {
+  /* Add yaw and pitch (degrees) to a camera, clamping pitch to ±89°. */
   if (!cam || !cam->frame) return;
   cam->frame->rot.y -= SF_DEG2RAD(yaw_offset);
   cam->frame->rot.x += SF_DEG2RAD(pitch_offset);
@@ -1854,6 +1905,7 @@ void sf_camera_add_yp(sf_ctx_t *ctx, sf_cam_t *cam, float yaw_offset, float pitc
 }
 
 void sf_load_sff(sf_ctx_t *ctx, const char *filename, const char *worldname) {
+  /* Load a .sff world file, populating textures, objects, entities, cameras, lights, and emitters. */
   char r_path[512];
   const char *open_path = filename;
   if (_sf_resolve_asset(filename, r_path, sizeof(r_path))) open_path = r_path;
@@ -1910,6 +1962,7 @@ void sf_load_sff(sf_ctx_t *ctx, const char *filename, const char *worldname) {
 }
 
 bool sf_save_sff(sf_ctx_t *ctx, const char *filepath) {
+  /* Serialize the current scene (cameras, objects, entities, lights) to a .sff file. */
   if (!ctx || !filepath) return false;
   FILE *f = fopen(filepath, "w");
   if (!f) {
@@ -2002,6 +2055,7 @@ bool sf_save_sff(sf_ctx_t *ctx, const char *filepath) {
 }
 
 bool _sf_sff_read_kv(FILE *f, char *key, size_t ksz, char *val, size_t vsz) {
+  /* Read the next "key = value" line from a .sff file block; returns false on '}' or EOF. */
   char line[512];
   while (fgets(line, sizeof(line), f)) {
     _sf_sff_trim(line);
@@ -2020,18 +2074,21 @@ bool _sf_sff_read_kv(FILE *f, char *key, size_t ksz, char *val, size_t vsz) {
 }
 
 void _sf_sff_trim(char *s) {
+  /* Trim leading and trailing whitespace (including newlines) from a string in place. */
   while (*s == ' ' || *s == '\t') { char *d = s; while ((*d = *(d+1))) d++; }
   size_t len = strlen(s);
   while (len > 0 && (s[len-1] == ' ' || s[len-1] == '\t' || s[len-1] == '\n' || s[len-1] == '\r')) s[--len] = '\0';
 }
 
 sf_fvec3_t _sf_sff_prse_vec3(const char *s) {
+  /* Parse a "(x, y, z)" string from a .sff value into an sf_fvec3_t. */
   sf_fvec3_t v = {0, 0, 0};
   sscanf(s, " ( %f , %f , %f )", &v.x, &v.y, &v.z);
   return v;
 }
 
 int _sf_sff_prse_list(const char *s, char out[][64], int max) {
+  /* Parse a "[a, b, c]" list from a .sff value into a fixed array of strings; returns item count. */
   const char *p = strchr(s, '[');
   if (!p) return 0;
   p++;
@@ -2050,6 +2107,7 @@ int _sf_sff_prse_list(const char *s, char out[][64], int max) {
 }
 
 sf_frame_t* _sf_sff_get_frame_(sf_ctx_t *ctx, const char *name) {
+  /* Find a frame by name during .sff loading; use the sf_get_frame() macro at runtime. */
   for (int i = 0; i < ctx->frames_count; i++) {
     if (ctx->frames[i].name && strcmp(ctx->frames[i].name, name) == 0)
       return &ctx->frames[i];
@@ -2058,6 +2116,7 @@ sf_frame_t* _sf_sff_get_frame_(sf_ctx_t *ctx, const char *name) {
 }
 
 void _sf_sff_prse_frame(sf_ctx_t *ctx, FILE *f, const char *name, int *frame_count) {
+  /* Parse a "frame name { ... }" block from a .sff file and add it to the scene graph. */
   char key[64], val[256];
   char parent_name[64] = {0};
   sf_fvec3_t pos = {0,0,0}, rot = {0,0,0}, scale = {1,1,1};
@@ -2082,6 +2141,7 @@ void _sf_sff_prse_frame(sf_ctx_t *ctx, FILE *f, const char *name, int *frame_cou
 }
 
 void _sf_sff_prse_cam(sf_ctx_t *ctx, FILE *f, const char *name, int *cam_count) {
+  /* Parse a "camera name { ... }" block from a .sff file, creating or configuring a camera. */
   char key[64], val[256];
   char parent_frame[64] = {0};
   sf_fvec3_t pos = {0,0,0}, target = {0,0,0};
@@ -2121,6 +2181,7 @@ void _sf_sff_prse_cam(sf_ctx_t *ctx, FILE *f, const char *name, int *cam_count) 
 }
 
 void _sf_sff_prse_enti(sf_ctx_t *ctx, FILE *f, const char *name, int *enti_count) {
+  /* Parse an "entity name { ... }" block from a .sff file, creating a renderable entity. */
   char key[64], val[256];
   char mesh_name[64] = {0}, tex_name[64] = {0}, parent_frame[64] = {0};
   sf_fvec3_t pos = {0,0,0}, rot = {0,0,0}, scale = {1,1,1};
@@ -2152,6 +2213,7 @@ void _sf_sff_prse_enti(sf_ctx_t *ctx, FILE *f, const char *name, int *enti_count
 }
 
 void _sf_sff_prse_light(sf_ctx_t *ctx, FILE *f, const char *name, int *light_count) {
+  /* Parse a "light name { ... }" block from a .sff file and add a point or directional light. */
   char key[64], val[256];
   char type_str[16] = "point", parent_frame[64] = {0};
   sf_fvec3_t pos = {0,0,0}, color = {1,1,1};
@@ -2179,6 +2241,7 @@ void _sf_sff_prse_light(sf_ctx_t *ctx, FILE *f, const char *name, int *light_cou
 }
 
 void _sf_sff_prse_sprit(sf_ctx_t *ctx, FILE *f, const char *name, int *sprite_count) {
+  /* Parse a "sprite name { ... }" block from a .sff file and register a sprite animation. */
   char key[64], val[256];
   float duration = 1.0f, scale = 1.0f;
   char frame_names[SF_MAX_SPRITE_FRAMES][64] = {{0}};
@@ -2205,6 +2268,7 @@ void _sf_sff_prse_sprit(sf_ctx_t *ctx, FILE *f, const char *name, int *sprite_co
 }
 
 void _sf_sff_prse_emitr(sf_ctx_t *ctx, FILE *f, const char *name, int *emitr_count) {
+  /* Parse an "emitter name { ... }" block from a .sff file and create a particle emitter. */
   char key[64], val[256];
   char type_str[16] = "omni", spr_name[64] = {0}, parent_frame[64] = {0};
   int max_p = 100;
@@ -2246,11 +2310,13 @@ void _sf_sff_prse_emitr(sf_ctx_t *ctx, FILE *f, const char *name, int *emitr_cou
 
 /* SF_FRAME_FUNCTIONS */
 sf_frame_t* sf_get_root(sf_ctx_t *ctx, sf_convention_t conv) {
+  /* Return the root frame for the given coordinate convention (DEFAULT, NED, FLU). */
   if (conv < 0 || conv >= SF_CONV_MAX) return NULL;
   return ctx->roots[conv];
 }
 
 sf_frame_t* sf_add_frame(sf_ctx_t *ctx, sf_frame_t *parent) {
+  /* Allocate a new scene-graph frame (from the free list or pool) and attach it to parent. */
   sf_frame_t *f;
   if (ctx->free_frames) {
     f = ctx->free_frames;
@@ -2276,6 +2342,7 @@ sf_frame_t* sf_add_frame(sf_ctx_t *ctx, sf_frame_t *parent) {
 }
 
 void sf_update_frames(sf_ctx_t *ctx) {
+  /* Walk every root's tree and recompute global_M for dirty frames. */
   for (int i = 0; i < SF_CONV_MAX; i++) {
     if (ctx->roots[i]) {
       _sf_calc_frame_tree(ctx->roots[i], sf_make_idn_fmat4(), false);
@@ -2284,6 +2351,7 @@ void sf_update_frames(sf_ctx_t *ctx) {
 }
 
 void sf_frame_look_at(sf_frame_t *f, sf_fvec3_t target) {
+  /* Orient a frame to face a world-space target point (sets yaw/pitch; rolls to zero). */
   if (!f) return;
   sf_fvec3_t diff = sf_fvec3_sub(target, f->pos);
   f->rot.y = atan2f(-diff.x, -diff.z);
@@ -2294,6 +2362,7 @@ void sf_frame_look_at(sf_frame_t *f, sf_fvec3_t target) {
 }
 
 void sf_frame_set_parent(sf_frame_t *child, sf_frame_t *new_parent) {
+  /* Re-parent a frame, unlinking it from its old parent and inserting it under new_parent. */
   if (!child || child->parent == new_parent) return;
 
   if (child->parent) {
@@ -2314,6 +2383,7 @@ void sf_frame_set_parent(sf_frame_t *child, sf_frame_t *new_parent) {
 }
 
 void sf_remove_frame(sf_ctx_t *ctx, sf_frame_t *f) {
+  /* Recursively unlink a frame and all its children, returning them to the free list. */
   if (!f || f->is_root) return;
   sf_frame_t *c = f->first_child;
   while (c) {
@@ -2335,6 +2405,7 @@ void sf_remove_frame(sf_ctx_t *ctx, sf_frame_t *f) {
 }
 
 void _sf_set_up_frames(sf_ctx_t *ctx) {
+  /* Create the three convention roots (DEFAULT, NED, FLU) with their fixed basis matrices. */
   ctx->roots[SF_CONV_DEFAULT] = &ctx->frames[ctx->frames_count++];
   memset(ctx->roots[SF_CONV_DEFAULT], 0, sizeof(sf_frame_t));
   ctx->roots[SF_CONV_DEFAULT]->local_M  = sf_make_idn_fmat4();
@@ -2363,6 +2434,7 @@ void _sf_set_up_frames(sf_ctx_t *ctx) {
 }
 
 void _sf_calc_frame_tree(sf_frame_t *f, sf_fmat4_t parent_global_M, bool force_dirty) {
+  /* Recursively recompute global_M for this frame and its children if dirty. */
   if (!f) return;
   bool current_dirty = f->is_dirty || force_dirty;
 
@@ -2383,6 +2455,7 @@ void _sf_calc_frame_tree(sf_frame_t *f, sf_fmat4_t parent_global_M, bool force_d
 }
 
 void _sf_write_frame_ref(FILE *f, sf_frame_t *fr, sf_ctx_t *ctx) {
+  /* Write a "frame = name" line to a .sff file if the frame has a named non-root parent. */
   (void)ctx;
   if (!fr || !fr->parent || fr->parent->is_root || !fr->parent->name) return;
   fprintf(f, "    frame     = %s\n", fr->parent->name);
@@ -2390,6 +2463,7 @@ void _sf_write_frame_ref(FILE *f, sf_frame_t *fr, sf_ctx_t *ctx) {
 
 /* SF_DRAWING_FUNCTIONS */
 void sf_fill(sf_ctx_t *ctx, sf_cam_t *cam, sf_pkd_clr_t c) {
+  /* Fill the entire camera pixel buffer with a solid color. */
   if (c == 0) { memset(cam->buffer, 0, cam->buffer_size * sizeof(sf_pkd_clr_t)); return; }
   sf_pkd_clr_t *buf = cam->buffer;
   int n = cam->buffer_size;
@@ -2397,11 +2471,13 @@ void sf_fill(sf_ctx_t *ctx, sf_cam_t *cam, sf_pkd_clr_t c) {
 }
 
 void sf_pixel(sf_ctx_t *ctx, sf_cam_t *cam, sf_pkd_clr_t c, sf_ivec2_t v0) {
+  /* Write a single pixel, clipping to the camera bounds. */
   if (v0.x < 0 || v0.x >= cam->w || v0.y < 0 || v0.y >= cam->h) return;
   cam->buffer[_sf_vec_to_index(ctx, cam, v0)] = c;
 }
 
 void sf_pixel_depth(sf_ctx_t *ctx, sf_cam_t *cam, sf_pkd_clr_t c, sf_ivec2_t v, float z) {
+  /* Write a pixel only if z is closer than the current z-buffer value. */
   if (v.x >= cam->w || v.y >= cam->h) return;
   uint32_t idx = _sf_vec_to_index(ctx, cam, v);
   if (z < cam->z_buffer[idx]) {
@@ -2411,6 +2487,7 @@ void sf_pixel_depth(sf_ctx_t *ctx, sf_cam_t *cam, sf_pkd_clr_t c, sf_ivec2_t v, 
 }
 
 void sf_line(sf_ctx_t *ctx, sf_cam_t *cam, sf_pkd_clr_t c, sf_ivec2_t v0, sf_ivec2_t v1) {
+  /* Draw a Bresenham line between two screen-space points. */
   int dx = abs(v1.x - v0.x);
   int sx = v0.x < v1.x ? 1 : -1;
   int dy = -abs(v1.y - v0.y);
@@ -2434,6 +2511,7 @@ void sf_line(sf_ctx_t *ctx, sf_cam_t *cam, sf_pkd_clr_t c, sf_ivec2_t v0, sf_ive
 }
 
 void sf_rect(sf_ctx_t *ctx, sf_cam_t *cam, sf_pkd_clr_t c, sf_ivec2_t v0, sf_ivec2_t v1) {
+  /* Fill a screen-space axis-aligned rectangle with a solid color. */
   int l = (v0.x < v1.x) ? v0.x : v1.x;
   int r = (v0.x > v1.x) ? v0.x : v1.x;
   int t = (v0.y < v1.y) ? v0.y : v1.y;
@@ -2447,6 +2525,7 @@ void sf_rect(sf_ctx_t *ctx, sf_cam_t *cam, sf_pkd_clr_t c, sf_ivec2_t v0, sf_ive
 }
 
 void sf_tri(sf_ctx_t *ctx, sf_cam_t *cam, sf_pkd_clr_t c, sf_fvec3_t v0, sf_fvec3_t v1, sf_fvec3_t v2, bool use_depth) {
+  /* Rasterize a flat-shaded triangle; z is the projected depth used for optional depth testing. */
   if (v1.y < v0.y) { sf_fvec3_t t = v0; v0 = v1; v1 = t; }
   if (v2.y < v0.y) { sf_fvec3_t t = v0; v0 = v2; v2 = t; }
   if (v2.y < v1.y) { sf_fvec3_t t = v1; v1 = v2; v2 = t; }
@@ -2510,6 +2589,7 @@ void sf_tri(sf_ctx_t *ctx, sf_cam_t *cam, sf_pkd_clr_t c, sf_fvec3_t v0, sf_fvec
 }
 
 void sf_tri_tex(sf_ctx_t *ctx, sf_cam_t *cam, sf_tex_t *tex, sf_fvec3_t v0, sf_fvec3_t v1, sf_fvec3_t v2, sf_fvec3_t uvz0, sf_fvec3_t uvz1, sf_fvec3_t uvz2, sf_fvec3_t l_int) {
+  /* Rasterize a perspective-correct textured and lit triangle; uvz encodes u/z, v/z, 1/z per vertex. */
   if (v1.y < v0.y) { _sf_swap_fvec3(&v0, &v1); _sf_swap_fvec3(&uvz0, &uvz1); }
   if (v2.y < v0.y) { _sf_swap_fvec3(&v0, &v2); _sf_swap_fvec3(&uvz0, &uvz2); }
   if (v2.y < v1.y) { _sf_swap_fvec3(&v1, &v2); _sf_swap_fvec3(&uvz1, &uvz2); }
@@ -2616,6 +2696,7 @@ void sf_tri_tex(sf_ctx_t *ctx, sf_cam_t *cam, sf_tex_t *tex, sf_fvec3_t v0, sf_f
 }
 
 void sf_put_text(sf_ctx_t *ctx, sf_cam_t *cam, const char *text, sf_ivec2_t p, sf_pkd_clr_t c, int scale) {
+  /* Render a null-terminated string using the built-in 8×8 bitmap font at integer scale. */
   if (scale < 1) scale = 1;
   int start_x = p.x;
   int stride = 8 * scale;
@@ -2650,10 +2731,12 @@ void sf_put_text(sf_ctx_t *ctx, sf_cam_t *cam, const char *text, sf_ivec2_t p, s
 }
 
 void sf_clear_depth(sf_ctx_t *ctx, sf_cam_t *cam) {
+  /* Reset the z-buffer to maximum depth (0x7F7F7F7F ≈ far). */
   memset(cam->z_buffer, 0x7F, cam->buffer_size * sizeof(float));
 }
 
 void sf_draw_cam_pip(sf_ctx_t *ctx, sf_cam_t *dest, sf_cam_t *src, sf_ivec2_t pos) {
+  /* Blit a secondary camera's buffer into dest at screen-space pos (picture-in-picture). */
   if (!dest || !dest->buffer || !src || !src->buffer) return;
   int sx0 = 0, sy0 = 0;
   int dx0 = pos.x, dy0 = pos.y;
@@ -2671,6 +2754,7 @@ void sf_draw_cam_pip(sf_ctx_t *ctx, sf_cam_t *dest, sf_cam_t *src, sf_ivec2_t po
 }
 
 void sf_draw_debug_ovrlay(sf_ctx_t *ctx, sf_cam_t *cam) {
+  /* Draw the full debug overlay: world axes, frames, lights, cameras, and performance stats. */
   sf_draw_debug_axes   (ctx, cam);
   sf_draw_debug_frames (ctx, cam, 1.0f);
   sf_draw_debug_lights (ctx, cam, 1.0f);
@@ -2680,6 +2764,7 @@ void sf_draw_debug_ovrlay(sf_ctx_t *ctx, sf_cam_t *cam) {
 
 
 void sf_draw_debug_axes(sf_ctx_t *ctx, sf_cam_t *cam) {
+  /* Draw the world-space X/Y/Z axes as RGB lines in a corner compass widget. */
   int cx = 40;
   int cy = cam->h - 40;
   float scale = 30.0f;
@@ -2704,6 +2789,7 @@ void sf_draw_debug_axes(sf_ctx_t *ctx, sf_cam_t *cam) {
 }
 
 void sf_draw_debug_frames(sf_ctx_t *ctx, sf_cam_t *cam, float axis_size) {
+  /* Project and draw every scene-graph frame's local axes and parent-link lines. */
   if (!ctx || !cam) return;
   sf_pkd_clr_t parent_link_clr = (sf_pkd_clr_t)0xFF555555;
   for (int i = 0; i < ctx->frames_count; ++i) {
@@ -2748,6 +2834,7 @@ void sf_draw_debug_frames(sf_ctx_t *ctx, sf_cam_t *cam, float axis_size) {
 }
 
 void sf_draw_debug_lights(sf_ctx_t *ctx, sf_cam_t *cam, float size) {
+  /* Draw a star (point) or arrow (dir) gizmo for each light in the scene. */
   if (!ctx || !cam) return;
   for (int i = 0; i < ctx->light_count; ++i) {
     sf_light_t *l = &ctx->lights[i];
@@ -2787,6 +2874,7 @@ void sf_draw_debug_lights(sf_ctx_t *ctx, sf_cam_t *cam, float size) {
 }
 
 void sf_draw_debug_cams(sf_ctx_t *ctx, sf_cam_t *view_cam, float ray_len) {
+  /* Draw frustum wireframes for every camera except view_cam itself. */
   if (!ctx || !view_cam) return;
   for (int i = 0; i < ctx->cam_count; ++i) {
     sf_cam_t *c = &ctx->cameras[i];
@@ -2826,6 +2914,7 @@ void sf_draw_debug_cams(sf_ctx_t *ctx, sf_cam_t *view_cam, float ray_len) {
 }
 
 void sf_draw_debug_perf(sf_ctx_t *ctx, sf_cam_t *cam) {
+  /* Render a HUD bar showing FPS, delta time, triangle count, and arena usage. */
   if (!ctx || !cam) return;
 
   int bh = 18;
@@ -2877,6 +2966,7 @@ void sf_draw_debug_perf(sf_ctx_t *ctx, sf_cam_t *cam) {
 }
 
 void sf_draw_sprite(sf_ctx_t *ctx, sf_cam_t *cam, sf_sprite_t *spr, sf_fvec3_t pos_w, float anim_time, float scale_mult) {
+  /* Billboard a sprite frame at a world position with depth testing and alpha blending. */
   if (!spr || spr->frame_count == 0) return;
   int frame_idx = (int)(anim_time / spr->frame_duration) % spr->frame_count;
   sf_tex_t *tex = spr->frames[frame_idx];
@@ -2941,6 +3031,7 @@ void sf_draw_sprite(sf_ctx_t *ctx, sf_cam_t *cam, sf_sprite_t *spr, sf_fvec3_t p
 
 /* SF_UI_FUNCTIONS */
 sf_ui_t* sf_ui_create (sf_ctx_t *ctx) {
+  /* Allocate and initialize a UI context with a default style from the arena. */
   sf_ui_t *ui = (sf_ui_t*)sf_arena_alloc(ctx, &ctx->arena, sizeof(sf_ui_t));
   ui->elements = sf_arena_alloc(ctx, &ctx->arena, SF_MAX_UI_ELEMENTS * sizeof(sf_ui_lmn_t));
   ui->count = 0;
@@ -2957,6 +3048,7 @@ sf_ui_t* sf_ui_create (sf_ctx_t *ctx) {
 }
 
 sf_ui_lmn_t* sf_ui_add_button(sf_ctx_t *ctx, const char *text, sf_ivec2_t v0, sf_ivec2_t v1, void (*cb)(sf_ctx_t*, void*), void *userdata) {
+  /* Add a clickable button with a label and optional click callback. */
   if (!ctx->ui || ctx->ui->count >= SF_MAX_UI_ELEMENTS) return NULL;
 
   sf_ui_lmn_t *parent = _sf_ui_find_prnt_pnl(ctx, v0, v1);
@@ -2984,6 +3076,7 @@ sf_ui_lmn_t* sf_ui_add_button(sf_ctx_t *ctx, const char *text, sf_ivec2_t v0, sf
 }
 
 sf_ui_lmn_t* sf_ui_add_slider(sf_ctx_t *ctx, sf_ivec2_t v0, sf_ivec2_t v1, float min_val, float max_val, float init_val, sf_ui_cb cb, void *userdata) {
+  /* Add a horizontal slider with a float range and optional on-change callback. */
   if (!ctx->ui || ctx->ui->count >= SF_MAX_UI_ELEMENTS) return NULL;
 
   sf_ui_lmn_t *parent = _sf_ui_find_prnt_pnl(ctx, v0, v1);
@@ -3013,6 +3106,7 @@ sf_ui_lmn_t* sf_ui_add_slider(sf_ctx_t *ctx, sf_ivec2_t v0, sf_ivec2_t v1, float
 }
 
 sf_ui_lmn_t* sf_ui_add_checkbox(sf_ctx_t *ctx, const char *text, sf_ivec2_t v0, sf_ivec2_t v1, bool init_state, sf_ui_cb cb, void *userdata) {
+  /* Add a checkbox with a label, initial checked state, and optional on-toggle callback. */
   if (!ctx->ui || ctx->ui->count >= SF_MAX_UI_ELEMENTS) return NULL;
 
   sf_ui_lmn_t *parent = _sf_ui_find_prnt_pnl(ctx, v0, v1);
@@ -3041,6 +3135,7 @@ sf_ui_lmn_t* sf_ui_add_checkbox(sf_ctx_t *ctx, const char *text, sf_ivec2_t v0, 
 }
 
 void sf_ui_render(sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_t *ui) {
+  /* Draw all visible UI elements; dropdown popups are drawn last to appear on top. */
   if (!ui) return;
   for (int i = 0; i < ui->count; ++i) {
     sf_ui_lmn_t *el = &ui->elements[i];
@@ -3066,6 +3161,7 @@ void sf_ui_render(sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_t *ui) {
 }
 
 void sf_ui_update(sf_ctx_t *ctx, sf_ui_t *ui) {
+  /* Process mouse hover/click input for every UI element and fire their callbacks. */
   if (!ui) return;
 
   int mx = ctx->input.mouse_x;
@@ -3108,12 +3204,14 @@ void sf_ui_update(sf_ctx_t *ctx, sf_ui_t *ui) {
 }
 
 void sf_ui_clear(sf_ctx_t *ctx) {
+  /* Remove all UI elements and clear focus without freeing arena memory. */
   if (!ctx->ui) return;
   ctx->ui->count = 0;
   ctx->ui->focused = NULL;
 }
 
 void sf_ui_set_callback(sf_ui_lmn_t *el, sf_ui_cb cb, void *userdata) {
+  /* Assign a callback and userdata to any UI element type. */
   if (!el) return;
   switch (el->type) {
     case SF_UI_BUTTON:     el->button.callback = cb;     el->button.userdata = userdata;     break;
@@ -3128,6 +3226,7 @@ void sf_ui_set_callback(sf_ui_lmn_t *el, sf_ui_cb cb, void *userdata) {
 }
 
 sf_ui_lmn_t* sf_ui_get_by_name(sf_ui_t *ui, const char *name) {
+  /* Look up a UI element by its name string; returns NULL if not found. */
   if (!ui || !name) return NULL;
   for (int i = 0; i < ui->count; i++) {
     sf_ui_lmn_t *el = &ui->elements[i];
@@ -3137,6 +3236,7 @@ sf_ui_lmn_t* sf_ui_get_by_name(sf_ui_t *ui, const char *name) {
 }
 
 sf_ui_lmn_t* sf_ui_add_label(sf_ctx_t *ctx, const char *text, sf_ivec2_t pos, sf_pkd_clr_t color) {
+  /* Add a non-interactive text label at a pixel position. */
   if (!ctx->ui || ctx->ui->count >= SF_MAX_UI_ELEMENTS) return NULL;
   sf_ivec2_t v1 = { pos.x + (int)strlen(text) * 8, pos.y + 8 };
   sf_ui_lmn_t *parent = _sf_ui_find_prnt_pnl(ctx, pos, v1);
@@ -3154,6 +3254,7 @@ sf_ui_lmn_t* sf_ui_add_label(sf_ctx_t *ctx, const char *text, sf_ivec2_t pos, sf
 }
 
 sf_ui_lmn_t* sf_ui_add_text_input(sf_ctx_t *ctx, sf_ivec2_t v0, sf_ivec2_t v1, char *buf, int buflen, sf_ui_cb cb, void *ud) {
+  /* Add a single-line text-input field backed by a caller-supplied buffer. */
   if (!ctx->ui || ctx->ui->count >= SF_MAX_UI_ELEMENTS) return NULL;
   sf_ui_lmn_t *parent = _sf_ui_find_prnt_pnl(ctx, v0, v1);
   sf_ui_lmn_t *el = &ctx->ui->elements[ctx->ui->count++];
@@ -3173,6 +3274,7 @@ sf_ui_lmn_t* sf_ui_add_text_input(sf_ctx_t *ctx, sf_ivec2_t v0, sf_ivec2_t v1, c
 }
 
 sf_ui_lmn_t* sf_ui_add_drag_float(sf_ctx_t *ctx, sf_ivec2_t v0, sf_ivec2_t v1, float *target, float step, sf_ui_cb cb, void *ud) {
+  /* Add a drag-to-change float widget that directly modifies a float pointer. */
   if (!ctx->ui || ctx->ui->count >= SF_MAX_UI_ELEMENTS) return NULL;
   sf_ui_lmn_t *parent = _sf_ui_find_prnt_pnl(ctx, v0, v1);
   sf_ui_lmn_t *el = &ctx->ui->elements[ctx->ui->count++];
@@ -3191,6 +3293,7 @@ sf_ui_lmn_t* sf_ui_add_drag_float(sf_ctx_t *ctx, sf_ivec2_t v0, sf_ivec2_t v1, f
 }
 
 sf_ui_lmn_t* sf_ui_add_dropdown(sf_ctx_t *ctx, sf_ivec2_t v0, sf_ivec2_t v1, const char **items, int n, int *selected, sf_ui_cb cb, void *ud) {
+  /* Add a dropdown selector from a string array; writes the chosen index to *selected. */
   if (!ctx->ui || ctx->ui->count >= SF_MAX_UI_ELEMENTS) return NULL;
   sf_ui_lmn_t *parent = _sf_ui_find_prnt_pnl(ctx, v0, v1);
   sf_ui_lmn_t *el = &ctx->ui->elements[ctx->ui->count++];
@@ -3212,6 +3315,7 @@ sf_ui_lmn_t* sf_ui_add_dropdown(sf_ctx_t *ctx, sf_ivec2_t v0, sf_ivec2_t v1, con
 }
 
 sf_ui_lmn_t* sf_ui_add_panel(sf_ctx_t *ctx, const char *title, sf_ivec2_t v0, sf_ivec2_t v1) {
+  /* Add a collapsible panel container; child elements positioned within it are hidden when collapsed. */
   if (!ctx->ui || ctx->ui->count >= SF_MAX_UI_ELEMENTS) return NULL;
   sf_ui_lmn_t *parent = _sf_ui_find_prnt_pnl(ctx, v0, v1);
   sf_ui_lmn_t *el = &ctx->ui->elements[ctx->ui->count++];
@@ -3229,6 +3333,7 @@ sf_ui_lmn_t* sf_ui_add_panel(sf_ctx_t *ctx, const char *title, sf_ivec2_t v0, sf
 }
 
 bool sf_save_sfui(sf_ctx_t *ctx, sf_ui_t *ui, const char *filepath) {
+  /* Serialize all UI elements to a .sfui text file for later loading. */
   if (!ctx || !ui || !filepath) return false;
   FILE *f = fopen(filepath, "w");
   if (!f) { SF_LOG(ctx, SF_LOG_ERROR, SF_LOG_INDENT "could not write %s\n", filepath); return false; }
@@ -3284,6 +3389,7 @@ bool sf_save_sfui(sf_ctx_t *ctx, sf_ui_t *ui, const char *filepath) {
 }
 
 sf_ui_t* sf_load_sfui(sf_ctx_t *ctx, const char *filepath) {
+  /* Parse a .sfui file and reconstruct all UI elements, returning the populated sf_ui_t. */
   if (!ctx || !filepath) return NULL;
   FILE *f = fopen(filepath, "r");
   if (!f) { SF_LOG(ctx, SF_LOG_ERROR, SF_LOG_INDENT "could not open %s\n", filepath); return NULL; }
@@ -3394,6 +3500,7 @@ sf_ui_t* sf_load_sfui(sf_ctx_t *ctx, const char *filepath) {
 }
 
 sf_ui_lmn_t* _sf_ui_find_prnt_pnl(sf_ctx_t *ctx, sf_ivec2_t v0, sf_ivec2_t v1) {
+  /* Find the innermost panel that fully contains the given rect; returns NULL if none. */
   if (!ctx->ui) return NULL;
   for (int i = ctx->ui->count - 1; i >= 0; i--) {
     sf_ui_lmn_t *p = &ctx->ui->elements[i];
@@ -3404,6 +3511,7 @@ sf_ui_lmn_t* _sf_ui_find_prnt_pnl(sf_ctx_t *ctx, sf_ivec2_t v0, sf_ivec2_t v1) {
 }
 
 bool _sf_ui_eff_visible(sf_ui_lmn_t *el) {
+  /* Return true if el and all its ancestor panels are visible and not collapsed. */
   if (!el->is_visible) return false;
   sf_ui_lmn_t *p = el->parent_panel;
   while (p) {
@@ -3414,6 +3522,7 @@ bool _sf_ui_eff_visible(sf_ui_lmn_t *el) {
 }
 
 void _sf_update_button(sf_ctx_t *ctx, sf_ui_lmn_t *el, bool m_down, bool m_pressed, bool m_released) {
+  /* Fire the button callback on mouse-up while hovered. */
   if (el->is_hovered && el->is_pressed && m_released) {
     if (el->button.callback) {
       el->button.callback(ctx, el->button.userdata);
@@ -3422,6 +3531,7 @@ void _sf_update_button(sf_ctx_t *ctx, sf_ui_lmn_t *el, bool m_down, bool m_press
 }
 
 void _sf_draw_button(sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_lmn_t *btn) {
+  /* Render a button: fill rect with hover/pressed/disabled tint and center the label. */
   if (!btn->is_visible) return;
   sf_pkd_clr_t bg_color = btn->style.color_base; 
 
@@ -3450,6 +3560,7 @@ void _sf_draw_button(sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_lmn_t *btn) {
 }
 
 void _sf_draw_slider(sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_lmn_t *el) {
+  /* Render a slider: dark track, filled portion proportional to value, centered value text. */
   if (!el->is_visible) return;
 
   sf_pkd_clr_t fill_color = el->style.color_base; 
@@ -3488,6 +3599,7 @@ void _sf_draw_slider(sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_lmn_t *el) {
 }
 
 void _sf_draw_checkbox(sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_lmn_t *el) {
+  /* Render a checkbox: square box with a check mark when checked, plus label text. */
   if (!el->is_visible) return;
 
   sf_pkd_clr_t box_color = el->style.color_base; 
@@ -3522,11 +3634,13 @@ void _sf_draw_checkbox(sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_lmn_t *el) {
 }
 
 void _sf_draw_label(sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_lmn_t *el) {
+  /* Render a static text label at its position with its assigned color. */
   if (!el->is_visible || !el->label.text) return;
   sf_put_text(ctx, cam, el->label.text, el->v0, el->label.color, 1);
 }
 
 void _sf_draw_text_input(sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_lmn_t *el) {
+  /* Render a text-input box: background, buffer contents, and blinking caret when focused. */
   if (!el->is_visible) return;
   bool focused = (ctx->ui && ctx->ui->focused == el);
   sf_pkd_clr_t bg = focused ? el->style.color_active : (el->is_hovered ? el->style.color_hover : el->style.color_base);
@@ -3542,6 +3656,7 @@ void _sf_draw_text_input(sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_lmn_t *el) {
 }
 
 void _sf_draw_drag_float(sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_lmn_t *el) {
+  /* Render a drag-float widget showing the current float value centered in its box. */
   if (!el->is_visible) return;
   sf_pkd_clr_t bg = el->is_pressed ? el->style.color_active : (el->is_hovered ? el->style.color_hover : el->style.color_base);
   sf_rect(ctx, cam, bg, el->v0, el->v1);
@@ -3556,6 +3671,7 @@ void _sf_draw_drag_float(sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_lmn_t *el) {
 }
 
 void _sf_draw_dropdown(sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_lmn_t *el) {
+  /* Render the collapsed dropdown header showing the selected item label and an arrow. */
   if (!el->is_visible) return;
   sf_pkd_clr_t bg = el->is_hovered ? el->style.color_hover : el->style.color_base;
   sf_rect(ctx, cam, bg, el->v0, el->v1);
@@ -3569,6 +3685,7 @@ void _sf_draw_dropdown(sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_lmn_t *el) {
 }
 
 void _sf_draw_drpdwn_popup(sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_lmn_t *el) {
+  /* Render the open dropdown item list below the header, highlighting the hovered row. */
   if (!el->is_visible || !el->dropdown.is_open) return;
   int h = el->v1.y - el->v0.y;
   int w = el->v1.x - el->v0.x;
@@ -3582,6 +3699,7 @@ void _sf_draw_drpdwn_popup(sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_lmn_t *el) {
 }
 
 void _sf_draw_panel(sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_lmn_t *el) {
+  /* Render a panel: dark background, header bar, and collapse indicator prefix. */
   if (!el->is_visible) return;
   sf_ivec2_t full_v1 = el->panel.collapsed ? (sf_ivec2_t){ el->v1.x, el->v0.y + 16 } : el->v1;
   sf_rect(ctx, cam, (sf_pkd_clr_t)0xFF2A2A2A, el->v0, full_v1);
@@ -3595,6 +3713,7 @@ void _sf_draw_panel(sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_lmn_t *el) {
 }
 
 void _sf_update_text_input(sf_ctx_t *ctx, sf_ui_lmn_t *el, bool m_pressed) {
+  /* Handle focus, character insertion/deletion, and caret movement for a text-input element. */
   if (!ctx->ui) return;
   if (el->is_hovered && m_pressed) ctx->ui->focused = el;
   if (ctx->ui->focused != el || !el->text_input.buf) return;
@@ -3613,6 +3732,7 @@ void _sf_update_text_input(sf_ctx_t *ctx, sf_ui_lmn_t *el, bool m_pressed) {
 }
 
 void _sf_update_drag_float(sf_ctx_t *ctx, sf_ui_lmn_t *el, bool m_down, bool m_pressed) {
+  /* Update a drag-float: record anchor on click, modify the target float by horizontal delta. */
   if (!el->drag_float.target) return;
   if (el->is_hovered && m_pressed) {
     el->drag_float.drag_anchor_x  = ctx->input.mouse_x;
@@ -3629,6 +3749,7 @@ void _sf_update_drag_float(sf_ctx_t *ctx, sf_ui_lmn_t *el, bool m_down, bool m_p
 }
 
 void _sf_update_dropdown(sf_ctx_t *ctx, sf_ui_lmn_t *el, bool m_pressed) {
+  /* Toggle open/closed, track hovered item, and write the selection on click. */
   int mx = ctx->input.mouse_x, my = ctx->input.mouse_y;
   int h = el->v1.y - el->v0.y;
   int w = el->v1.x - el->v0.x;
@@ -3712,6 +3833,7 @@ int _sf_ui_type_from_str(const char *s) {
 
 /* SF_MESH_AUTHORING_FUNCTIONS */
 sf_obj_t* sf_obj_create_empty(sf_ctx_t *ctx, const char *objname, int max_v, int max_vt, int max_f) {
+  /* Allocate a named mesh with pre-reserved vertex, UV, and face arrays in the arena. */
   char auto_name[32];
   if (objname == NULL) {
     snprintf(auto_name, sizeof(auto_name), "obj_%d", ctx->obj_count);
@@ -3749,18 +3871,21 @@ sf_obj_t* sf_obj_create_empty(sf_ctx_t *ctx, const char *objname, int max_v, int
 }
 
 int sf_obj_add_vert(sf_obj_t *obj, sf_fvec3_t p) {
+  /* Append a vertex position; returns its index or -1 if the array is full. */
   if (!obj || obj->v_cnt >= obj->v_cap) return -1;
   obj->v[obj->v_cnt] = p;
   return obj->v_cnt++;
 }
 
 int sf_obj_add_uv(sf_obj_t *obj, sf_fvec2_t uv) {
+  /* Append a UV coordinate; returns its index or -1 if the array is full. */
   if (!obj || obj->vt_cnt >= obj->vt_cap) return -1;
   obj->vt[obj->vt_cnt] = uv;
   return obj->vt_cnt++;
 }
 
 int sf_obj_add_face(sf_obj_t *obj, int i0, int i1, int i2) {
+  /* Append a triangle face by vertex indices only (no UV mapping). */
   if (!obj || obj->f_cnt >= obj->f_cap) return -1;
   sf_face_t *f = &obj->f[obj->f_cnt];
   f->idx[0] = (sf_vtx_idx_t){i0, -1, -1};
@@ -3770,6 +3895,7 @@ int sf_obj_add_face(sf_obj_t *obj, int i0, int i1, int i2) {
 }
 
 int sf_obj_add_face_uv(sf_obj_t *obj, int v0, int v1, int v2, int t0, int t1, int t2) {
+  /* Append a triangle face with per-corner UV indices. */
   if (!obj || obj->f_cnt >= obj->f_cap) return -1;
   sf_face_t *f = &obj->f[obj->f_cnt];
   f->idx[0] = (sf_vtx_idx_t){v0, t0, -1};
@@ -3779,6 +3905,7 @@ int sf_obj_add_face_uv(sf_obj_t *obj, int v0, int v1, int v2, int t0, int t1, in
 }
 
 void sf_obj_recompute_bs(sf_obj_t *obj) {
+  /* Recompute the bounding-sphere center (centroid) and radius from the current vertex set. */
   if (!obj || obj->v_cnt == 0) return;
   sf_fvec3_t c = {0, 0, 0};
   for (int i = 0; i < obj->v_cnt; i++) { c.x += obj->v[i].x; c.y += obj->v[i].y; c.z += obj->v[i].z; }
@@ -3795,6 +3922,7 @@ void sf_obj_recompute_bs(sf_obj_t *obj) {
 }
 
 sf_obj_t* sf_obj_make_plane(sf_ctx_t *ctx, const char *objname, float sx, float sz, int res) {
+  /* Generate a flat XZ-plane mesh of size sx×sz subdivided into res×res quads. */
   if (res < 1) res = 1;
   int nv = (res + 1) * (res + 1);
   int nvt = nv;
@@ -3824,6 +3952,7 @@ sf_obj_t* sf_obj_make_plane(sf_ctx_t *ctx, const char *objname, float sx, float 
 }
 
 sf_obj_t* sf_obj_make_box(sf_ctx_t *ctx, const char *objname, float sx, float sy, float sz) {
+  /* Generate a UV-mapped box mesh with the given half-extents. */
   sf_obj_t *obj = sf_obj_create_empty(ctx, objname, 24, 24, 12);
   if (!obj) return NULL;
   float x = sx*0.5f, y = sy*0.5f, z = sz*0.5f;
@@ -3849,6 +3978,7 @@ sf_obj_t* sf_obj_make_box(sf_ctx_t *ctx, const char *objname, float sx, float sy
 }
 
 sf_obj_t* sf_obj_make_sphere(sf_ctx_t *ctx, const char *objname, float radius, int segs) {
+  /* Generate a UV-sphere mesh with the given radius and segment count. */
   if (segs < 3) segs = 3;
   int rings = segs;
   int nv  = (rings + 1) * (segs + 1);
@@ -3883,6 +4013,7 @@ sf_obj_t* sf_obj_make_sphere(sf_ctx_t *ctx, const char *objname, float radius, i
 }
 
 sf_obj_t* sf_obj_make_cyl(sf_ctx_t *ctx, const char *objname, float radius, float height, int segs) {
+  /* Generate a capped cylinder mesh with the given radius, height, and segment count. */
   if (segs < 3) segs = 3;
   int nv  = (segs + 1) * 2 + 2;
   int nvt = nv;
@@ -3917,6 +4048,7 @@ sf_obj_t* sf_obj_make_cyl(sf_ctx_t *ctx, const char *objname, float radius, floa
 }
 
 sf_obj_t* sf_obj_make_heightmap(sf_ctx_t *ctx, const char *objname, float size_x, float size_z, int res, sf_height_fn fn, void *ud) {
+  /* Generate a terrain mesh by sampling a height callback function on a res×res grid. */
   if (res < 1) res = 1;
   int nv = (res + 1) * (res + 1);
   int nvt = nv;
@@ -3948,6 +4080,7 @@ sf_obj_t* sf_obj_make_heightmap(sf_ctx_t *ctx, const char *objname, float size_x
 }
 
 bool sf_obj_save_obj(sf_ctx_t *ctx, sf_obj_t *obj, const char *filepath) {
+  /* Export a mesh to a Wavefront .obj file. */
   if (!obj || !filepath) return false;
   FILE *f = fopen(filepath, "w");
   if (!f) {
@@ -3979,6 +4112,7 @@ bool sf_obj_save_obj(sf_ctx_t *ctx, sf_obj_t *obj, const char *filepath) {
 }
 
 float sf_noise_fbm(float x, float z, int oct, float lac, float gain, uint32_t seed) {
+  /* Fractional Brownian motion: sum of smooth noise octaves for natural-looking terrain. */
   float sum = 0.0f, amp = 1.0f, freq = 1.0f, norm = 0.0f;
   for (int i = 0; i < oct; i++) {
     sum  += _sf_smooth_noise(x * freq, z * freq, seed + (uint32_t)i) * amp;
@@ -3991,6 +4125,7 @@ float sf_noise_fbm(float x, float z, int oct, float lac, float gain, uint32_t se
 
 /* SF_PICKING_FUNCTIONS */
 sf_ray_t sf_ray_from_screen(sf_ctx_t *ctx, sf_cam_t *cam, int sx, int sy) {
+  /* Unproject a screen pixel into a world-space ray origin and direction. */
   sf_ray_t r = {{0,0,0},{0,0,-1}};
   if (!cam || !cam->frame) return r;
   float ndc_x = (2.0f * (float)sx / (float)cam->w) - 1.0f;
@@ -4013,6 +4148,7 @@ sf_ray_t sf_ray_from_screen(sf_ctx_t *ctx, sf_cam_t *cam, int sx, int sy) {
 }
 
 bool sf_ray_triangle(sf_ray_t r, sf_fvec3_t a, sf_fvec3_t b, sf_fvec3_t c, float *out_t) {
+  /* Möller–Trumbore ray-triangle intersection; writes hit distance to out_t if non-NULL. */
   sf_fvec3_t e1 = sf_fvec3_sub(b, a);
   sf_fvec3_t e2 = sf_fvec3_sub(c, a);
   sf_fvec3_t p  = sf_fvec3_cross(r.d, e2);
@@ -4032,6 +4168,7 @@ bool sf_ray_triangle(sf_ray_t r, sf_fvec3_t a, sf_fvec3_t b, sf_fvec3_t c, float
 }
 
 bool sf_ray_plane_y(sf_ray_t r, float y, sf_fvec3_t *out) {
+  /* Intersect a ray with the horizontal plane at height y; writes the hit point to out if non-NULL. */
   if (fabsf(r.d.y) < 1e-6f) return false;
   float t = (y - r.o.y) / r.d.y;
   if (t < 0.0f) return false;
@@ -4040,6 +4177,7 @@ bool sf_ray_plane_y(sf_ray_t r, float y, sf_fvec3_t *out) {
 }
 
 bool sf_ray_aabb(sf_ray_t r, sf_fvec3_t bmin, sf_fvec3_t bmax, float *out_t) {
+  /* Slab-method AABB intersection; writes nearest hit distance to out_t if non-NULL. */
   float tmin = 0.0f, tmax = 1e30f;
   float o[3] = {r.o.x, r.o.y, r.o.z}, d[3] = {r.d.x, r.d.y, r.d.z};
   float mn[3] = {bmin.x, bmin.y, bmin.z}, mx[3] = {bmax.x, bmax.y, bmax.z};
@@ -4060,6 +4198,7 @@ bool sf_ray_aabb(sf_ray_t r, sf_fvec3_t bmin, sf_fvec3_t bmax, float *out_t) {
 }
 
 sf_enti_t* sf_raycast_entities(sf_ctx_t *ctx, sf_ray_t ray, float *out_t) {
+  /* Test a ray against every entity's triangles and return the closest hit entity. */
   sf_enti_t *hit = NULL;
   float best = 1e30f;
   for (int i = 0; i < ctx->enti_count; i++) {
@@ -4101,11 +4240,13 @@ void sf_log_(sf_ctx_t *ctx, sf_log_level_t level, const char* func, const char* 
 }
 
 void sf_set_logger(sf_ctx_t *ctx, sf_log_fn callback, void* userdata) {
+  /* Override the engine's log sink with a custom callback and optional userdata pointer. */
   ctx->log_cb = callback;
   ctx->log_user = userdata;
 }
 
 void sf_logger_console(const char* message, void* userdata) {
+  /* Default log sink: write the formatted message to stdout. */
   fprintf(stdout, "%s", message);
 }
 
@@ -4121,6 +4262,7 @@ const char* _sf_log_lvl_to_str(sf_log_level_t level) {
 
 /* SF_MATH_FUNCTIONS */
 sf_fmat4_t sf_fmat4_mul_fmat4(sf_fmat4_t m0, sf_fmat4_t m1) {
+  /* Multiply two 4×4 matrices and return the result. */
   sf_fmat4_t result = {0};
   for (int i = 0; i < 4; i++) {
     for (int j = 0; j < 4; j++) {
@@ -4133,6 +4275,7 @@ sf_fmat4_t sf_fmat4_mul_fmat4(sf_fmat4_t m0, sf_fmat4_t m1) {
 }
 
 sf_fvec3_t sf_fmat4_mul_vec3(sf_fmat4_t m, sf_fvec3_t v) {
+  /* Transform a vec3 by a 4×4 matrix with perspective divide. */
   sf_fvec3_t result;
   float w;
   result.x = v.x * m.m[0][0] + v.y * m.m[1][0] + v.z * m.m[2][0] + m.m[3][0];
@@ -4146,14 +4289,17 @@ sf_fvec3_t sf_fmat4_mul_vec3(sf_fmat4_t m, sf_fvec3_t v) {
 }
 
 sf_fvec3_t sf_fvec3_sub(sf_fvec3_t v0, sf_fvec3_t v1) {
+  /* Subtract v1 from v0 component-wise. */
   return (sf_fvec3_t){ v0.x - v1.x, v0.y - v1.y, v0.z - v1.z };
 }
 
 sf_fvec3_t sf_fvec3_add(sf_fvec3_t v0, sf_fvec3_t v1) {
+  /* Add two vec3s component-wise. */
   return (sf_fvec3_t){ v0.x + v1.x, v0.y + v1.y, v0.z + v1.z };
 }
 
 sf_fvec3_t sf_fvec3_norm(sf_fvec3_t v) {
+  /* Return a unit-length copy of v, or {0,0,0} for the zero vector. */
   float sq = v.x*v.x + v.y*v.y + v.z*v.z;
   if (sq == 0.0f) return (sf_fvec3_t){0,0,0};
   float inv_len = 1.0f / sqrtf(sq);
@@ -4161,6 +4307,7 @@ sf_fvec3_t sf_fvec3_norm(sf_fvec3_t v) {
 }
 
 sf_fvec3_t sf_fvec3_cross(sf_fvec3_t v0, sf_fvec3_t v1) {
+  /* Compute the cross product of v0 and v1. */
   return (sf_fvec3_t){
     v0.y * v1.z - v0.z * v1.y,
     v0.z * v1.x - v0.x * v1.z,
@@ -4169,10 +4316,12 @@ sf_fvec3_t sf_fvec3_cross(sf_fvec3_t v0, sf_fvec3_t v1) {
 }
 
 float sf_fvec3_dot(sf_fvec3_t v0, sf_fvec3_t v1) {
+  /* Compute the scalar dot product of v0 and v1. */
   return v0.x * v1.x + v0.y * v1.y + v0.z * v1.z;
 }
 
 sf_fmat4_t sf_make_tsl_fmat4(float x, float y, float z) {
+  /* Build a 4×4 translation matrix for (x, y, z). */
   sf_fmat4_t m = sf_make_idn_fmat4();
   m.m[3][0] = x;
   m.m[3][1] = y;
@@ -4181,6 +4330,7 @@ sf_fmat4_t sf_make_tsl_fmat4(float x, float y, float z) {
 }
 
 sf_fmat4_t sf_make_rot_fmat4(sf_fvec3_t angles) {
+  /* Build a 4×4 rotation matrix from Euler XYZ angles (radians), applied as Y→X→Z. */
   float cx = cosf(angles.x);
   float sx = sinf(angles.x);
   float cy = cosf(angles.y);
@@ -4206,6 +4356,7 @@ sf_fmat4_t sf_make_rot_fmat4(sf_fvec3_t angles) {
 }
 
 sf_fmat4_t sf_make_psp_fmat4(float fov_deg, float aspect, float near, float far) {
+  /* Build a right-handed perspective projection matrix from FOV (degrees), aspect ratio, and clip planes. */
   sf_fmat4_t m = {0};
   float fov_rad = fov_deg * (3.14159f / 180.0f);
   float tan_half_fov = tanf(fov_rad / 2.0f);
@@ -4221,6 +4372,7 @@ sf_fmat4_t sf_make_psp_fmat4(float fov_deg, float aspect, float near, float far)
 }
 
 sf_fmat4_t sf_make_idn_fmat4() {
+  /* Return a 4×4 identity matrix. */
   sf_fmat4_t result;
   for (int i = 0; i < 4; i++) {
     for (int j = 0; j < 4; j++) {
@@ -4232,6 +4384,7 @@ sf_fmat4_t sf_make_idn_fmat4() {
 }
 
 sf_fmat4_t sf_make_view_fmat4(sf_fvec3_t eye, sf_fvec3_t target, sf_fvec3_t up) {
+  /* Build a look-at view matrix from eye position, target point, and up vector. */
   sf_fvec3_t f = sf_fvec3_norm(sf_fvec3_sub(target, eye));
   sf_fvec3_t r = sf_fvec3_norm(sf_fvec3_cross(f, up));
   sf_fvec3_t u = sf_fvec3_cross(r, f);
@@ -4258,6 +4411,7 @@ sf_fmat4_t sf_make_view_fmat4(sf_fvec3_t eye, sf_fvec3_t target, sf_fvec3_t up) 
 }
 
 sf_fmat4_t sf_make_scale_fmat4(sf_fvec3_t s) {
+  /* Build a 4×4 non-uniform scale matrix from a vec3 of scale factors. */
   sf_fmat4_t m = sf_make_idn_fmat4();
   m.m[0][0] = s.x;
   m.m[1][1] = s.y;
