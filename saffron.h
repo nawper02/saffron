@@ -2849,41 +2849,6 @@ void sf_render_ui(sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_t *ui) {
   }
 }
 
-void _sf_update_button(sf_ctx_t *ctx, sf_ui_lmn_t *el, bool m_down, bool m_pressed, bool m_released) {
-  if (el->is_hovered && el->is_pressed && m_released) {
-    if (el->button.callback) {
-      el->button.callback(ctx, el->button.userdata);
-    }
-  }
-}
-
-void _sf_update_checkbox(sf_ctx_t *ctx, sf_ui_lmn_t *el, bool m_down, bool m_pressed, bool m_released) {
-  if (el->is_hovered && el->is_pressed && m_released) {
-    el->checkbox.is_checked = !el->checkbox.is_checked;
-    if (el->checkbox.callback) {
-      el->checkbox.callback(ctx, el->checkbox.userdata);
-    }
-  }
-}
-
-void _sf_update_slider(sf_ctx_t *ctx, sf_ui_lmn_t *el, bool m_down, bool m_pressed, bool m_released) {
-  if (el->is_pressed && m_down) {
-    int mx = ctx->input.mouse_x;
-    float width = (float)(el->v1.x - el->v0.x);
-    float offset = (float)(mx - el->v0.x);
-    float t = offset / width;
-    if (t < 0.0f) t = 0.0f;
-    if (t > 1.0f) t = 1.0f;
-    float new_val = el->slider.min_val + t * (el->slider.max_val - el->slider.min_val);
-    if (new_val != el->slider.value) {
-      el->slider.value = new_val;
-      if (el->slider.callback) {
-        el->slider.callback(ctx, el->slider.userdata);
-      }
-    }
-  }
-}
-
 void sf_update_ui(sf_ctx_t *ctx, sf_ui_t *ui) {
   if (!ui) return;
 
@@ -4267,6 +4232,41 @@ bool _sf_ui_effective_visible(sf_ui_lmn_t *el) {
     p = p->parent_panel;
   }
   return true;
+}
+
+void _sf_update_button(sf_ctx_t *ctx, sf_ui_lmn_t *el, bool m_down, bool m_pressed, bool m_released) {
+  if (el->is_hovered && el->is_pressed && m_released) {
+    if (el->button.callback) {
+      el->button.callback(ctx, el->button.userdata);
+    }
+  }
+}
+
+void _sf_update_checkbox(sf_ctx_t *ctx, sf_ui_lmn_t *el, bool m_down, bool m_pressed, bool m_released) {
+  if (el->is_hovered && el->is_pressed && m_released) {
+    el->checkbox.is_checked = !el->checkbox.is_checked;
+    if (el->checkbox.callback) {
+      el->checkbox.callback(ctx, el->checkbox.userdata);
+    }
+  }
+}
+
+void _sf_update_slider(sf_ctx_t *ctx, sf_ui_lmn_t *el, bool m_down, bool m_pressed, bool m_released) {
+  if (el->is_pressed && m_down) {
+    int mx = ctx->input.mouse_x;
+    float width = (float)(el->v1.x - el->v0.x);
+    float offset = (float)(mx - el->v0.x);
+    float t = offset / width;
+    if (t < 0.0f) t = 0.0f;
+    if (t > 1.0f) t = 1.0f;
+    float new_val = el->slider.min_val + t * (el->slider.max_val - el->slider.min_val);
+    if (new_val != el->slider.value) {
+      el->slider.value = new_val;
+      if (el->slider.callback) {
+        el->slider.callback(ctx, el->slider.userdata);
+      }
+    }
+  }
 }
 
 /* SF_LA_FUNCTIONS */
