@@ -1,4 +1,5 @@
 build/*
 .cache
 .clangd
-docs/__pycache__
+sf_docs/__pycache__
+CMakeFiles

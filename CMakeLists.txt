@@ -56,15 +56,15 @@ install(DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/sf_assets/"
 find_package(Python3 QUIET COMPONENTS Interpreter)
 if(Python3_FOUND)
     add_custom_command(
-        OUTPUT  "${CMAKE_CURRENT_SOURCE_DIR}/docs/saffron_manual.md"
+        OUTPUT  "${CMAKE_CURRENT_SOURCE_DIR}/sf_docs/saffron_manual.md"
         COMMAND ${Python3_EXECUTABLE}
-                "${CMAKE_CURRENT_SOURCE_DIR}/docs/gen_docs.py"
+                "${CMAKE_CURRENT_SOURCE_DIR}/sf_docs/gen_docs.py"
         DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/saffron.h"
-                "${CMAKE_CURRENT_SOURCE_DIR}/docs/gen_docs.py"
-        COMMENT "Generating docs/saffron_manual.md"
+                "${CMAKE_CURRENT_SOURCE_DIR}/sf_docs/gen_docs.py"
+        COMMENT "Generating sf_docs/saffron_manual.md"
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
     )
     add_custom_target(generate_docs ALL
-        DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/docs/saffron_manual.md"
+        DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/sf_docs/saffron_manual.md"
     )
 endif()
