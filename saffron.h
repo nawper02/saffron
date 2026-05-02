@@ -588,6 +588,21 @@ void           sf_log_              (sf_ctx_t *ctx, sf_log_level_t level, const 
 void           sf_set_logger        (sf_ctx_t *ctx, sf_log_fn log_cb, void* userdata);
 void           sf_logger_console    (const char* message, void* userdata);
 
+/* SF_LA_FUNCTIONS */
+sf_fmat4_t     sf_fmat4_mul_fmat4   (sf_fmat4_t m0, sf_fmat4_t m1);
+sf_fvec3_t     sf_fmat4_mul_vec3    (sf_fmat4_t m, sf_fvec3_t v);
+sf_fvec3_t     sf_fvec3_sub         (sf_fvec3_t v0, sf_fvec3_t v1);
+sf_fvec3_t     sf_fvec3_add         (sf_fvec3_t v0, sf_fvec3_t v1);
+sf_fvec3_t     sf_fvec3_norm        (sf_fvec3_t v);
+sf_fvec3_t     sf_fvec3_cross       (sf_fvec3_t v0, sf_fvec3_t v1);
+float          sf_fvec3_dot         (sf_fvec3_t v0, sf_fvec3_t v1);
+sf_fmat4_t     sf_make_tsl_fmat4    (float x, float y, float z);
+sf_fmat4_t     sf_make_rot_fmat4    (sf_fvec3_t angles);
+sf_fmat4_t     sf_make_psp_fmat4    (float fov_deg, float aspect, float near, float far);
+sf_fmat4_t     sf_make_idn_fmat4    (void);
+sf_fmat4_t     sf_make_view_fmat4   (sf_fvec3_t eye, sf_fvec3_t target, sf_fvec3_t up);
+sf_fmat4_t     sf_make_scale_fmat4  (sf_fvec3_t scale);
+
 /* SF_IMPLEMENTATION_HELPERS */
 uint32_t       _sf_vec_to_index     (sf_ctx_t *ctx, sf_cam_t *cam, sf_ivec2_t v);
 void           _sf_swap_svec2       (sf_ivec2_t *v0, sf_ivec2_t *v1);
@@ -639,21 +654,6 @@ void           _sf_update_dropdown  (sf_ctx_t *ctx, sf_ui_lmn_t *el, bool m_pres
 void           _sf_update_panel     (sf_ctx_t *ctx, sf_ui_lmn_t *el, bool m_pressed);
 float          _sf_hash_2d          (int x, int z, uint32_t seed);
 float          _sf_smooth_noise     (float x, float z, uint32_t seed);
-
-/* SF_LA_FUNCTIONS */
-sf_fmat4_t     sf_fmat4_mul_fmat4   (sf_fmat4_t m0, sf_fmat4_t m1);
-sf_fvec3_t     sf_fmat4_mul_vec3    (sf_fmat4_t m, sf_fvec3_t v);
-sf_fvec3_t     sf_fvec3_sub         (sf_fvec3_t v0, sf_fvec3_t v1);
-sf_fvec3_t     sf_fvec3_add         (sf_fvec3_t v0, sf_fvec3_t v1);
-sf_fvec3_t     sf_fvec3_norm        (sf_fvec3_t v);
-sf_fvec3_t     sf_fvec3_cross       (sf_fvec3_t v0, sf_fvec3_t v1);
-float          sf_fvec3_dot         (sf_fvec3_t v0, sf_fvec3_t v1);
-sf_fmat4_t     sf_make_tsl_fmat4    (float x, float y, float z);
-sf_fmat4_t     sf_make_rot_fmat4    (sf_fvec3_t angles);
-sf_fmat4_t     sf_make_psp_fmat4    (float fov_deg, float aspect, float near, float far);
-sf_fmat4_t     sf_make_idn_fmat4    (void);
-sf_fmat4_t     sf_make_view_fmat4   (sf_fvec3_t eye, sf_fvec3_t target, sf_fvec3_t up);
-sf_fmat4_t     sf_make_scale_fmat4  (sf_fvec3_t scale);
 
 /* SF_GAMMA_LUT */
 static const uint8_t                _sf_gamma_lut[256];
@@ -3599,6 +3599,152 @@ void sf_logger_console(const char* message, void* userdata) {
   fprintf(stdout, "%s", message);
 }
 
+/* SF_LA_FUNCTIONS */
+sf_fmat4_t sf_fmat4_mul_fmat4(sf_fmat4_t m0, sf_fmat4_t m1) {
+  sf_fmat4_t result = {0};
+  for (int i = 0; i < 4; i++) {
+    for (int j = 0; j < 4; j++) {
+      for (int k = 0; k < 4; k++) {
+        result.m[i][j] += m0.m[i][k] * m1.m[k][j];
+      }
+    }
+  }
+  return result;
+}
+
+sf_fvec3_t sf_fmat4_mul_vec3(sf_fmat4_t m, sf_fvec3_t v) {
+  sf_fvec3_t result;
+  float w;
+  result.x = v.x * m.m[0][0] + v.y * m.m[1][0] + v.z * m.m[2][0] + m.m[3][0];
+  result.y = v.x * m.m[0][1] + v.y * m.m[1][1] + v.z * m.m[2][1] + m.m[3][1];
+  result.z = v.x * m.m[0][2] + v.y * m.m[1][2] + v.z * m.m[2][2] + m.m[3][2];
+  w        = v.x * m.m[0][3] + v.y * m.m[1][3] + v.z * m.m[2][3] + m.m[3][3];
+  if (w != 0.0f) {
+      result.x /= w; result.y /= w; result.z /= w;
+  }
+  return result;
+}
+
+sf_fvec3_t sf_fvec3_sub(sf_fvec3_t v0, sf_fvec3_t v1) {
+  return (sf_fvec3_t){ v0.x - v1.x, v0.y - v1.y, v0.z - v1.z };
+}
+
+sf_fvec3_t sf_fvec3_add(sf_fvec3_t v0, sf_fvec3_t v1) {
+  return (sf_fvec3_t){ v0.x + v1.x, v0.y + v1.y, v0.z + v1.z };
+}
+
+sf_fvec3_t sf_fvec3_norm(sf_fvec3_t v) {
+  float sq = v.x*v.x + v.y*v.y + v.z*v.z;
+  if (sq == 0.0f) return (sf_fvec3_t){0,0,0};
+  float inv_len = 1.0f / sqrtf(sq);
+  return (sf_fvec3_t){ v.x * inv_len, v.y * inv_len, v.z * inv_len };
+}
+
+sf_fvec3_t sf_fvec3_cross(sf_fvec3_t v0, sf_fvec3_t v1) {
+  return (sf_fvec3_t){
+    v0.y * v1.z - v0.z * v1.y,
+    v0.z * v1.x - v0.x * v1.z,
+    v0.x * v1.y - v0.y * v1.x
+  };
+}
+
+float sf_fvec3_dot(sf_fvec3_t v0, sf_fvec3_t v1) {
+  return v0.x * v1.x + v0.y * v1.y + v0.z * v1.z;
+}
+
+sf_fmat4_t sf_make_tsl_fmat4(float x, float y, float z) {
+  sf_fmat4_t m = sf_make_idn_fmat4();
+  m.m[3][0] = x;
+  m.m[3][1] = y;
+  m.m[3][2] = z;
+  return m;
+}
+
+sf_fmat4_t sf_make_rot_fmat4(sf_fvec3_t angles) {
+  float cx = cosf(angles.x);
+  float sx = sinf(angles.x);
+  float cy = cosf(angles.y);
+  float sy = sinf(angles.y);
+  float cz = cosf(angles.z);
+  float sz = sinf(angles.z);
+
+  sf_fmat4_t m = sf_make_idn_fmat4();
+
+  m.m[0][0] = cy * cz;
+  m.m[0][1] = cy * sz;
+  m.m[0][2] = -sy;
+
+  m.m[1][0] = sx * sy * cz - cx * sz;
+  m.m[1][1] = sx * sy * sz + cx * cz;
+  m.m[1][2] = sx * cy;
+
+  m.m[2][0] = cx * sy * cz + sx * sz;
+  m.m[2][1] = cx * sy * sz - sx * cz;
+  m.m[2][2] = cx * cy;
+
+  return m;
+}
+
+sf_fmat4_t sf_make_psp_fmat4(float fov_deg, float aspect, float near, float far) {
+  sf_fmat4_t m = {0};
+  float fov_rad = fov_deg * (3.14159f / 180.0f);
+  float tan_half_fov = tanf(fov_rad / 2.0f);
+  float z_range = near - far;
+
+  m.m[0][0] = 1.0f / (tan_half_fov * aspect);
+  m.m[1][1] = 1.0f / tan_half_fov;
+  m.m[2][2] = (near + far) / z_range;
+  m.m[2][3] = -1.0f; 
+  m.m[3][2] = (2.0f * far * near) / z_range;
+
+  return m;
+}
+
+sf_fmat4_t sf_make_idn_fmat4() {
+  sf_fmat4_t result;
+  for (int i = 0; i < 4; i++) {
+    for (int j = 0; j < 4; j++) {
+      if (i == j) result.m[i][j] = 1;
+      else        result.m[i][j] = 0;
+    }
+  }
+  return result;
+}
+
+sf_fmat4_t sf_make_view_fmat4(sf_fvec3_t eye, sf_fvec3_t target, sf_fvec3_t up) {
+  sf_fvec3_t f = sf_fvec3_norm(sf_fvec3_sub(target, eye));
+  sf_fvec3_t r = sf_fvec3_norm(sf_fvec3_cross(f, up));
+  sf_fvec3_t u = sf_fvec3_cross(r, f);
+
+  sf_fmat4_t m = sf_make_idn_fmat4();
+
+  m.m[0][0] = r.x;
+  m.m[1][0] = r.y;
+  m.m[2][0] = r.z;
+
+  m.m[0][1] = u.x;
+  m.m[1][1] = u.y;
+  m.m[2][1] = u.z;
+
+  m.m[0][2] = -f.x;
+  m.m[1][2] = -f.y;
+  m.m[2][2] = -f.z;
+
+  m.m[3][0] = -sf_fvec3_dot(r, eye);
+  m.m[3][1] = -sf_fvec3_dot(u, eye);
+  m.m[3][2] =  sf_fvec3_dot(f, eye);
+
+  return m;
+}
+
+sf_fmat4_t sf_make_scale_fmat4(sf_fvec3_t s) {
+  sf_fmat4_t m = sf_make_idn_fmat4();
+  m.m[0][0] = s.x;
+  m.m[1][1] = s.y;
+  m.m[2][2] = s.z;
+  return m;
+}
+
 /* SF_IMPLEMENTATION_HELPERS */
 uint32_t _sf_vec_to_index(sf_ctx_t *ctx, sf_cam_t *cam, sf_ivec2_t v) {
   return v.y * cam->w + v.x;
@@ -4269,152 +4415,6 @@ void _sf_update_panel(sf_ctx_t *ctx, sf_ui_lmn_t *el, bool m_pressed) {
   int mx = ctx->input.mouse_x, my = ctx->input.mouse_y;
   bool header = (mx >= el->v0.x && mx <= el->v1.x && my >= el->v0.y && my <= el->v0.y + 16);
   if (header && m_pressed) el->panel.collapsed = !el->panel.collapsed;
-}
-
-/* SF_LA_FUNCTIONS */
-sf_fmat4_t sf_fmat4_mul_fmat4(sf_fmat4_t m0, sf_fmat4_t m1) {
-  sf_fmat4_t result = {0};
-  for (int i = 0; i < 4; i++) {
-    for (int j = 0; j < 4; j++) {
-      for (int k = 0; k < 4; k++) {
-        result.m[i][j] += m0.m[i][k] * m1.m[k][j];
-      }
-    }
-  }
-  return result;
-}
-
-sf_fvec3_t sf_fmat4_mul_vec3(sf_fmat4_t m, sf_fvec3_t v) {
-  sf_fvec3_t result;
-  float w;
-  result.x = v.x * m.m[0][0] + v.y * m.m[1][0] + v.z * m.m[2][0] + m.m[3][0];
-  result.y = v.x * m.m[0][1] + v.y * m.m[1][1] + v.z * m.m[2][1] + m.m[3][1];
-  result.z = v.x * m.m[0][2] + v.y * m.m[1][2] + v.z * m.m[2][2] + m.m[3][2];
-  w        = v.x * m.m[0][3] + v.y * m.m[1][3] + v.z * m.m[2][3] + m.m[3][3];
-  if (w != 0.0f) {
-      result.x /= w; result.y /= w; result.z /= w;
-  }
-  return result;
-}
-
-sf_fvec3_t sf_fvec3_sub(sf_fvec3_t v0, sf_fvec3_t v1) {
-  return (sf_fvec3_t){ v0.x - v1.x, v0.y - v1.y, v0.z - v1.z };
-}
-
-sf_fvec3_t sf_fvec3_add(sf_fvec3_t v0, sf_fvec3_t v1) {
-  return (sf_fvec3_t){ v0.x + v1.x, v0.y + v1.y, v0.z + v1.z };
-}
-
-sf_fvec3_t sf_fvec3_norm(sf_fvec3_t v) {
-  float sq = v.x*v.x + v.y*v.y + v.z*v.z;
-  if (sq == 0.0f) return (sf_fvec3_t){0,0,0};
-  float inv_len = 1.0f / sqrtf(sq);
-  return (sf_fvec3_t){ v.x * inv_len, v.y * inv_len, v.z * inv_len };
-}
-
-sf_fvec3_t sf_fvec3_cross(sf_fvec3_t v0, sf_fvec3_t v1) {
-  return (sf_fvec3_t){
-    v0.y * v1.z - v0.z * v1.y,
-    v0.z * v1.x - v0.x * v1.z,
-    v0.x * v1.y - v0.y * v1.x
-  };
-}
-
-float sf_fvec3_dot(sf_fvec3_t v0, sf_fvec3_t v1) {
-  return v0.x * v1.x + v0.y * v1.y + v0.z * v1.z;
-}
-
-sf_fmat4_t sf_make_tsl_fmat4(float x, float y, float z) {
-  sf_fmat4_t m = sf_make_idn_fmat4();
-  m.m[3][0] = x;
-  m.m[3][1] = y;
-  m.m[3][2] = z;
-  return m;
-}
-
-sf_fmat4_t sf_make_rot_fmat4(sf_fvec3_t angles) {
-  float cx = cosf(angles.x);
-  float sx = sinf(angles.x);
-  float cy = cosf(angles.y);
-  float sy = sinf(angles.y);
-  float cz = cosf(angles.z);
-  float sz = sinf(angles.z);
-
-  sf_fmat4_t m = sf_make_idn_fmat4();
-
-  m.m[0][0] = cy * cz;
-  m.m[0][1] = cy * sz;
-  m.m[0][2] = -sy;
-
-  m.m[1][0] = sx * sy * cz - cx * sz;
-  m.m[1][1] = sx * sy * sz + cx * cz;
-  m.m[1][2] = sx * cy;
-
-  m.m[2][0] = cx * sy * cz + sx * sz;
-  m.m[2][1] = cx * sy * sz - sx * cz;
-  m.m[2][2] = cx * cy;
-
-  return m;
-}
-
-sf_fmat4_t sf_make_psp_fmat4(float fov_deg, float aspect, float near, float far) {
-  sf_fmat4_t m = {0};
-  float fov_rad = fov_deg * (3.14159f / 180.0f);
-  float tan_half_fov = tanf(fov_rad / 2.0f);
-  float z_range = near - far;
-
-  m.m[0][0] = 1.0f / (tan_half_fov * aspect);
-  m.m[1][1] = 1.0f / tan_half_fov;
-  m.m[2][2] = (near + far) / z_range;
-  m.m[2][3] = -1.0f; 
-  m.m[3][2] = (2.0f * far * near) / z_range;
-
-  return m;
-}
-
-sf_fmat4_t sf_make_idn_fmat4() {
-  sf_fmat4_t result;
-  for (int i = 0; i < 4; i++) {
-    for (int j = 0; j < 4; j++) {
-      if (i == j) result.m[i][j] = 1;
-      else        result.m[i][j] = 0;
-    }
-  }
-  return result;
-}
-
-sf_fmat4_t sf_make_view_fmat4(sf_fvec3_t eye, sf_fvec3_t target, sf_fvec3_t up) {
-  sf_fvec3_t f = sf_fvec3_norm(sf_fvec3_sub(target, eye));
-  sf_fvec3_t r = sf_fvec3_norm(sf_fvec3_cross(f, up));
-  sf_fvec3_t u = sf_fvec3_cross(r, f);
-
-  sf_fmat4_t m = sf_make_idn_fmat4();
-
-  m.m[0][0] = r.x;
-  m.m[1][0] = r.y;
-  m.m[2][0] = r.z;
-
-  m.m[0][1] = u.x;
-  m.m[1][1] = u.y;
-  m.m[2][1] = u.z;
-
-  m.m[0][2] = -f.x;
-  m.m[1][2] = -f.y;
-  m.m[2][2] = -f.z;
-
-  m.m[3][0] = -sf_fvec3_dot(r, eye);
-  m.m[3][1] = -sf_fvec3_dot(u, eye);
-  m.m[3][2] =  sf_fvec3_dot(f, eye);
-
-  return m;
-}
-
-sf_fmat4_t sf_make_scale_fmat4(sf_fvec3_t s) {
-  sf_fmat4_t m = sf_make_idn_fmat4();
-  m.m[0][0] = s.x;
-  m.m[1][1] = s.y;
-  m.m[2][2] = s.z;
-  return m;
 }
 
 /* SF_GAMMA_LUT - sqrtf(i/255.0)*255 for linear->sRGB approx */
