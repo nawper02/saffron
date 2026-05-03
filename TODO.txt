@@ -1,5 +1,4 @@
 TODO
-  **Add fog
   .mtl parsing and rendering
   Orbit camera (takes in entity, automatically handles mouse pan)
   A way to sync one instance to another over the network . Render low res on the drone and high res on pc. 

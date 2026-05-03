@@ -1,27 +1,136 @@
 # Saffron UI File
 
 ui button {
-    name = "theme_btn"
+    name = "fog_btn"
     v0 = (10, 50)
     v1 = (140, 80)
     visible = 1
-    text = "Random Theme"
+    text = "Toggle fog"
+}
+
+ui button {
+    name = "sky_btn"
+    v0 = (10, 90)
+    v1 = (140, 120)
+    visible = 1
+    text = "Toggle skybox"
+}
+
+ui button {
+    name = "depth_btn"
+    v0 = (10, 130)
+    v1 = (140, 160)
+    visible = 1
+    text = "Depth Buffer"
+}
+
+ui button {
+    name = "wire_btn"
+    v0 = (10, 170)
+    v1 = (140, 200)
+    visible = 1
+    text = "Wireframe"
 }
 
 ui slider {
-    name = "speed"
-    v0 = (10, 90)
-    v1 = (140, 110)
+    name = "fog_start"
+    v0 = (10, 220)
+    v1 = (140, 240)
     visible = 1
     min = 0.0000
-    max = 5.0000
-    value = 1.0000
+    max = 100.0000
+    value = 10.0000
+}
+
+ui label {
+    name = "lbl_fog_start"
+    v0 = (145, 226)
+    v1 = (280, 240)
+    visible = 1
+    text = "Fog Start"
+    color = 0xFFEEEEEE
+}
+
+ui slider {
+    name = "fog_end"
+    v0 = (10, 250)
+    v1 = (140, 270)
+    visible = 1
+    min = 0.0000
+    max = 100.0000
+    value = 50.0000
+}
+
+ui label {
+    name = "lbl_fog_end"
+    v0 = (145, 256)
+    v1 = (280, 270)
+    visible = 1
+    text = "Fog End"
+    color = 0xFFEEEEEE
+}
+
+ui slider {
+    name = "fog_r"
+    v0 = (10, 290)
+    v1 = (140, 310)
+    visible = 1
+    min = 0.0000
+    max = 1.0000
+    value = 0.5000
+}
+
+ui label {
+    name = "lbl_fog_r"
+    v0 = (145, 296)
+    v1 = (280, 310)
+    visible = 1
+    text = "Fog R"
+    color = 0xFFEEEEEE
+}
+
+ui slider {
+    name = "fog_g"
+    v0 = (10, 320)
+    v1 = (140, 340)
+    visible = 1
+    min = 0.0000
+    max = 1.0000
+    value = 0.5000
+}
+
+ui label {
+    name = "lbl_fog_g"
+    v0 = (145, 326)
+    v1 = (280, 340)
+    visible = 1
+    text = "Fog G"
+    color = 0xFFEEEEEE
+}
+
+ui slider {
+    name = "fog_b"
+    v0 = (10, 350)
+    v1 = (140, 370)
+    visible = 1
+    min = 0.0000
+    max = 1.0000
+    value = 0.5000
+}
+
+ui label {
+    name = "lbl_fog_b"
+    v0 = (145, 356)
+    v1 = (280, 370)
+    visible = 1
+    text = "Fog B"
+    color = 0xFFEEEEEE
 }
 
 ui checkbox {
     name = "debug_ovrlay"
-    v0 = (10, 120)
-    v1 = (140, 140)
+    v0 = (10, 740)
+    v1 = (140, 760)
     visible = 1
     text = "Draw Debug Overlay"
     checked = 1

@@ -1,4 +1,4 @@
-/* sf_trees — Procedural Tree Generator for Saffron */
+/* sf_treegen — Procedural Tree Generator for Saffron */
 #define SAFFRON_IMPLEMENTATION
 #include "saffron.h"
 #undef SAFFRON_IMPLEMENTATION
@@ -18,58 +18,62 @@
 /* ============================================================
    CONSTANTS
    ============================================================ */
-#define W        800            /* window width                       */
-#define H        600            /* window height                      */
-#define SEGS     6              /* cylinder polygon sides             */
-#define MAX_V    32000          /* mesh vertex capacity               */
+#define W        800
+#define H        600
+#define SEGS     6
+#define MAX_V    32000
 #define MAX_UV   32000
 #define MAX_F    32000
-#define MAX_LEA  4096           /* leaf billboard positions           */
-#define MAX_TEX  64             /* scannable bark textures            */
-#define MAX_SPR  32             /* scannable leaf sprites             */
+#define MAX_TEX  64
+#define MAX_SPR  32
+#define ICON_SZ  13            /* slider icon size (px)              */
 
 /* UI panel */
-#define PX1    192              /* panel right edge (x)               */
-#define PY0    18               /* panel top: sits below stats bar    */
-#define LX     5                /* label x                            */
-#define IX     78               /* drag-float input x                 */
-#define IX1    188              /* input right edge                   */
-#define RH     15               /* row height (px)                    */
-#define RY(n)  (PY0 + 22 + (n)*RH)   /* absolute top-y of row n     */
+#define PX1    222
+#define PY0    18
+#define LX     5
+#define LX_TXT (LX + ICON_SZ + 2)   /* label x, after icon            */
+#define IX     78
+#define IX1    218
+#define RH     15
+#define RY(n)  (PY0 + 22 + (n)*RH)
+
+/* Top-right texture previews (just below stats bar) */
+#define PREV_SZ   48
+#define PREV_Y    (PY0 + 2)
+#define BARK_PX   (W - PREV_SZ - 4)
+#define LEAF_PX   (W - PREV_SZ*2 - 8)
 
 /* ============================================================
    GLOBALS
    ============================================================ */
 static sf_ctx_t      g_ctx;
-static sf_obj_t     *g_obj  = NULL;   /* pooled procedural mesh       */
-static sf_enti_t    *g_enti = NULL;   /* scene entity                 */
-static sf_sprite_t  *g_leaf = NULL;   /* active leaf sprite           */
-
-typedef struct { sf_fvec3_t p; float s; } leaf_t;
-static leaf_t  g_leaves[MAX_LEA];
-static int     g_nleaf = 0;
+static sf_obj_t     *g_obj  = NULL;
+static sf_enti_t    *g_enti = NULL;
+static sf_sprite_t  *g_leaf = NULL;
 
 /* Camera orbit */
 static float   g_yaw   =  0.5f;
 static float   g_pitch =  0.35f;
 static float   g_dist  = 15.0f;
-static bool    g_drag  = false;       /* left-mouse drag active       */
+static bool    g_drag  = false;
 static int     g_lmx, g_lmy;
 
-/* Tree parameters (drag-float targets) */
+/* Tree parameters */
 static float p_seed   = 42.0f;
 static float p_depth  =  4.0f;
 static float p_branch =  3.0f;
-static float p_angle  = 32.0f;    /* branch spread angle (degrees)  */
-static float p_len    =  0.70f;   /* child length / parent length   */
-static float p_taper  =  0.65f;   /* child start-r / parent start-r */
-static float p_grav   =  0.15f;   /* gravity bend (pos = droop)     */
-static float p_wiggle =  0.12f;   /* random noise magnitude         */
-static float p_twist  =137.5f;    /* sibling twist (golden angle)   */
-static float p_tr     =  0.22f;   /* trunk base radius              */
-static float p_tl     =  2.5f;    /* trunk segment length           */
-static float p_ls     =  1.0f;    /* leaf sprite scale              */
-static float p_ld     =  4.0f;    /* leaves per terminal branch     */
+static float p_angle  = 32.0f;
+static float p_len    =  0.70f;
+static float p_taper  =  0.65f;
+static float p_grav   =  0.15f;
+static float p_wiggle =  0.12f;
+static float p_twist  =137.5f;
+static float p_tr     =  0.22f;
+static float p_tl     =  2.5f;
+static float p_ls     =  1.0f;   /* leaf scale   */
+static float p_ld     =  4.0f;   /* leaf count   */
+static float p_lo     =  0.85f;  /* leaf opacity */
 
 /* Bark textures */
 static char       g_tname[MAX_TEX][64];
@@ -78,7 +82,7 @@ static int        g_tnc = 0;
 static int        g_tsel = 0;
 
 /* Leaf sprites */
-static char        g_sname[MAX_SPR][64]; /* display name (no ext)    */
+static char        g_sname[MAX_SPR][64];
 static const char *g_sitem[MAX_SPR];
 static sf_sprite_t*g_sprites[MAX_SPR];
 static int         g_snc = 0;
@@ -87,18 +91,39 @@ static int         g_ssel = 0;
 /* SFF save path */
 static char g_sff_path[SF_MAX_TEXT_INPUT_LEN] = "tree_out.sff";
 
+/* 3D leaf orientation toggle */
+static bool p_rand3d = false;
+
+/* Slider icons (one per drag-float row, 14 total) */
+static const char *k_row_icon_bmp[14] = {
+    "seed.bmp",        /* Seed      */
+    "depth.bmp",       /* Depth     */
+    "branches.bmp",    /* Branches  */
+    "angle.bmp",       /* Angle     */
+    "length.bmp",      /* Length    */
+    "taper.bmp",       /* Taper     */
+    "gravity.bmp",     /* Gravity   */
+    "wiggle.bmp",      /* Wiggle    */
+    "twist.bmp",       /* Twist     */
+    "trunk_r.bmp",     /* Trunk R   */
+    "trunk_l.bmp",     /* Trunk L   */
+    "leaf_scl.bmp",    /* Leaf Scl  */
+    "leaf_cnt.bmp",    /* Leaf Cnt  */
+    "leaf_opacity.bmp",/* Leaf Opa  */
+};
+static sf_tex_t *g_row_icon[14] = {0};
+
 /* Preset data */
 typedef struct {
     const char *name;
-    float depth,branch,angle,len,taper,grav,wiggle,twist,tr,tl,ls,ld;
+    float depth,branch,angle,len,taper,grav,wiggle,twist,tr,tl,ls,ld,lo;
 } preset_t;
 static const preset_t k_presets[] = {
-/*          depth branch  ang   len  taper  grav wiggle  twist    tr    tl   ls  ld */
-{"Oak",      4,    3,   35.f, .70f, .65f, .15f, .12f, 137.5f, .22f, 2.5f, 1.0f, 4},
-{"Pine",     5,    2,   18.f, .76f, .72f,-.05f, .06f, 137.5f, .16f, 3.0f, 0.7f, 2},
-{"Weeping",  4,    3,   42.f, .68f, .62f,  .4f, .15f, 137.5f, .20f, 2.5f, 1.2f, 4},
-{"Birch",    5,    2,   28.f, .72f, .68f, .08f, .18f,  90.0f, .13f, 3.5f, 0.8f, 3},
-{"Shrub",    3,    4,   48.f, .62f, .60f, .22f, .20f, 137.5f, .30f, 1.5f, 1.1f, 5},
+{"Oak",      4, 3, 35.f, .70f, .65f, .15f, .12f, 137.5f, .22f, 2.5f, 1.0f, 4, .85f},
+{"Pine",     5, 2, 18.f, .76f, .72f,-.05f, .06f, 137.5f, .16f, 3.0f, 0.7f, 2, .80f},
+{"Weeping",  4, 3, 42.f, .68f, .62f,  .4f, .15f, 137.5f, .20f, 2.5f, 1.2f, 4, .90f},
+{"Birch",    5, 2, 28.f, .72f, .68f, .08f, .18f,  90.0f, .13f, 3.5f, 0.8f, 3, .85f},
+{"Shrub",    3, 4, 48.f, .62f, .60f, .22f, .20f, 137.5f, .30f, 1.5f, 1.1f, 5, .90f},
 };
 #define N_PRESETS 5
 
@@ -111,7 +136,6 @@ static sf_fvec3_t v3s(sf_fvec3_t v, float s) {
 static float v3len(sf_fvec3_t v) {
     return sqrtf(v.x*v.x + v.y*v.y + v.z*v.z);
 }
-/* Rodrigues rotation: rotate v around unit axis k by angle theta */
 static sf_fvec3_t v3rot(sf_fvec3_t v, sf_fvec3_t k, float theta) {
     float c = cosf(theta), s = sinf(theta), d = sf_fvec3_dot(k, v);
     sf_fvec3_t cr = sf_fvec3_cross(k, v);
@@ -131,12 +155,10 @@ static float rf(void) {
     g_rng ^= g_rng << 13; g_rng ^= g_rng >> 17; g_rng ^= g_rng << 5;
     return (float)(g_rng & 0xFFFF) / 65535.f;
 }
-static float rf2(void) { return rf()*2.f - 1.f; }  /* [-1, 1] */
+static float rf2(void) { return rf()*2.f - 1.f; }
 
 /* ============================================================
    MESH — ADD CYLINDER SEGMENT (outward CCW winding)
-   Generates a tapered cylinder from p0 to p1 with radii r0,r1.
-   UV: u wraps around circumference, v from vt0 to vt1.
    ============================================================ */
 static void add_seg(sf_obj_t *o,
     sf_fvec3_t p0, sf_fvec3_t p1, float r0, float r1,
@@ -164,14 +186,13 @@ static void add_seg(sf_obj_t *o,
     for (int i = 0; i < SEGS; i++) {
         int v00=bv+i*2, v10=bv+i*2+1, v01=bv+(i+1)*2, v11=bv+(i+1)*2+1;
         int t00=bt+i*2, t10=bt+i*2+1, t01=bt+(i+1)*2, t11=bt+(i+1)*2+1;
-        /* outward-facing CCW triangles */
         sf_obj_add_face_uv(o, v00, v01, v11, t00, t01, t11);
         sf_obj_add_face_uv(o, v00, v11, v10, t00, t11, t10);
     }
 }
 
 /* ============================================================
-   TREE GROWTH — RECURSIVE L-SYSTEM BRANCHING
+   TREE GROWTH
    ============================================================ */
 static void grow(sf_obj_t *obj,
     sf_fvec3_t pos, sf_fvec3_t dir,
@@ -194,19 +215,26 @@ static void grow(sf_obj_t *obj,
 
     add_seg(obj, pos, end, rad, er, vt, vt1);
 
-    /* terminal: scatter leaf billboard positions around tip */
     if (depth == 0) {
         int n = (int)(p_ld + .5f);
-        for (int i = 0; i < n && g_nleaf < MAX_LEA; i++) {
+        for (int i = 0; i < n && g_ctx.bill_count < SF_MAX_BILLS; i++) {
             float sp = len * 0.9f;
-            g_leaves[g_nleaf].p = (sf_fvec3_t){
+            sf_fvec3_t lp = {
                 end.x + rf2()*sp,
                 end.y + rf() *sp * 0.8f,
                 end.z + rf2()*sp
             };
-            /* clamp to [0,1]: scale_mult*255 is alpha, >1 wraps to 0 */
-            g_leaves[g_nleaf].s = fminf(p_ls * (0.7f + rf()*0.3f), 1.0f);
-            g_nleaf++;
+            float ls = fminf(p_ls * (0.7f + rf()*0.3f), 2.0f);
+            float lo = fminf(p_lo, 1.0f);
+            float la = rf() * 2.f * SF_PI;  /* random screen-space rotation */
+            char bname[32];
+            snprintf(bname, sizeof(bname), "lf_%d", g_ctx.bill_count);
+            sf_bill_t *bl = sf_add_bill(&g_ctx, g_leaf, bname, lp, ls, lo, la);
+            if (bl && p_rand3d) {
+                bl->normal.x = rf2(); bl->normal.y = rf2(); bl->normal.z = rf2();
+                float nl = sqrtf(bl->normal.x*bl->normal.x + bl->normal.y*bl->normal.y + bl->normal.z*bl->normal.z);
+                if (nl > 0.001f) { bl->normal.x /= nl; bl->normal.y /= nl; bl->normal.z /= nl; }
+            }
         }
         return;
     }
@@ -263,7 +291,7 @@ static void generate_tree(void) {
     g_obj->vt_cnt = 0;
     g_obj->f_cnt  = 0;
     g_obj->src_path = NULL;
-    g_nleaf = 0;
+    sf_clear_bills(&g_ctx);
 
     rseed((uint32_t)(p_seed * 17239.f) + 1);
     int maxd = (int)(p_depth + .5f);
@@ -335,7 +363,6 @@ static void apply_bark_tex(void) {
     }
 }
 
-/* Scan sf_sprites dir, load textures and create sprites for each .bmp found. */
 static void load_leaf_sprites(void) {
     const char *dir_path = SF_ASSET_PATH "/sf_sprites";
     DIR *dir = opendir(dir_path);
@@ -358,8 +385,8 @@ static void load_leaf_sprites(void) {
     if (g_snc > 0 && g_sprites[0]) g_leaf = g_sprites[0];
 }
 
-/* Nearest-neighbour blit of texture t into the camera pixel buffer at (px,py), size pw x ph. */
-static void blit_preview(sf_tex_t *t, int px, int py, int pw, int ph) {
+/* Nearest-neighbour blit with magenta-keyed transparency. */
+static void blit_keyed(sf_tex_t *t, int px, int py, int pw, int ph) {
     if (!t || !t->px || t->w <= 0 || t->h <= 0) return;
     sf_pkd_clr_t *buf = g_ctx.main_camera.buffer;
     int bw = g_ctx.main_camera.w;
@@ -371,7 +398,8 @@ static void blit_preview(sf_tex_t *t, int px, int py, int pw, int ph) {
             int tx = x * t->w / pw;
             int ty = y * t->h / ph;
             sf_pkd_clr_t c = t->px[ty * t->w + tx];
-            if ((c & 0x00FFFFFF) == 0x00FF00FF) continue;  /* skip magenta */
+            if ((c & 0x00FFFFFF) == 0x00FF00FF) continue;
+            if ((c >> 24) == 0) continue;
             buf[by * bw + bx] = c;
         }
     }
@@ -389,30 +417,26 @@ static void update_camera(void) {
 }
 
 /* ============================================================
-   SAVE TREE — model-only .sff (mesh + bark tex + leaf sprite + entity)
+   SAVE TREE — model-only .sff
    ============================================================ */
 static void save_tree(void) {
     if (!g_obj) return;
 
-    /* Derive mesh basename from .sff path */
-    const char *sl  = strrchr(g_sff_path, '/');
+    const char *sl = strrchr(g_sff_path, '/');
     char base[256];
     snprintf(base, sizeof(base), "%s", sl ? sl+1 : g_sff_path);
     char *bdot = strrchr(base, '.');
     if (bdot) *bdot = '\0';
 
-    /* Output dir */
     char dir[512];
     snprintf(dir, sizeof(dir), "%s", g_sff_path);
     char *sl2 = strrchr(dir, '/');
     if (sl2) *sl2 = '\0'; else { dir[0]='.'; dir[1]='\0'; }
 
-    /* Save mesh .obj */
     char obj_path[512];
     snprintf(obj_path, sizeof(obj_path), "%s/%s.obj", dir, base);
     sf_obj_save_obj(&g_ctx, g_obj, obj_path);
 
-    /* Write model-only .sff */
     FILE *f = fopen(g_sff_path, "w");
     if (!f) { SF_LOG(&g_ctx, SF_LOG_ERROR, "Cannot write %s\n", g_sff_path); return; }
 
@@ -448,17 +472,32 @@ static void save_tree(void) {
         fprintf(f, "    scale   = (%.3f, %.3f, %.3f)\n", s.x, s.y, s.z);
         if (g_enti->tex && g_enti->tex->name)
             fprintf(f, "    texture = %s\n", g_enti->tex->name);
-        fprintf(f, "}\n");
+        fprintf(f, "}\n\n");
+    }
+
+    /* Billboard instances */
+    for (int i = 0; i < g_ctx.bill_count; i++) {
+        sf_bill_t *b = &g_ctx.bills[i];
+        if (!b->sprite || !b->sprite->name) continue;
+        fprintf(f, "billboard %s {\n", b->name[0] ? b->name : "bill");
+        fprintf(f, "    sprite  = %s\n", b->sprite->name);
+        fprintf(f, "    pos     = (%.4f, %.4f, %.4f)\n", b->pos.x, b->pos.y, b->pos.z);
+        fprintf(f, "    scale   = %.4f\n", b->scale);
+        fprintf(f, "    opacity = %.4f\n", b->opacity);
+        fprintf(f, "    angle   = %.4f\n", b->angle);
+        fprintf(f, "    normal  = (%.4f, %.4f, %.4f)\n", b->normal.x, b->normal.y, b->normal.z);
+        fprintf(f, "}\n\n");
     }
 
     fclose(f);
-    SF_LOG(&g_ctx, SF_LOG_INFO, "Saved tree: %s\n", g_sff_path);
+    SF_LOG(&g_ctx, SF_LOG_INFO, SF_LOG_INDENT "Saved tree: %s\n", g_sff_path);
 }
 
 /* ============================================================
    UI CALLBACKS
    ============================================================ */
 static void cb_save(sf_ctx_t *ctx, void *ud) { (void)ctx; (void)ud; save_tree(); }
+static void cb_rand3d(sf_ctx_t *ctx, void *ud) { (void)ctx; (void)ud; p_rand3d = !p_rand3d; }
 
 static void apply_preset(const preset_t *p) {
     p_depth  = p->depth;   p_branch = p->branch;
@@ -467,6 +506,7 @@ static void apply_preset(const preset_t *p) {
     p_wiggle = p->wiggle;  p_twist  = p->twist;
     p_tr     = p->tr;      p_tl     = p->tl;
     p_ls     = p->ls;      p_ld     = p->ld;
+    p_lo     = p->lo;
 }
 
 static void cb_preset0(sf_ctx_t *c, void *u){(void)c;(void)u; apply_preset(&k_presets[0]);}
@@ -487,7 +527,7 @@ static void build_ui(void) {
         (sf_ivec2_t){PX1, H});
 
 #define ROW_DF(row, lbl, tgt, step) do { \
-    sf_ui_add_label(&g_ctx, lbl, (sf_ivec2_t){LX, RY(row)+2}, 0); \
+    sf_ui_add_label(&g_ctx, lbl, (sf_ivec2_t){LX_TXT, RY(row)+2}, 0); \
     sf_ui_add_drag_float(&g_ctx, (sf_ivec2_t){IX,RY(row)}, \
         (sf_ivec2_t){IX1,RY(row)+12}, &tgt, step, NULL, NULL); \
 } while(0)
@@ -505,44 +545,52 @@ static void build_ui(void) {
     ROW_DF(10, "Trunk L",  p_tl,     0.1f);
     ROW_DF(11, "Leaf Scl", p_ls,     0.05f);
     ROW_DF(12, "Leaf Cnt", p_ld,     1.0f);
+    ROW_DF(13, "Leaf Opa", p_lo,     0.01f);
 
 #undef ROW_DF
 
     /* Bark texture dropdown */
-    sf_ui_add_label(&g_ctx, "Bark Tex", (sf_ivec2_t){LX, RY(13)+2}, 0);
+    sf_ui_add_label(&g_ctx, "Bark Tex", (sf_ivec2_t){LX_TXT, RY(14)+2}, 0);
     if (g_tnc > 0)
         sf_ui_add_dropdown(&g_ctx,
-            (sf_ivec2_t){LX,  RY(14)},
-            (sf_ivec2_t){IX1, RY(14)+12},
+            (sf_ivec2_t){LX,  RY(15)},
+            (sf_ivec2_t){IX1, RY(15)+12},
             g_titem, g_tnc, &g_tsel, NULL, NULL);
 
-    /* Leaf sprite dropdown (preview blitted manually after sf_ui_render at RY(17)) */
-    sf_ui_add_label(&g_ctx, "Leaf Spr", (sf_ivec2_t){LX, RY(15)+2}, 0);
+    /* Leaf sprite dropdown */
+    sf_ui_add_label(&g_ctx, "Leaf Spr", (sf_ivec2_t){LX_TXT, RY(16)+2}, 0);
     if (g_snc > 0)
         sf_ui_add_dropdown(&g_ctx,
-            (sf_ivec2_t){LX,  RY(16)},
-            (sf_ivec2_t){IX1, RY(16)+12},
+            (sf_ivec2_t){LX,  RY(17)},
+            (sf_ivec2_t){IX1, RY(17)+12},
             g_sitem, g_snc, &g_ssel, NULL, NULL);
+    /* sprite preview blitted at top-right after sf_ui_render */
+
+    /* 3D leaf orientation toggle */
+    sf_ui_add_checkbox(&g_ctx, "3D Leaves",
+        (sf_ivec2_t){LX, RY(18)},
+        (sf_ivec2_t){IX1, RY(18)+14},
+        p_rand3d, cb_rand3d, NULL);
 
     /* Save button */
     sf_ui_add_button(&g_ctx, "Save",
-        (sf_ivec2_t){LX,  RY(20)},
-        (sf_ivec2_t){IX1, RY(20)+14},
+        (sf_ivec2_t){LX,  RY(19)},
+        (sf_ivec2_t){IX1, RY(19)+14},
         cb_save, NULL);
 
-    /* SFF path text input */
-    sf_ui_add_label(&g_ctx, "SFF path", (sf_ivec2_t){LX, RY(21)+2}, 0);
+    /* SFF path */
+    sf_ui_add_label(&g_ctx, "SFF path", (sf_ivec2_t){LX_TXT, RY(20)+2}, 0);
     sf_ui_add_text_input(&g_ctx,
-        (sf_ivec2_t){LX,  RY(22)},
-        (sf_ivec2_t){IX1, RY(22)+12},
+        (sf_ivec2_t){LX,  RY(21)},
+        (sf_ivec2_t){IX1, RY(21)+12},
         g_sff_path, (int)sizeof(g_sff_path), NULL, NULL);
 
     /* Preset buttons */
-    sf_ui_add_label(&g_ctx, "Presets", (sf_ivec2_t){LX, RY(23)+2}, 0);
+    sf_ui_add_label(&g_ctx, "Presets", (sf_ivec2_t){LX_TXT, RY(22)+2}, 0);
 
     int pw = (IX1 - LX - 2) / 3;
     for (int i = 0; i < N_PRESETS; i++) {
-        int row = 24 + i/3;
+        int row = 23 + i/3;
         int col = i % 3;
         int bx0 = LX + col*(pw+1);
         int bx1 = bx0 + pw;
@@ -560,7 +608,7 @@ int main(int argc, char *argv[]) {
     (void)argc; (void)argv;
 
     SDL_Init(SDL_INIT_VIDEO);
-    SDL_Window   *win = SDL_CreateWindow("sf_trees — Procedural Tree Generator",
+    SDL_Window   *win = SDL_CreateWindow("sf_treegen",
         SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, W, H, 0);
     SDL_Renderer *ren = SDL_CreateRenderer(win, -1, SDL_RENDERER_ACCELERATED);
     SDL_Texture  *tex = SDL_CreateTexture(ren, SDL_PIXELFORMAT_ARGB8888,
@@ -569,6 +617,14 @@ int main(int argc, char *argv[]) {
     sf_init(&g_ctx, W, H);
     sf_set_logger(&g_ctx, sf_logger_console, NULL);
     sf_camera_set_psp(&g_ctx, &g_ctx.main_camera, 60.f, 0.1f, 200.f);
+    /* Shift projection so scene centers in open area to the right of the panel */
+    {
+        float aspect = (float)W / (float)H;
+        g_ctx.main_camera.P = sf_make_psp_fmat4(60.f, aspect, 0.1f, 200.f);
+        float open_cx = PX1 + (W - PX1) * 0.5f;
+        g_ctx.main_camera.P.m[2][0] = 1.f - 2.f * open_cx / (float)W;
+        g_ctx.main_camera.is_proj_dirty = false;
+    }
     update_camera();
 
     sf_light_t *key = sf_add_light(&g_ctx, "key",
@@ -582,13 +638,19 @@ int main(int argc, char *argv[]) {
     scan_bark_textures();
     load_leaf_sprites();
 
+    /* Load slider icons */
+    for (int i = 0; i < 14; i++) {
+        char iname[32];
+        snprintf(iname, sizeof(iname), "ico_%d", i);
+        g_row_icon[i] = sf_load_texture_bmp(&g_ctx, k_row_icon_bmp[i], iname);
+    }
+
     g_obj  = sf_obj_create_empty(&g_ctx, "tree", MAX_V, MAX_UV, MAX_F);
     g_enti = sf_add_enti(&g_ctx, g_obj, "tree_enti");
     if (g_enti) sf_enti_set_pos(&g_ctx, g_enti, 0.f, 0.f, 0.f);
 
     build_ui();
 
-    /* Initial tree (Oak preset) */
     apply_preset(&k_presets[0]);
     generate_tree();
     apply_bark_tex();
@@ -600,7 +662,6 @@ int main(int argc, char *argv[]) {
         while (SDL_PollEvent(&ev)) {
             if (ev.type == SDL_QUIT) { sf_stop(&g_ctx); break; }
 
-            /* LMB orbit — only right of the UI panel */
             if (ev.type == SDL_MOUSEBUTTONDOWN && ev.button.button == SDL_BUTTON_LEFT
                     && ev.button.x >= PX1) {
                 g_drag = true; g_lmx = ev.button.x; g_lmy = ev.button.y;
@@ -609,8 +670,8 @@ int main(int argc, char *argv[]) {
             } else if (ev.type == SDL_MOUSEMOTION && g_drag) {
                 float dx = (float)(ev.motion.x - g_lmx) * 0.007f;
                 float dy = (float)(ev.motion.y - g_lmy) * 0.007f;
-                g_yaw   -= dx;   /* inverted for natural feel */
-                g_pitch -= dy;
+                g_yaw   -= dx;
+                g_pitch += dy;   /* inverted up: drag up = pitch down */
                 if (g_pitch >  1.4f) g_pitch =  1.4f;
                 if (g_pitch < -0.1f) g_pitch = -0.1f;
                 g_lmx = ev.motion.x; g_lmy = ev.motion.y;
@@ -627,14 +688,15 @@ int main(int argc, char *argv[]) {
 
         if (sf_key_pressed(&g_ctx, SF_KEY_ESC)) sf_stop(&g_ctx);
 
-        /* Real-time update: regenerate when any parameter changes */
+        /* Real-time update */
         {
-            static float last_p[13] = {-1e30f};
+            static float last_p[14] = {-1e30f};
             static int   last_tsel  = -1;
             static int   last_ssel  = -1;
+            static bool  last_rand3d = false;
 
-            float cur[13] = {p_seed,p_depth,p_branch,p_angle,p_len,p_taper,
-                             p_grav,p_wiggle,p_twist,p_tr,p_tl,p_ls,p_ld};
+            float cur[14] = {p_seed,p_depth,p_branch,p_angle,p_len,p_taper,
+                             p_grav,p_wiggle,p_twist,p_tr,p_tl,p_ls,p_ld,p_lo};
             if (memcmp(cur, last_p, sizeof(cur)) != 0) {
                 memcpy(last_p, cur, sizeof(cur));
                 generate_tree();
@@ -646,8 +708,17 @@ int main(int argc, char *argv[]) {
             }
             if (g_ssel != last_ssel) {
                 last_ssel = g_ssel;
-                if (g_ssel >= 0 && g_ssel < g_snc && g_sprites[g_ssel])
+                if (g_ssel >= 0 && g_ssel < g_snc && g_sprites[g_ssel]) {
                     g_leaf = g_sprites[g_ssel];
+                    /* Regenerate so new sprite is used for bills */
+                    generate_tree();
+                    apply_bark_tex();
+                }
+            }
+            if (p_rand3d != last_rand3d) {
+                last_rand3d = p_rand3d;
+                generate_tree();
+                apply_bark_tex();
             }
         }
 
@@ -655,21 +726,28 @@ int main(int argc, char *argv[]) {
         sf_ui_update(&g_ctx, g_ctx.ui);
         sf_render_ctx(&g_ctx);
 
-        /* Leaf billboards */
-        if (g_leaf) {
-            for (int i = 0; i < g_nleaf; i++)
-                sf_draw_sprite(&g_ctx, &g_ctx.main_camera,
-                    g_leaf, g_leaves[i].p, 0.f, g_leaves[i].s);
-        }
+        /* Draw billboard leaves */
+        for (int i = 0; i < g_ctx.bill_count; i++)
+            sf_draw_bill(&g_ctx, &g_ctx.main_camera, &g_ctx.bills[i], 0.f);
 
         sf_draw_debug_perf(&g_ctx, &g_ctx.main_camera);
         sf_ui_render(&g_ctx, &g_ctx.main_camera, g_ctx.ui);
 
-        /* Sprite preview (40x40) blitted on top of panel after UI render */
+        /* Slider icons (blitted on top of UI, left of each label) */
+        for (int i = 0; i < 14; i++) {
+            if (g_row_icon[i])
+                blit_keyed(g_row_icon[i], LX, RY(i)+1, ICON_SZ, ICON_SZ);
+        }
+
+        /* Texture previews: top-right corner of scene view */
         if (g_snc > 0 && g_ssel >= 0 && g_ssel < g_snc) {
             sf_sprite_t *spr = g_sprites[g_ssel];
             if (spr && spr->frame_count > 0 && spr->frames[0])
-                blit_preview(spr->frames[0], LX, RY(17), 40, 40);
+                blit_keyed(spr->frames[0], LEAF_PX, PREV_Y, PREV_SZ, PREV_SZ);
+        }
+        if (g_tnc > 0 && g_ssel >= 0) {
+            sf_tex_t *bt = ensure_bark_tex(g_tsel);
+            if (bt) blit_keyed(bt, BARK_PX, PREV_Y, PREV_SZ, PREV_SZ);
         }
 
         SDL_UpdateTexture(tex, NULL,

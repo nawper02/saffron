@@ -28,8 +28,8 @@ static bool         g_dbg_axes      = true;
 static bool         g_dbg_frames    = true;
 static bool         g_dbg_lights    = true;
 static bool         g_dbg_cams      = true;
-static int          g_w             = 1920;
-static int          g_h             = 1080;
+static int          g_w             = 683*2;
+static int          g_h             = 384*2;
 static char         g_save_path[SF_MAX_TEXT_INPUT_LEN] = "studio_out.sff";
 static char         g_sfui_path[SF_MAX_TEXT_INPUT_LEN] = "studio_out.sfui";
 static tab_t        g_tab = TAB_SFF;
@@ -2020,7 +2020,7 @@ int main(int argc, char *argv[]) {
   (void)argc; (void)argv;
 
   SDL_Init(SDL_INIT_VIDEO);
-  SDL_Window   *window   = SDL_CreateWindow("sf_studio", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, g_w, g_h, SDL_WINDOW_RESIZABLE);
+  SDL_Window   *window   = SDL_CreateWindow("sf_studio", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, g_w, g_h, SDL_WINDOW_FULLSCREEN_DESKTOP);
   SDL_Renderer *renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
   SDL_RenderSetLogicalSize(renderer, g_w, g_h);
   SDL_Texture  *texture  = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, g_w, g_h);

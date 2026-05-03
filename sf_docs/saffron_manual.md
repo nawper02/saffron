@@ -34,6 +34,8 @@
 | `sf_render_cam` | Core |
 | `sf_render_emitrs` | Core |
 | `sf_render_skybox` | Core |
+| `sf_render_fog` | Core |
+| `sf_render_depth` | Core |
 | `sf_update_emitrs` | Core |
 | `sf_time_update` | Core |
 | `sf_arena_init` | Memory / Arena |
@@ -66,6 +68,7 @@
 | `sf_get_cam_` | Scene |
 | `sf_add_light` | Scene |
 | `sf_get_light_` | Scene |
+| `sf_set_fog` | Scene |
 | `sf_load_skybox` | Scene |
 | `sf_get_skybox_` | Scene |
 | `sf_set_active_skybox` | Scene |
@@ -120,6 +123,10 @@
 | `sf_draw_debug_cams` | Drawing |
 | `sf_draw_debug_perf` | Drawing |
 | `sf_draw_sprite` | Drawing |
+| `sf_draw_bill` | Drawing |
+| `sf_add_bill` | Drawing |
+| `sf_clear_bills` | Drawing |
+| `_sf_sff_prse_bill` | Drawing |
 | `sf_ui_create` | UI |
 | `sf_ui_update` | UI |
 | `sf_ui_render` | UI |
@@ -226,6 +233,7 @@
 | `SF_MAX_SKYBOXES` | `4` |
 | `SF_SKYBOX_SPAN` | `128` |
 | `SF_MAX_SPRITE_FRAMES` | `16` |
+| `SF_MAX_BILLS` | `8192` |
 | `SF_PERF_HIST_SIZE` | `64` |
 | `SF_PI` | `3.14159265359f` |
 | `SF_NANOS_PER_SEC` | `1000000000ULL` |
@@ -279,6 +287,8 @@
 
 **`sf_ui_type_t`** — `SF_UI_BUTTON`, `SF_UI_SLIDER`, `SF_UI_CHECKBOX`, `SF_UI_LABEL`, `SF_UI_TEXT_INPUT`, `SF_UI_DRAG_FLOAT`, `SF_UI_DROPDOWN`, `SF_UI_PANEL`
 
+**`sf_render_mode_t`** — `SF_RENDER_NORMAL`, `SF_RENDER_WIREFRAME`, `SF_RENDER_DEPTH`, `SF_RENDER_MODE_COUNT`
+
 
 ### Structs
 
@@ -316,9 +326,11 @@
 
 **`sf_light_t`** — fields: `type`, `color`, `intensity`, `frame`, `name`, `id`
 
-**`sf_sprite_t`** — fields: `id`, `name`, `SF_MAX_SPRITE_FRAMES`, `frame_count`, `frame_duration`, `base_scale`
+**`sf_sprite_t`** — fields: `id`, `name`, `SF_MAX_SPRITE_FRAMES`, `frame_count`, `frame_duration`, `base_scale`, `opacity`, `opacity`
 
-**`sf_skybox_t`** — fields: `id`, `name`, `tex`, `sky_buf`, `d`, `sky_buf_w`, `sky_buf_h`, `sky_V`, `render`, `invalidation`
+**`sf_bill_t`** — fields: `name`, `sprite`, `pos`, `scale`, `opacity`, `angle`, `rotation`, `normal`, `billboard`, `quad`
+
+**`sf_skybox_t`** — fields: `id`, `name`, `tex`
 
 **`sf_particle_t`** — fields: `pos`, `vel`, `life`, `max_life`, `anim_time`, `active`
 
@@ -369,7 +381,7 @@ void sf_stop (sf_ctx_t *ctx);
 
 ### `sf_render_enti`
 
-Draw all active particles from every emitter as sprites into cam.
+Rasterize one entity into cam: frustum-cull, light, near-clip, then draw textured or flat triangles.
 
 ```c
 void sf_render_enti (sf_ctx_t *ctx, sf_cam_t *cam, sf_enti_t *enti);
@@ -397,14 +409,30 @@ void sf_render_emitrs (sf_ctx_t *ctx, sf_cam_t *cam);
 
 ### `sf_render_skybox`
 
-Fast path: if the camera hasn't rotated since the last render, blit the pre-rendered
-sky_buf with a single memcpy.  Rebuilds only when the rotation actually changes.
+Fill the camera buffer with an equirectangular sky panorama using span interpolation.
+Exact UVs are computed every SF_SKYBOX_SPAN pixels and linearly interpolated between.
 
 ```c
 void sf_render_skybox (sf_ctx_t *ctx, sf_cam_t *cam);
 ```
 
+### `sf_render_fog`
+
+Draw all active particles from every emitter as sprites into cam.
+
+```c
+void sf_render_fog (sf_ctx_t *ctx, sf_cam_t *cam);
+```
+
+### `sf_render_depth`
+
+```c
+void sf_render_depth (sf_ctx_t *ctx, sf_cam_t *cam);
+```
+
 ### `sf_update_emitrs`
+
+Advance particle lifetimes, move them by velocity, and spawn new particles according to rate.
 
 ```c
 void sf_update_emitrs (sf_ctx_t *ctx);
@@ -623,6 +651,12 @@ sf_light_t* sf_add_light (sf_ctx_t *ctx, const char *lightname, sf_light_type_t 
 sf_light_t* sf_get_light_ (sf_ctx_t *ctx, const char *lightname, bool should_log_failure);
 ```
 
+### `sf_set_fog`
+
+```c
+void sf_set_fog (sf_ctx_t *ctx, sf_fvec3_t color, float start, float end);
+```
+
 ### `sf_load_skybox`
 
 ```c
@@ -773,7 +807,7 @@ int _sf_sff_prse_list (const char *s, char out[][64], int max);
 
 ### `_sf_sff_get_frame_`
 
-Return the root frame for the given coordinate convention (DEFAULT, NED, FLU).
+Parse a "billboard name { ... }" block from a .sff file.
 
 ```c
 sf_frame_t* _sf_sff_get_frame_ (sf_ctx_t *ctx, const char *name);
@@ -999,6 +1033,32 @@ Billboard a sprite frame at a world position with depth testing and alpha blendi
 
 ```c
 void sf_draw_sprite (sf_ctx_t *ctx, sf_cam_t *cam, sf_sprite_t *spr, sf_fvec3_t pos_w, float anim_time, float scale_mult);
+```
+
+### `sf_draw_bill`
+
+```c
+void sf_draw_bill (sf_ctx_t *ctx, sf_cam_t *cam, sf_bill_t *bill, float anim_time);
+```
+
+### `sf_add_bill`
+
+```c
+sf_bill_t* sf_add_bill (sf_ctx_t *ctx, sf_sprite_t *spr, const char *name, sf_fvec3_t pos, float scale, float opacity, float angle);
+```
+
+### `sf_clear_bills`
+
+Remove all billboard instances from the scene.
+
+```c
+void sf_clear_bills (sf_ctx_t *ctx);
+```
+
+### `_sf_sff_prse_bill`
+
+```c
+void _sf_sff_prse_bill (sf_ctx_t *ctx, FILE *f, const char *name, int *bill_count);
 ```
 
 

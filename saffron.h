@@ -44,6 +44,7 @@ extern "C" {
 #define SF_MAX_SKYBOXES               4
 #define SF_SKYBOX_SPAN                128
 #define SF_MAX_SPRITE_FRAMES          16
+#define SF_MAX_BILLS                 8192
 #define SF_PERF_HIST_SIZE             64
 #define SF_LOG_INDENT                 "            "
 #define SF_PI                         3.14159265359f
@@ -203,7 +204,18 @@ typedef struct {
   int                               frame_count;
   float                             frame_duration;
   float                             base_scale;
+  float                             opacity;      /* default opacity 0..1 */
 } sf_sprite_t;
+
+typedef struct {
+  char                              name[32];
+  sf_sprite_t                      *sprite;
+  sf_fvec3_t                        pos;
+  float                             scale;        /* world-space size multiplier */
+  float                             opacity;      /* 0..1 alpha                  */
+  float                             angle;        /* screen-space rotation, radians */
+  sf_fvec3_t                        normal;       /* (0,0,0) = billboard; non-zero = 3D-oriented quad */
+} sf_bill_t;
 
 typedef struct {
   int32_t                           id;
@@ -413,6 +425,13 @@ typedef struct sf_ui_t_ {
   sf_ui_lmn_t                      *active_panel;
 } sf_ui_t;
 
+typedef enum {
+  SF_RENDER_NORMAL                  = 0,
+  SF_RENDER_WIREFRAME,
+  SF_RENDER_DEPTH,
+  SF_RENDER_MODE_COUNT
+} sf_render_mode_t;
+
 struct sf_ctx_t_ {
   sf_run_state_t                    state;
 
@@ -433,11 +452,20 @@ struct sf_ctx_t_ {
   int32_t                           cam_count;
   sf_sprite_t                      *sprites;
   int32_t                           sprite_count;
+  sf_bill_t                        *bills;
+  int32_t                           bill_count;
   sf_emitr_t                       *emitrs;
   int32_t                           emitr_count;
   sf_skybox_t                      *skyboxes;
   int32_t                           skybox_count;
   sf_skybox_t                      *active_skybox;
+  bool                              skybox_enabled;
+
+  bool                              fog_enabled;
+  sf_fvec3_t                        fog_color;
+  float                             fog_start;
+  float                             fog_end;
+  sf_render_mode_t                  render_mode;
 
   sf_light_t                       *lights;
   int32_t                           light_count;
@@ -475,6 +503,8 @@ void           sf_render_ctx        (sf_ctx_t *ctx);
 void           sf_render_cam        (sf_ctx_t *ctx, sf_cam_t *cam);
 void           sf_render_emitrs     (sf_ctx_t *ctx, sf_cam_t *cam);
 void           sf_render_skybox     (sf_ctx_t *ctx, sf_cam_t *cam);
+void           sf_render_fog        (sf_ctx_t *ctx, sf_cam_t *cam);
+void           sf_render_depth      (sf_ctx_t *ctx, sf_cam_t *cam);
 void           sf_update_emitrs     (sf_ctx_t *ctx);
 void           sf_time_update       (sf_ctx_t *ctx);
 
@@ -513,6 +543,7 @@ sf_cam_t*      sf_add_cam           (sf_ctx_t *ctx, const char *camname, int w, 
 sf_cam_t*      sf_get_cam_          (sf_ctx_t *ctx, const char *camname, bool should_log_failure);
 sf_light_t*    sf_add_light         (sf_ctx_t *ctx, const char *lightname, sf_light_type_t type, sf_fvec3_t color, float intensity);
 sf_light_t*    sf_get_light_        (sf_ctx_t *ctx, const char *lightname, bool should_log_failure);
+void           sf_set_fog           (sf_ctx_t *ctx, sf_fvec3_t color, float start, float end);
 sf_skybox_t*   sf_load_skybox       (sf_ctx_t *ctx, const char *filename, const char *skyboxname);
 sf_skybox_t*   sf_get_skybox_       (sf_ctx_t *ctx, const char *skyboxname, bool should_log_failure);
 void           sf_set_active_skybox (sf_ctx_t *ctx, sf_skybox_t *skybox);
@@ -571,6 +602,10 @@ void           sf_draw_debug_lights (sf_ctx_t *ctx, sf_cam_t *cam, float size);
 void           sf_draw_debug_cams   (sf_ctx_t *ctx, sf_cam_t *view_cam, float ray_len);
 void           sf_draw_debug_perf   (sf_ctx_t *ctx, sf_cam_t *cam);
 void           sf_draw_sprite       (sf_ctx_t *ctx, sf_cam_t *cam, sf_sprite_t *spr, sf_fvec3_t pos_w, float anim_time, float scale_mult);
+void           sf_draw_bill         (sf_ctx_t *ctx, sf_cam_t *cam, sf_bill_t *bill, float anim_time);
+sf_bill_t*     sf_add_bill          (sf_ctx_t *ctx, sf_sprite_t *spr, const char *name, sf_fvec3_t pos, float scale, float opacity, float angle);
+void           sf_clear_bills       (sf_ctx_t *ctx);
+void           _sf_sff_prse_bill    (sf_ctx_t *ctx, FILE *f, const char *name, int *bill_count);
 
 /* SF_UI_FUNCTIONS */
 sf_ui_t*       sf_ui_create         (sf_ctx_t *ctx);
@@ -712,6 +747,7 @@ void sf_init(sf_ctx_t *ctx, int w, int h) {
   ctx->frames                       = sf_arena_alloc(ctx, &ctx->arena, SF_MAX_FRAMES   * sizeof(sf_frame_t));
   ctx->sprites                      = sf_arena_alloc(ctx, &ctx->arena, SF_MAX_SPRITES  * sizeof(sf_sprite_t));
   ctx->emitrs                       = sf_arena_alloc(ctx, &ctx->arena, SF_MAX_EMITRS   * sizeof(sf_emitr_t));
+  ctx->bills                        = sf_arena_alloc(ctx, &ctx->arena, SF_MAX_BILLS    * sizeof(sf_bill_t));
   ctx->skyboxes                     = sf_arena_alloc(ctx, &ctx->arena, SF_MAX_SKYBOXES * sizeof(sf_skybox_t));
   ctx->obj_count                    = 0;
   ctx->enti_count                   = 0;
@@ -721,9 +757,16 @@ void sf_init(sf_ctx_t *ctx, int w, int h) {
   ctx->frames_count                 = 0;
   ctx->free_frames                  = NULL;
   ctx->sprite_count                 = 0;
+  ctx->bill_count                   = 0;
   ctx->emitr_count                  = 0;
   ctx->skybox_count                 = 0;
   ctx->active_skybox                = NULL;
+  ctx->fog_enabled                  = false;
+  ctx->skybox_enabled               = false;
+  ctx->fog_color                    = (sf_fvec3_t){ 0.0, 0.0, 0.0 };
+  ctx->fog_start                    = 12.0f;
+  ctx->fog_end                      = 18.0f;
+  ctx->render_mode                  = SF_RENDER_NORMAL;
   ctx->_start_ticks                 = _sf_get_ticks();
   ctx->_last_ticks                  = ctx->_start_ticks;
   ctx->delta_time                   = 0.0f;
@@ -924,7 +967,18 @@ void sf_render_enti(sf_ctx_t *ctx, sf_cam_t *cam, sf_enti_t *enti) {
         out[outc++] = v_view[j];
       }
     }
-    if (enti->tex && has_uvs) {
+    if (ctx->render_mode == SF_RENDER_WIREFRAME) {
+      if (inc > 0) {
+        sf_pkd_clr_t wclr = 0xFF44FF44u;
+        bool vis0 = (v_view[0].z <= -near), vis1 = (v_view[1].z <= -near), vis2 = (v_view[2].z <= -near);
+        sf_fvec3_t sv0 = _sf_project_vertex(ctx, cam, v_view[0], P);
+        sf_fvec3_t sv1 = _sf_project_vertex(ctx, cam, v_view[1], P);
+        sf_fvec3_t sv2 = _sf_project_vertex(ctx, cam, v_view[2], P);
+        if (vis0 && vis1) sf_line(ctx, cam, wclr, (sf_ivec2_t){(int)sv0.x,(int)sv0.y}, (sf_ivec2_t){(int)sv1.x,(int)sv1.y});
+        if (vis1 && vis2) sf_line(ctx, cam, wclr, (sf_ivec2_t){(int)sv1.x,(int)sv1.y}, (sf_ivec2_t){(int)sv2.x,(int)sv2.y});
+        if (vis2 && vis0) sf_line(ctx, cam, wclr, (sf_ivec2_t){(int)sv2.x,(int)sv2.y}, (sf_ivec2_t){(int)sv0.x,(int)sv0.y});
+      }
+    } else if (enti->tex && has_uvs) {
       if (inc == 3) {
         sf_tri_tex(ctx, cam, enti->tex, _sf_project_vertex(ctx, cam, in[0], P), _sf_project_vertex(ctx, cam, in[1], P), _sf_project_vertex(ctx, cam, in[2], P), in_uvz[0], in_uvz[1], in_uvz[2], l_int);
       } else if (inc == 1) {
@@ -999,7 +1053,7 @@ void sf_render_cam(sf_ctx_t *ctx, sf_cam_t *cam) {
   }
 
   sf_clear_depth(ctx, cam);
-  if (ctx->active_skybox) {
+  if (ctx->active_skybox && ctx->skybox_enabled) {
     sf_render_skybox(ctx, cam);
   } else {
     sf_fill(ctx, cam, SF_CLR_BLACK);
@@ -1010,6 +1064,11 @@ void sf_render_cam(sf_ctx_t *ctx, sf_cam_t *cam) {
   }
 
   sf_render_emitrs(ctx, cam);
+  if (ctx->render_mode == SF_RENDER_DEPTH) {
+    sf_render_depth(ctx, cam);
+  } else if (ctx->render_mode == SF_RENDER_NORMAL && ctx->fog_enabled) {
+    sf_render_fog(ctx, cam);
+  }
 
   sf_event_t ev_end;
   ev_end.type = SF_EVT_RENDER_END;
@@ -1027,6 +1086,78 @@ void sf_render_emitrs(sf_ctx_t *ctx, sf_cam_t *cam) {
       }
     }
   }
+}
+
+void sf_render_fog(sf_ctx_t *ctx, sf_cam_t *cam) {
+  /* Post-process depth fog: blend each geometry pixel toward fog_color based on
+   * linearised view-space depth.  Sky/unwritten pixels (z > 2.0) are skipped. */
+  if (!ctx->fog_enabled) return;
+  float near     = cam->near_plane;
+  float far      = cam->far_plane;
+  float A        = 2.0f * near * far;
+  float B        = far + near;
+  float C        = far - near;
+  float inv_rng  = 1.0f / (ctx->fog_end - ctx->fog_start);
+  uint32_t fr    = (uint32_t)(ctx->fog_color.x * 255.0f + 0.5f);
+  uint32_t fg_   = (uint32_t)(ctx->fog_color.y * 255.0f + 0.5f);
+  uint32_t fb    = (uint32_t)(ctx->fog_color.z * 255.0f + 0.5f);
+  int n = cam->w * cam->h;
+  for (int i = 0; i < n; i++) {
+    float z = cam->z_buffer[i];
+    float t;
+    if (z > 2.0f) {
+      t = 1.0f;                               /* sky / unwritten: infinitely far = full fog */
+    } else {
+      float depth = A / (B - z * C);          /* NDC z -> view-space depth */
+      t = (depth - ctx->fog_start) * inv_rng;
+      if (t <= 0.0f) continue;
+      if (t >  1.0f) t = 1.0f;
+    }
+    sf_pkd_clr_t px = cam->buffer[i];
+    uint32_t r = (px >> 16) & 0xFF;
+    uint32_t g = (px >>  8) & 0xFF;
+    uint32_t b =  px        & 0xFF;
+    uint32_t it = (uint32_t)(t * 256.0f);
+    r = (r * (256u - it) + fr  * it) >> 8;
+    g = (g * (256u - it) + fg_ * it) >> 8;
+    b = (b * (256u - it) + fb  * it) >> 8;
+    cam->buffer[i] = (0xFFu << 24) | (r << 16) | (g << 8) | b;
+  }
+}
+
+void sf_render_depth(sf_ctx_t *ctx, sf_cam_t *cam) {
+  /* Visualise the z-buffer as a heatmap: blue (near) → cyan → green → yellow → red (far/sky). */
+  static const float kr[5] = {0.0f, 0.0f, 0.0f, 1.0f, 1.0f};
+  static const float kg[5] = {0.0f, 1.0f, 1.0f, 1.0f, 0.0f};
+  static const float kb[5] = {1.0f, 1.0f, 0.0f, 0.0f, 0.0f};
+  int n = cam->w * cam->h;
+  for (int i = 0; i < n; i++) {
+    float z = cam->z_buffer[i];
+    float t;
+    if (z > 2.0f) {
+      t = 1.0f;
+    } else {
+      t = (z + 1.0f) * 0.5f;   /* NDC z=-1 (near) → t=0, z=+1 (far) → t=1 */
+      if (t < 0.0f) t = 0.0f;
+      if (t > 1.0f) t = 1.0f;
+    }
+    float scaled = t * 4.0f;
+    int seg = (int)scaled;
+    if (seg >= 4) seg = 3;
+    float f = scaled - (float)seg;
+    uint8_t r = (uint8_t)((kr[seg] + (kr[seg+1] - kr[seg]) * f) * 255.0f + 0.5f);
+    uint8_t g = (uint8_t)((kg[seg] + (kg[seg+1] - kg[seg]) * f) * 255.0f + 0.5f);
+    uint8_t b = (uint8_t)((kb[seg] + (kb[seg+1] - kb[seg]) * f) * 255.0f + 0.5f);
+    cam->buffer[i] = 0xFF000000u | ((uint32_t)r << 16) | ((uint32_t)g << 8) | b;
+  }
+}
+
+void sf_set_fog(sf_ctx_t *ctx, sf_fvec3_t color, float start, float end) {
+  /* Configure and enable fog.  Toggle off/on with ctx->fog_enabled = false/true. */
+  ctx->fog_color   = color;
+  ctx->fog_start   = start;
+  ctx->fog_end     = end;
+  ctx->fog_enabled = true;
 }
 
 void sf_render_skybox(sf_ctx_t *ctx, sf_cam_t *cam) {
@@ -2043,7 +2174,7 @@ void sf_load_sff(sf_ctx_t *ctx, const char *filename, const char *worldname) {
     return;
   }
   char line[512];
-  int obj_count = 0, enti_count = 0, light_count = 0, cam_count = 0, tex_count = 0, sprite_count = 0, emitr_count = 0, frame_count = 0, skybox_count = 0;
+  int obj_count = 0, enti_count = 0, light_count = 0, cam_count = 0, tex_count = 0, sprite_count = 0, emitr_count = 0, frame_count = 0, skybox_count = 0, bill_count = 0;
   while (fgets(line, sizeof(line), file)) {
     _sf_sff_trim(line);
     if (line[0] == '#' || line[0] == '\0') continue;
@@ -2058,6 +2189,7 @@ void sf_load_sff(sf_ctx_t *ctx, const char *filename, const char *worldname) {
       else if (strcmp(keyword, "light")   == 0) _sf_sff_prse_light(ctx, file, name, &light_count);
       else if (strcmp(keyword, "sprite")  == 0) _sf_sff_prse_sprit(ctx, file, name, &sprite_count);
       else if (strcmp(keyword, "emitter") == 0) _sf_sff_prse_emitr(ctx, file, name, &emitr_count);
+      else if (strcmp(keyword, "billboard") == 0) _sf_sff_prse_bill(ctx, file, name, &bill_count);
     }
     else if (sscanf(line, "mesh %63s \"%255[^\"]\"", name, filepath) == 2) {
       char r_path[512];
@@ -2183,6 +2315,19 @@ bool sf_save_sff(sf_ctx_t *ctx, const char *filepath) {
     fprintf(f, "    color     = (%.3f, %.3f, %.3f)\n", l->color.x, l->color.y, l->color.z);
     fprintf(f, "    intensity = %.3f\n", l->intensity);
     _sf_write_frame_ref(f, l->frame, ctx);
+    fprintf(f, "}\n\n");
+  }
+
+  for (int i = 0; i < ctx->bill_count; i++) {
+    sf_bill_t *b = &ctx->bills[i];
+    if (!b->sprite || !b->sprite->name) continue;
+    const char *bname = b->name[0] ? b->name : "bill";
+    fprintf(f, "billboard %s {\n", bname);
+    fprintf(f, "    sprite  = %s\n", b->sprite->name);
+    fprintf(f, "    pos     = (%.4f, %.4f, %.4f)\n", b->pos.x, b->pos.y, b->pos.z);
+    fprintf(f, "    scale   = %.4f\n", b->scale);
+    fprintf(f, "    opacity = %.4f\n", b->opacity);
+    fprintf(f, "    angle   = %.4f\n", b->angle);
     fprintf(f, "}\n\n");
   }
 
@@ -2443,6 +2588,26 @@ void _sf_sff_prse_emitr(sf_ctx_t *ctx, FILE *f, const char *name, int *emitr_cou
     if (pf) sf_frame_set_parent(em->frame, pf);
   }
   (*emitr_count)++;
+}
+
+void _sf_sff_prse_bill(sf_ctx_t *ctx, FILE *f, const char *name, int *bill_count) {
+  /* Parse a "billboard name { ... }" block from a .sff file. */
+  char key[64], val[256];
+  char spr_name[64] = {0};
+  sf_fvec3_t pos = {0,0,0};
+  float scale = 1.0f, opacity = 1.0f, angle = 0.0f;
+  while (_sf_sff_read_kv(f, key, sizeof(key), val, sizeof(val))) {
+    if      (strcmp(key, "sprite")  == 0) snprintf(spr_name, sizeof(spr_name), "%s", val);
+    else if (strcmp(key, "pos")     == 0) pos     = _sf_sff_prse_vec3(val);
+    else if (strcmp(key, "scale")   == 0) sscanf(val, "%f", &scale);
+    else if (strcmp(key, "opacity") == 0) sscanf(val, "%f", &opacity);
+    else if (strcmp(key, "angle")   == 0) sscanf(val, "%f", &angle);
+  }
+  if (!spr_name[0]) return;
+  sf_sprite_t *spr = sf_get_sprite_(ctx, spr_name, true);
+  if (!spr) return;
+  sf_add_bill(ctx, spr, name, pos, scale, opacity, angle);
+  (*bill_count)++;
 }
 
 /* SF_FRAME_FUNCTIONS */
@@ -3161,6 +3326,128 @@ void sf_draw_sprite(sf_ctx_t *ctx, sf_cam_t *cam, sf_sprite_t *spr, sf_fvec3_t p
         uint32_t og  = (tg * a8 + bg_lg * inv_a8) >> 8; if (og > 255) og = 255;
         uint32_t ob  = (tb * a8 + bg_lb * inv_a8) >> 8; if (ob > 255) ob = 255;
         cam_buf[bi] = 0xFF000000u | ((uint32_t)_sf_gamma_lut[or_] << 16) | ((uint32_t)_sf_gamma_lut[og] << 8) | _sf_gamma_lut[ob];
+      }
+    }
+  }
+}
+
+sf_bill_t* sf_add_bill(sf_ctx_t *ctx, sf_sprite_t *spr, const char *name, sf_fvec3_t pos, float scale, float opacity, float angle) {
+  /* Add a billboard instance to the scene's bill pool. */
+  if (!ctx || ctx->bill_count >= SF_MAX_BILLS) return NULL;
+  sf_bill_t *b = &ctx->bills[ctx->bill_count++];
+  if (name) { int i; for (i = 0; i < 31 && name[i]; i++) b->name[i] = name[i]; b->name[i] = '\0'; }
+  else { b->name[0] = '\0'; }
+  b->sprite  = spr;
+  b->pos     = pos;
+  b->scale   = scale;
+  b->opacity = opacity;
+  b->angle   = angle;
+  b->normal  = (sf_fvec3_t){0.f, 0.f, 0.f};
+  return b;
+}
+
+void sf_clear_bills(sf_ctx_t *ctx) {
+  /* Remove all billboard instances from the scene. */
+  if (ctx) ctx->bill_count = 0;
+}
+
+void sf_draw_bill(sf_ctx_t *ctx, sf_cam_t *cam, sf_bill_t *bill, float anim_time) {
+  /* Billboard a sprite instance with per-instance scale, opacity, and screen-space rotation. */
+  if (!bill || !bill->sprite || bill->sprite->frame_count == 0) return;
+  int frame_idx = bill->sprite->frame_duration > 0.f
+      ? (int)(anim_time / bill->sprite->frame_duration) % bill->sprite->frame_count : 0;
+  sf_tex_t *tex = bill->sprite->frames[frame_idx];
+  if (!tex) return;
+  sf_fvec3_t v_view = sf_fmat4_mul_vec3(cam->V, bill->pos);
+  if (v_view.z >= -cam->near_plane) return;
+
+  /* 3D-oriented quad mode when normal is non-zero */
+  float nl2 = bill->normal.x*bill->normal.x + bill->normal.y*bill->normal.y + bill->normal.z*bill->normal.z;
+  if (nl2 > 0.001f) {
+    float inv_nl = 1.f / sqrtf(nl2);
+    sf_fvec3_t N = {bill->normal.x*inv_nl, bill->normal.y*inv_nl, bill->normal.z*inv_nl};
+    sf_fvec3_t up_ref = {0.f, 1.f, 0.f};
+    if (fabsf(N.y) > 0.98f) up_ref = (sf_fvec3_t){1.f, 0.f, 0.f};
+    sf_fvec3_t T = sf_fvec3_norm(sf_fvec3_cross(up_ref, N));
+    sf_fvec3_t B3 = sf_fvec3_cross(N, T);
+    float hs = bill->sprite->base_scale * bill->scale * 0.5f;
+    sf_fvec3_t corners[4] = {
+      {bill->pos.x+(-T.x-B3.x)*hs, bill->pos.y+(-T.y-B3.y)*hs, bill->pos.z+(-T.z-B3.z)*hs},
+      {bill->pos.x+( T.x-B3.x)*hs, bill->pos.y+( T.y-B3.y)*hs, bill->pos.z+( T.z-B3.z)*hs},
+      {bill->pos.x+( T.x+B3.x)*hs, bill->pos.y+( T.y+B3.y)*hs, bill->pos.z+( T.z+B3.z)*hs},
+      {bill->pos.x+(-T.x+B3.x)*hs, bill->pos.y+(-T.y+B3.y)*hs, bill->pos.z+(-T.z+B3.z)*hs},
+    };
+    float uvals[4][2] = {{0.f,0.f},{0.999f,0.f},{0.999f,0.999f},{0.f,0.999f}};
+    sf_fvec3_t vv[4], uvz[4], sv[4];
+    for (int i = 0; i < 4; i++) {
+      vv[i] = sf_fmat4_mul_vec3(cam->V, corners[i]);
+      if (vv[i].z >= -cam->near_plane) return;
+      float iz = 1.f / vv[i].z;
+      uvz[i] = (sf_fvec3_t){uvals[i][0]*iz, uvals[i][1]*iz, iz};
+      sv[i] = _sf_project_vertex(ctx, cam, vv[i], cam->P);
+    }
+    sf_fvec3_t l_int = {bill->opacity, bill->opacity, bill->opacity};
+    sf_tri_tex(ctx, cam, tex, sv[0], sv[1], sv[2], uvz[0], uvz[1], uvz[2], l_int);
+    sf_tri_tex(ctx, cam, tex, sv[0], sv[2], sv[3], uvz[0], uvz[2], uvz[3], l_int);
+    return;
+  }
+
+  /* Billboard mode */
+  sf_fvec3_t center_scr = _sf_project_vertex(ctx, cam, v_view, cam->P);
+  float actual_scale = bill->sprite->base_scale * bill->scale;
+  sf_fvec3_t edge_view = { v_view.x + actual_scale, v_view.y + actual_scale, v_view.z };
+  sf_fvec3_t edge_scr  = _sf_project_vertex(ctx, cam, edge_view, cam->P);
+  float hw = fabsf(edge_scr.x - center_scr.x);
+  float hh = fabsf(edge_scr.y - center_scr.y);
+  if (hw < 1.f) hw = 1.f;
+  if (hh < 1.f) hh = 1.f;
+  float ca = cosf(bill->angle), sa = sinf(bill->angle);
+  float bb_hw = fabsf(hw * ca) + fabsf(hh * sa);
+  float bb_hh = fabsf(hw * sa) + fabsf(hh * ca);
+  float cx = center_scr.x, cy = center_scr.y, cz = center_scr.z;
+  int x0 = (int)(cx - bb_hw) - 1, x1 = (int)(cx + bb_hw) + 1;
+  int y0 = (int)(cy - bb_hh) - 1, y1 = (int)(cy + bb_hh) + 1;
+  if (x1 < 0 || x0 >= cam->w || y1 < 0 || y0 >= cam->h) return;
+  if (x0 < 0) x0 = 0; if (x1 >= cam->w) x1 = cam->w - 1;
+  if (y0 < 0) y0 = 0; if (y1 >= cam->h) y1 = cam->h - 1;
+  uint8_t a8 = (uint8_t)(bill->opacity * 255.f + 0.5f);
+  bool opaque = (a8 >= 252);
+  uint8_t inv_a8 = 255 - a8;
+  int tex_w = tex->w, tex_h = tex->h;
+  sf_pkd_clr_t *tex_px = tex->px;
+  for (int y = y0; y <= y1; y++) {
+    float ry = (float)y - cy;
+    int row = y * cam->w;
+    for (int x = x0; x <= x1; x++) {
+      float rx = (float)x - cx;
+      /* inverse rotation (transpose of rotation matrix) */
+      float lx =  rx * ca + ry * sa;
+      float ly = -rx * sa + ry * ca;
+      if (lx < -hw || lx > hw || ly < -hh || ly > hh) continue;
+      int bi = row + x;
+      if (cz >= cam->z_buffer[bi]) continue;
+      int tx = (int)((lx / hw + 1.f) * 0.5f * (float)(tex_w - 1) + 0.5f);
+      int ty = (int)((ly / hh + 1.f) * 0.5f * (float)(tex_h - 1) + 0.5f);
+      if (tx < 0) tx = 0; if (tx >= tex_w) tx = tex_w - 1;
+      if (ty < 0) ty = 0; if (ty >= tex_h) ty = tex_h - 1;
+      sf_pkd_clr_t texel = tex_px[ty * tex_w + tx];
+      if ((texel >> 24) == 0) continue;
+      uint32_t tr = (texel >> 16) & 0xFF;
+      uint32_t tg = (texel >> 8)  & 0xFF;
+      uint32_t tb =  texel         & 0xFF;
+      if (opaque) {
+        cam->z_buffer[bi] = cz;
+        cam->buffer[bi] = 0xFF000000u | ((uint32_t)_sf_gamma_lut[tr] << 16) | ((uint32_t)_sf_gamma_lut[tg] << 8) | _sf_gamma_lut[tb];
+      } else {
+        cam->z_buffer[bi] = cz;
+        uint32_t bg = cam->buffer[bi];
+        uint32_t bg_lr = _sf_degamma_lut[(bg >> 16) & 0xFF];
+        uint32_t bg_lg = _sf_degamma_lut[(bg >> 8)  & 0xFF];
+        uint32_t bg_lb = _sf_degamma_lut[ bg         & 0xFF];
+        uint32_t or_ = (tr * a8 + bg_lr * inv_a8) >> 8; if (or_ > 255) or_ = 255;
+        uint32_t og  = (tg * a8 + bg_lg * inv_a8) >> 8; if (og  > 255) og  = 255;
+        uint32_t ob  = (tb * a8 + bg_lb * inv_a8) >> 8; if (ob  > 255) ob  = 255;
+        cam->buffer[bi] = 0xFF000000u | ((uint32_t)_sf_gamma_lut[or_] << 16) | ((uint32_t)_sf_gamma_lut[og] << 8) | _sf_gamma_lut[ob];
       }
     }
   }
