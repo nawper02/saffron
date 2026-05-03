@@ -1,10 +1,11 @@
 Before PR
   Refatcor (before bugs, in case they go away/come back)
     !!Find stuff we did in sf_studio that should be added to the library (like blit)
-    !!Totally refactor / clean up sf_studio implementation -- its clearly too long and messy for claude
+    !!Totally refactor / simplify / clean up sf_studio implementation -- its clearly too long and messy for claude
+    Make a generated assets dir, make anything needed by an sff file get saved to that dir with unique id, and add that to the asset path, hook it to install btn
+    Sort out file ambiguity
   Bugs
     Cant add multiple of the same sff /tree (at least the leaves dont show up)
-    Loaded .sff doesnt load terrain (maybe terrain is missing from sff file def?)
     Collapsing texture collapses texture and parenting
     Collapsing parameters colapses everything below it
     Remove random dropdown in file menu
