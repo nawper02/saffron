@@ -2,13 +2,15 @@ NOW
   Make it so browsers navigate fwd a while page not just one row
   Cant add multiple lights
   Fix stuff overlapping the save button in the sff panel
-  Make it so you can duplicate selection
   Cant add multiple of the same sff /tree (at least the leaves dont show up)
   Loaded .sff doesnt load terrain (maybe terrain is missing from sff file def?)
+  Make it so you can duplicate selection
   Add skybox selection to sf_studio
 
 TODO
   Clean up after claude - refactor sf_studio implementation (its probably bad)
+  Overall refactor / cleanup / make more intuitive
+  manual not catching a bunch of the function doc comments
   .mtl parsing and rendering
   A way to sync one instance to another over the network . Render low res on the drone and high res on pc. 
   Optimize busy scenes - LoD?

@@ -580,7 +580,7 @@ void           _sf_sff_prse_enti    (sf_ctx_t *ctx, FILE *f, const char *name, i
 void           _sf_sff_prse_light   (sf_ctx_t *ctx, FILE *f, const char *name, int *light_count);
 void           _sf_sff_prse_sprit   (sf_ctx_t *ctx, FILE *f, const char *name, int *sprite_count);
 void           _sf_sff_prse_emitr   (sf_ctx_t *ctx, FILE *f, const char *name, int *emitr_count);
-void           _sf_sff_prse_sprt_3d (sf_ctx_t *ctx, FILE *f, const char *name, int *sprite_3d_count);
+void           _sf_sff_prse_sprit_3d(sf_ctx_t *ctx, FILE *f, const char *name, int *sprite_3d_count);
 
 /* SF_FRAME_FUNCTIONS */
 sf_frame_t*    sf_get_root          (sf_ctx_t *ctx, sf_convention_t conv);
@@ -1120,9 +1120,9 @@ void sf_render_fog(sf_ctx_t *ctx, sf_cam_t *cam) {
     float z = cam->z_buffer[i];
     float t;
     if (z > 2.0f) {
-      t = 1.0f;                               /* sky / unwritten: infinitely far = full fog */
+      t = 1.0f;
     } else {
-      float depth = A / (B - z * C);          /* NDC z -> view-space depth */
+      float depth = A / (B - z * C);
       t = (depth - ctx->fog_start) * inv_rng;
       if (t <= 0.0f) continue;
       if (t >  1.0f) t = 1.0f;
@@ -1159,11 +1159,11 @@ void sf_render_depth(sf_ctx_t *ctx, sf_cam_t *cam) {
     if (z > 2.0f) {
       t = 1.0f;
     } else {
-      float depth = A / (B - z * C);         /* NDC z → linear view-space depth */
-      t = (depth - near) * inv_rng;          /* normalise to [0, 1] across near..far */
+      float depth = A / (B - z * C);
+      t = (depth - near) * inv_rng;
       if (t < 0.0f) t = 0.0f;
       if (t > 1.0f) t = 1.0f;
-      t = powf(t, 0.2f);                     /* power curve: expands near range visually */
+      t = powf(t, 0.2f);
     }
     float scaled = t * 4.0f;
     int seg = (int)scaled;
@@ -2213,7 +2213,7 @@ void sf_load_sff(sf_ctx_t *ctx, const char *filename, const char *worldname) {
       else if (strcmp(keyword, "light")   == 0)   _sf_sff_prse_light(ctx, file, name, &light_count);
       else if (strcmp(keyword, "sprite")  == 0)   _sf_sff_prse_sprit(ctx, file, name, &sprite_count);
       else if (strcmp(keyword, "emitter") == 0)   _sf_sff_prse_emitr(ctx, file, name, &emitr_count);
-      else if (strcmp(keyword, "billboard") == 0) _sf_sff_prse_sprt_3d(ctx, file, name, &sprite_3d_count);
+      else if (strcmp(keyword, "billboard") == 0) _sf_sff_prse_sprit_3d(ctx, file, name, &sprite_3d_count);
     }
     else if (sscanf(line, "mesh %63s \"%255[^\"]\"", name, filepath) == 2) {
       char r_path[512];
@@ -2618,7 +2618,7 @@ void _sf_sff_prse_emitr(sf_ctx_t *ctx, FILE *f, const char *name, int *emitr_cou
   (*emitr_count)++;
 }
 
-void _sf_sff_prse_sprt_3d(sf_ctx_t *ctx, FILE *f, const char *name, int *sprite_3d_count) {
+void _sf_sff_prse_sprit_3d(sf_ctx_t *ctx, FILE *f, const char *name, int *sprite_3d_count) {
   /* Parse a "billboard name { ... }" block from a .sff file. */
   char key[64], val[256];
   char spr_name[64] = {0}, frame_name[64] = {0};
@@ -4257,7 +4257,6 @@ void _sf_draw_drpdwn_popup(sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_lmn_t *el) {
     sf_rect(ctx, cam, bg, iv0, iv1);
     sf_put_text(ctx, cam, el->dropdown.items[item_idx], (sf_ivec2_t){iv0.x + 4, iv0.y + (h-8)/2}, el->style.color_text, 1);
   }
-  /* Scroll indicators (non-interactive — use mouse wheel to scroll) */
   if (scroll > 0)
     sf_put_text(ctx, cam, "^", (sf_ivec2_t){el->v0.x + w - 10, el->v1.y + (h-8)/2}, el->style.color_text, 1);
   if (scroll + mv < n)
@@ -4356,7 +4355,6 @@ void _sf_update_dropdown(sf_ctx_t *ctx, sf_ui_lmn_t *el, bool m_pressed) {
   }
   if (el->is_hovered && m_pressed) {
     el->dropdown.is_open = !el->dropdown.is_open;
-    /* When opening, scroll so the current selection is visible */
     if (el->dropdown.is_open && el->dropdown.selected) {
       int sel = *el->dropdown.selected;
       if (sel < scroll) scroll = sel;
