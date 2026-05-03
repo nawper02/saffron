@@ -1,6 +1,5 @@
 /* saffron.h
- * Saffron is an stb-style graphics engine library.
- * Eventually it may become a game/simulation engine.
+ * Saffron is an stb-style graphics/game engine library.
 */
 
 /* SF_HEADER */
@@ -38,6 +37,7 @@ extern "C" {
 #define SF_MAX_UI_ELEMENTS            512
 #define SF_MAX_TEXT_INPUT_LEN         128
 #define SF_MAX_DROPDOWN_ITEMS         64
+#define SF_DROPDOWN_MAX_VISIBLE       8
 #define SF_MAX_FRAMES                 512
 #define SF_MAX_SPRITES                20
 #define SF_MAX_EMITRS                 10
@@ -204,18 +204,18 @@ typedef struct {
   int                               frame_count;
   float                             frame_duration;
   float                             base_scale;
-  float                             opacity;      /* default opacity 0..1 */
+  float                             opacity;
 } sf_sprite_t;
 
 typedef struct {
   char                              name[32];
   sf_sprite_t                      *sprite;
   sf_fvec3_t                        pos;
-  float                             scale;        /* world-space size multiplier */
-  float                             opacity;      /* 0..1 alpha                  */
-  float                             angle;        /* screen-space rotation, radians */
-  sf_fvec3_t                        normal;       /* (0,0,0) = billboard; non-zero = 3D-oriented quad */
-  sf_frame_t                       *frame;        /* parent frame; NULL = world-space pos */
+  float                             scale;
+  float                             opacity;
+  float                             angle;
+  sf_fvec3_t                        normal;
+  sf_frame_t                       *frame;
 } sf_sprite_3d_t;
 
 typedef struct {
@@ -407,6 +407,8 @@ struct sf_ui_lmn_t_ {
       int                          *selected;
       bool                          is_open;
       int                           hover_item;
+      int                           scroll_offset;
+      int                           max_visible;
       sf_ui_cb                      callback;
       void                         *userdata;
     } dropdown;
@@ -573,6 +575,7 @@ void           _sf_sff_prse_enti    (sf_ctx_t *ctx, FILE *f, const char *name, i
 void           _sf_sff_prse_light   (sf_ctx_t *ctx, FILE *f, const char *name, int *light_count);
 void           _sf_sff_prse_sprit   (sf_ctx_t *ctx, FILE *f, const char *name, int *sprite_count);
 void           _sf_sff_prse_emitr   (sf_ctx_t *ctx, FILE *f, const char *name, int *emitr_count);
+void           _sf_sff_prse_sprt_3d (sf_ctx_t *ctx, FILE *f, const char *name, int *sprite_3d_count);
 
 /* SF_FRAME_FUNCTIONS */
 sf_frame_t*    sf_get_root          (sf_ctx_t *ctx, sf_convention_t conv);
@@ -603,10 +606,9 @@ void           sf_draw_debug_lights (sf_ctx_t *ctx, sf_cam_t *cam, float size);
 void           sf_draw_debug_cams   (sf_ctx_t *ctx, sf_cam_t *view_cam, float ray_len);
 void           sf_draw_debug_perf   (sf_ctx_t *ctx, sf_cam_t *cam);
 void           sf_draw_sprite       (sf_ctx_t *ctx, sf_cam_t *cam, sf_sprite_t *spr, sf_fvec3_t pos_w, float anim_time, float scale_mult);
-void           sf_draw_sprite_3d         (sf_ctx_t *ctx, sf_cam_t *cam, sf_sprite_3d_t *bill, float anim_time);
-sf_sprite_3d_t*     sf_add_sprite_3d          (sf_ctx_t *ctx, sf_sprite_t *spr, const char *name, sf_fvec3_t pos, float scale, float opacity, float angle);
-void           sf_clear_sprite_3ds       (sf_ctx_t *ctx);
-void           _sf_sff_prse_sprite_3d    (sf_ctx_t *ctx, FILE *f, const char *name, int *sprite_3d_count);
+void           sf_draw_sprite_3d    (sf_ctx_t *ctx, sf_cam_t *cam, sf_sprite_3d_t *bill, float anim_time);
+sf_sprite_3d_t*     sf_add_sprite_3d(sf_ctx_t *ctx, sf_sprite_t *spr, const char *name, sf_fvec3_t pos, float scale, float opacity, float angle);
+void           sf_clear_sprite_3ds  (sf_ctx_t *ctx);
 
 /* SF_UI_FUNCTIONS */
 sf_ui_t*       sf_ui_create         (sf_ctx_t *ctx);
@@ -2199,13 +2201,13 @@ void sf_load_sff(sf_ctx_t *ctx, const char *filename, const char *worldname) {
 
     if (sscanf(line, "%31s %63[^ \t{] {", keyword, name) == 2 && strchr(line, '{')) {
       _sf_sff_trim(name);
-      if      (strcmp(keyword, "frame")   == 0) _sf_sff_prse_frame(ctx, file, name, &frame_count);
-      else if (strcmp(keyword, "camera")  == 0) _sf_sff_prse_cam(ctx, file, name, &cam_count);
-      else if (strcmp(keyword, "entity")  == 0) _sf_sff_prse_enti(ctx, file, name, &enti_count);
-      else if (strcmp(keyword, "light")   == 0) _sf_sff_prse_light(ctx, file, name, &light_count);
-      else if (strcmp(keyword, "sprite")  == 0) _sf_sff_prse_sprit(ctx, file, name, &sprite_count);
-      else if (strcmp(keyword, "emitter") == 0) _sf_sff_prse_emitr(ctx, file, name, &emitr_count);
-      else if (strcmp(keyword, "billboard") == 0) _sf_sff_prse_sprite_3d(ctx, file, name, &sprite_3d_count);
+      if      (strcmp(keyword, "frame")   == 0)   _sf_sff_prse_frame(ctx, file, name, &frame_count);
+      else if (strcmp(keyword, "camera")  == 0)   _sf_sff_prse_cam(ctx, file, name, &cam_count);
+      else if (strcmp(keyword, "entity")  == 0)   _sf_sff_prse_enti(ctx, file, name, &enti_count);
+      else if (strcmp(keyword, "light")   == 0)   _sf_sff_prse_light(ctx, file, name, &light_count);
+      else if (strcmp(keyword, "sprite")  == 0)   _sf_sff_prse_sprit(ctx, file, name, &sprite_count);
+      else if (strcmp(keyword, "emitter") == 0)   _sf_sff_prse_emitr(ctx, file, name, &emitr_count);
+      else if (strcmp(keyword, "billboard") == 0) _sf_sff_prse_sprt_3d(ctx, file, name, &sprite_3d_count);
     }
     else if (sscanf(line, "mesh %63s \"%255[^\"]\"", name, filepath) == 2) {
       char r_path[512];
@@ -2407,8 +2409,10 @@ int _sf_sff_prse_list(const char *s, char out[][64], int max) {
 sf_frame_t* _sf_sff_get_frame_(sf_ctx_t *ctx, const char *name) {
   /* Find a frame by name during .sff loading; use the sf_get_frame() macro at runtime. */
   for (int i = 0; i < ctx->frames_count; i++) {
-    if (ctx->frames[i].name && strcmp(ctx->frames[i].name, name) == 0)
-      return &ctx->frames[i];
+    sf_frame_t *f = &ctx->frames[i];
+    if (!f->parent && !f->is_root) continue; /* skip freed frames */
+    if (f->name && strcmp(f->name, name) == 0)
+      return f;
   }
   return NULL;
 }
@@ -2608,7 +2612,7 @@ void _sf_sff_prse_emitr(sf_ctx_t *ctx, FILE *f, const char *name, int *emitr_cou
   (*emitr_count)++;
 }
 
-void _sf_sff_prse_sprite_3d(sf_ctx_t *ctx, FILE *f, const char *name, int *sprite_3d_count) {
+void _sf_sff_prse_sprt_3d(sf_ctx_t *ctx, FILE *f, const char *name, int *sprite_3d_count) {
   /* Parse a "billboard name { ... }" block from a .sff file. */
   char key[64], val[256];
   char spr_name[64] = {0}, frame_name[64] = {0};
@@ -2726,6 +2730,7 @@ void sf_remove_frame(sf_ctx_t *ctx, sf_frame_t *f) {
   }
   f->parent = NULL;
   f->first_child = NULL;
+  f->name = NULL;
   f->next_sibling = ctx->free_frames;
   ctx->free_frames = f;
 }
@@ -3398,7 +3403,6 @@ void sf_draw_sprite_3d(sf_ctx_t *ctx, sf_cam_t *cam, sf_sprite_3d_t *bill, float
   sf_tex_t *tex = bill->sprite->frames[frame_idx];
   if (!tex) return;
 
-  /* apply parent frame transform if set */
   sf_fvec3_t world_pos = bill->pos;
   sf_fvec3_t world_normal = bill->normal;
   if (bill->frame) {
@@ -3412,7 +3416,6 @@ void sf_draw_sprite_3d(sf_ctx_t *ctx, sf_cam_t *cam, sf_sprite_3d_t *bill, float
   sf_fvec3_t v_view = sf_fmat4_mul_vec3(cam->V, world_pos);
   if (v_view.z >= -cam->near_plane) return;
 
-  /* 3D-oriented quad mode when normal is non-zero */
   float nl2 = world_normal.x*world_normal.x + world_normal.y*world_normal.y + world_normal.z*world_normal.z;
   if (nl2 > 0.001f) {
     float inv_nl = 1.f / sqrtf(nl2);
@@ -3443,7 +3446,6 @@ void sf_draw_sprite_3d(sf_ctx_t *ctx, sf_cam_t *cam, sf_sprite_3d_t *bill, float
     return;
   }
 
-  /* Billboard mode */
   sf_fvec3_t center_scr = _sf_project_vertex(ctx, cam, v_view, cam->P);
   float actual_scale = bill->sprite->base_scale * bill->scale;
   sf_fvec3_t edge_view = { v_view.x + actual_scale, v_view.y + actual_scale, v_view.z };
@@ -3471,7 +3473,6 @@ void sf_draw_sprite_3d(sf_ctx_t *ctx, sf_cam_t *cam, sf_sprite_3d_t *bill, float
     int row = y * cam->w;
     for (int x = x0; x <= x1; x++) {
       float rx = (float)x - cx;
-      /* inverse rotation (transpose of rotation matrix) */
       float lx =  rx * ca + ry * sa;
       float ly = -rx * sa + ry * ca;
       if (lx < -hw || lx > hw || ly < -hh || ly > hh) continue;
@@ -3662,7 +3663,10 @@ void sf_ui_update(sf_ctx_t *ctx, sf_ui_t *ui) {
     sf_ui_lmn_t *el = &ui->elements[i];
     if (el->type != SF_UI_DROPDOWN || !el->dropdown.is_open) continue;
     int h = el->v1.y - el->v0.y, w = el->v1.x - el->v0.x;
-    int py0 = el->v1.y, py1 = el->v1.y + el->dropdown.n_items * h;
+    int n = el->dropdown.n_items;
+    int mv = (el->dropdown.max_visible > 0 && n > el->dropdown.max_visible)
+             ? el->dropdown.max_visible : n;
+    int py0 = el->v1.y, py1 = el->v1.y + mv * h;
     if (mx >= el->v0.x && mx <= el->v0.x + w && my >= py0 && my <= py1) {
       click_blocked = true; break;
     }
@@ -3808,10 +3812,12 @@ sf_ui_lmn_t* sf_ui_add_dropdown(sf_ctx_t *ctx, sf_ivec2_t v0, sf_ivec2_t v1, con
   el->dropdown.items      = items;
   el->dropdown.n_items    = n;
   el->dropdown.selected   = selected;
-  el->dropdown.is_open    = false;
-  el->dropdown.hover_item = -1;
-  el->dropdown.callback   = cb;
-  el->dropdown.userdata   = ud;
+  el->dropdown.is_open      = false;
+  el->dropdown.hover_item   = -1;
+  el->dropdown.scroll_offset = 0;
+  el->dropdown.max_visible   = SF_DROPDOWN_MAX_VISIBLE;
+  el->dropdown.callback      = cb;
+  el->dropdown.userdata      = ud;
   return el;
 }
 
@@ -4186,17 +4192,32 @@ void _sf_draw_dropdown(sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_lmn_t *el) {
 }
 
 void _sf_draw_drpdwn_popup(sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_lmn_t *el) {
-  /* Render the open dropdown item list below the header, highlighting the hovered row. */
+  /* Render the open dropdown item list below the header, highlighting the hovered row.
+     Only max_visible rows are shown at once; scroll_offset controls the first visible item. */
   if (!el->is_visible || !el->dropdown.is_open) return;
   int h = el->v1.y - el->v0.y;
   int w = el->v1.x - el->v0.x;
-  for (int i = 0; i < el->dropdown.n_items; i++) {
+  int n = el->dropdown.n_items;
+  int mv = (el->dropdown.max_visible > 0 && n > el->dropdown.max_visible)
+           ? el->dropdown.max_visible : n;
+  int scroll = el->dropdown.scroll_offset;
+  if (scroll < 0) scroll = 0;
+  if (scroll > n - mv) scroll = n - mv;
+  if (scroll < 0) scroll = 0;
+  for (int i = 0; i < mv; i++) {
+    int item_idx = scroll + i;
+    if (item_idx >= n) break;
     sf_ivec2_t iv0 = { el->v0.x, el->v1.y + i * h };
     sf_ivec2_t iv1 = { el->v0.x + w, el->v1.y + (i + 1) * h };
-    sf_pkd_clr_t bg = (i == el->dropdown.hover_item) ? el->style.color_hover : el->style.color_base;
+    sf_pkd_clr_t bg = (item_idx == el->dropdown.hover_item) ? el->style.color_hover : el->style.color_base;
     sf_rect(ctx, cam, bg, iv0, iv1);
-    sf_put_text(ctx, cam, el->dropdown.items[i], (sf_ivec2_t){iv0.x + 4, iv0.y + (h-8)/2}, el->style.color_text, 1);
+    sf_put_text(ctx, cam, el->dropdown.items[item_idx], (sf_ivec2_t){iv0.x + 4, iv0.y + (h-8)/2}, el->style.color_text, 1);
   }
+  /* Scroll indicators (non-interactive — use mouse wheel to scroll) */
+  if (scroll > 0)
+    sf_put_text(ctx, cam, "^", (sf_ivec2_t){el->v0.x + w - 10, el->v1.y + (h-8)/2}, el->style.color_text, 1);
+  if (scroll + mv < n)
+    sf_put_text(ctx, cam, "v", (sf_ivec2_t){el->v0.x + w - 10, el->v1.y + (mv-1)*h + (h-8)/2}, el->style.color_text, 1);
 }
 
 void _sf_draw_panel(sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_lmn_t *el) {
@@ -4250,19 +4271,38 @@ void _sf_update_drag_float(sf_ctx_t *ctx, sf_ui_lmn_t *el, bool m_down, bool m_p
 }
 
 void _sf_update_dropdown(sf_ctx_t *ctx, sf_ui_lmn_t *el, bool m_pressed) {
-  /* Toggle open/closed, track hovered item, and write the selection on click. */
+  /* Toggle open/closed, track hovered item, scroll with mouse wheel, and write selection on click. */
   int mx = ctx->input.mouse_x, my = ctx->input.mouse_y;
   int h = el->v1.y - el->v0.y;
   int w = el->v1.x - el->v0.x;
+  int n = el->dropdown.n_items;
+  int mv = (el->dropdown.max_visible > 0 && n > el->dropdown.max_visible)
+           ? el->dropdown.max_visible : n;
+  int scroll = el->dropdown.scroll_offset;
+  if (scroll < 0) scroll = 0;
+  if (scroll > n - mv) scroll = n - mv;
+  if (scroll < 0) scroll = 0;
   el->dropdown.hover_item = -1;
   if (el->dropdown.is_open) {
-    for (int i = 0; i < el->dropdown.n_items; i++) {
+    int popup_y0 = el->v1.y;
+    int popup_y1 = el->v1.y + mv * h;
+    bool over_popup = (mx >= el->v0.x && mx <= el->v0.x + w && my >= popup_y0 && my <= popup_y1);
+    if (over_popup && ctx->input.wheel_dy != 0) {
+      scroll -= ctx->input.wheel_dy;
+      if (scroll < 0) scroll = 0;
+      if (scroll > n - mv) scroll = n - mv;
+      if (scroll < 0) scroll = 0;
+      el->dropdown.scroll_offset = scroll;
+    }
+    for (int i = 0; i < mv; i++) {
+      int item_idx = scroll + i;
+      if (item_idx >= n) break;
       int iy0 = el->v1.y + i * h;
       int iy1 = el->v1.y + (i + 1) * h;
       if (mx >= el->v0.x && mx <= el->v0.x + w && my >= iy0 && my <= iy1) {
-        el->dropdown.hover_item = i;
+        el->dropdown.hover_item = item_idx;
         if (m_pressed) {
-          if (el->dropdown.selected) *el->dropdown.selected = i;
+          if (el->dropdown.selected) *el->dropdown.selected = item_idx;
           el->dropdown.is_open = false;
           if (el->dropdown.callback) el->dropdown.callback(ctx, el->dropdown.userdata);
         }
@@ -4270,7 +4310,19 @@ void _sf_update_dropdown(sf_ctx_t *ctx, sf_ui_lmn_t *el, bool m_pressed) {
     }
     if (m_pressed && el->dropdown.hover_item < 0 && !el->is_hovered) el->dropdown.is_open = false;
   }
-  if (el->is_hovered && m_pressed) el->dropdown.is_open = !el->dropdown.is_open;
+  if (el->is_hovered && m_pressed) {
+    el->dropdown.is_open = !el->dropdown.is_open;
+    /* When opening, scroll so the current selection is visible */
+    if (el->dropdown.is_open && el->dropdown.selected) {
+      int sel = *el->dropdown.selected;
+      if (sel < scroll) scroll = sel;
+      else if (sel >= scroll + mv) scroll = sel - mv + 1;
+      if (scroll < 0) scroll = 0;
+      if (scroll > n - mv) scroll = n - mv;
+      if (scroll < 0) scroll = 0;
+      el->dropdown.scroll_offset = scroll;
+    }
+  }
 }
 
 void _sf_update_panel(sf_ctx_t *ctx, sf_ui_lmn_t *el, bool m_pressed) {

@@ -1,16 +1,14 @@
 TONIGHT
-  ~Cant delete frames left by deleted objects in sf_studio
-  When you click the add entity button, it spawns a default entity. But selecting an entity in the dropdown doesnt get rid of the default
-  Cant scroll in dropdowns
-  sf_launcher for launching example apps
+  texture / model / sprite browser
+  icons didnt get moved down with panel
+  sff / obj not installing into assets 
 
 TODO
   Clean up after claude
+  Add skybox selection to sf_studio
   .mtl parsing and rendering
   Orbit camera (takes in entity, automatically handles mouse pan)
   A way to sync one instance to another over the network . Render low res on the drone and high res on pc. 
-  Wireframe view
-  Depth buffer view
   Optimize busy scenes - LoD?
   Sound / synthesis -- full audio backend (sources, pedals, sink)
 
@@ -19,4 +17,4 @@ Things to make with the library
   OrbWeaver
   A classic FPS like cs1.6
   Promo for the drone
-  Dark fantasy game
+  sf_launcher for launching example apps

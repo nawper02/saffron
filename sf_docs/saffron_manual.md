@@ -228,6 +228,7 @@
 | `SF_MAX_UI_ELEMENTS` | `512` |
 | `SF_MAX_TEXT_INPUT_LEN` | `128` |
 | `SF_MAX_DROPDOWN_ITEMS` | `64` |
+| `SF_DROPDOWN_MAX_VISIBLE` | `8   /* max rows shown in open dropdown before scrolling */` |
 | `SF_MAX_FRAMES` | `512` |
 | `SF_MAX_SPRITES` | `20` |
 | `SF_MAX_EMITRS` | `10` |
@@ -1230,6 +1231,7 @@ void _sf_draw_dropdown (sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_lmn_t *el);
 ### `_sf_draw_drpdwn_popup`
 
 Render the open dropdown item list below the header, highlighting the hovered row.
+Only max_visible rows are shown at once; scroll_offset controls the first visible item.
 
 ```c
 void _sf_draw_drpdwn_popup(sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_lmn_t *el);
