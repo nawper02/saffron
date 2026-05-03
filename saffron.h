@@ -41,6 +41,8 @@ extern "C" {
 #define SF_MAX_FRAMES                 512
 #define SF_MAX_SPRITES                20
 #define SF_MAX_EMITRS                 10
+#define SF_MAX_SKYBOXES               4
+#define SF_SKYBOX_SPAN                128
 #define SF_MAX_SPRITE_FRAMES          16
 #define SF_PERF_HIST_SIZE             64
 #define SF_LOG_INDENT                 "            "
@@ -58,6 +60,7 @@ extern "C" {
 #define sf_get_emitr(ctx, name)       sf_get_emitr_(ctx, name, true)
 #define sf_get_sprite(ctx, name)      sf_get_sprite_(ctx, name, true)
 #define sf_get_light(ctx, name)       sf_get_light_(ctx, name, true)
+#define sf_get_skybox(ctx, name)      sf_get_skybox_(ctx, name, true)
 
 #define SF_CLR_RED                    ((sf_pkd_clr_t)0xFFFF0000)
 #define SF_CLR_GREEN                  ((sf_pkd_clr_t)0xFF00FF00)
@@ -201,6 +204,12 @@ typedef struct {
   float                             frame_duration;
   float                             base_scale;
 } sf_sprite_t;
+
+typedef struct {
+  int32_t                           id;
+  const char                       *name;
+  sf_tex_t                         *tex;
+} sf_skybox_t;
 
 typedef struct {
   sf_fvec3_t                        pos;
@@ -426,6 +435,9 @@ struct sf_ctx_t_ {
   int32_t                           sprite_count;
   sf_emitr_t                       *emitrs;
   int32_t                           emitr_count;
+  sf_skybox_t                      *skyboxes;
+  int32_t                           skybox_count;
+  sf_skybox_t                      *active_skybox;
 
   sf_light_t                       *lights;
   int32_t                           light_count;
@@ -462,6 +474,7 @@ void           sf_render_enti       (sf_ctx_t *ctx, sf_cam_t *cam, sf_enti_t *en
 void           sf_render_ctx        (sf_ctx_t *ctx);
 void           sf_render_cam        (sf_ctx_t *ctx, sf_cam_t *cam);
 void           sf_render_emitrs     (sf_ctx_t *ctx, sf_cam_t *cam);
+void           sf_render_skybox     (sf_ctx_t *ctx, sf_cam_t *cam);
 void           sf_update_emitrs     (sf_ctx_t *ctx);
 void           sf_time_update       (sf_ctx_t *ctx);
 
@@ -500,6 +513,9 @@ sf_cam_t*      sf_add_cam           (sf_ctx_t *ctx, const char *camname, int w, 
 sf_cam_t*      sf_get_cam_          (sf_ctx_t *ctx, const char *camname, bool should_log_failure);
 sf_light_t*    sf_add_light         (sf_ctx_t *ctx, const char *lightname, sf_light_type_t type, sf_fvec3_t color, float intensity);
 sf_light_t*    sf_get_light_        (sf_ctx_t *ctx, const char *lightname, bool should_log_failure);
+sf_skybox_t*   sf_load_skybox       (sf_ctx_t *ctx, const char *filename, const char *skyboxname);
+sf_skybox_t*   sf_get_skybox_       (sf_ctx_t *ctx, const char *skyboxname, bool should_log_failure);
+void           sf_set_active_skybox (sf_ctx_t *ctx, sf_skybox_t *skybox);
 void           sf_enti_set_pos      (sf_ctx_t *ctx, sf_enti_t *enti, float x, float y, float z);
 void           sf_enti_move         (sf_ctx_t *ctx, sf_enti_t *enti, float dx, float dy, float dz);
 void           sf_enti_set_rot      (sf_ctx_t *ctx, sf_enti_t *enti, float rx, float ry, float rz);
@@ -696,6 +712,7 @@ void sf_init(sf_ctx_t *ctx, int w, int h) {
   ctx->frames                       = sf_arena_alloc(ctx, &ctx->arena, SF_MAX_FRAMES   * sizeof(sf_frame_t));
   ctx->sprites                      = sf_arena_alloc(ctx, &ctx->arena, SF_MAX_SPRITES  * sizeof(sf_sprite_t));
   ctx->emitrs                       = sf_arena_alloc(ctx, &ctx->arena, SF_MAX_EMITRS   * sizeof(sf_emitr_t));
+  ctx->skyboxes                     = sf_arena_alloc(ctx, &ctx->arena, SF_MAX_SKYBOXES * sizeof(sf_skybox_t));
   ctx->obj_count                    = 0;
   ctx->enti_count                   = 0;
   ctx->light_count                  = 0;
@@ -705,6 +722,8 @@ void sf_init(sf_ctx_t *ctx, int w, int h) {
   ctx->free_frames                  = NULL;
   ctx->sprite_count                 = 0;
   ctx->emitr_count                  = 0;
+  ctx->skybox_count                 = 0;
+  ctx->active_skybox                = NULL;
   ctx->_start_ticks                 = _sf_get_ticks();
   ctx->_last_ticks                  = ctx->_start_ticks;
   ctx->delta_time                   = 0.0f;
@@ -979,8 +998,12 @@ void sf_render_cam(sf_ctx_t *ctx, sf_cam_t *cam) {
     cam->V = sf_make_view_fmat4(eye, target, up);
   }
 
-  sf_fill(ctx, cam, SF_CLR_BLACK);
-  sf_clear_depth(ctx, cam); 
+  sf_clear_depth(ctx, cam);
+  if (ctx->active_skybox) {
+    sf_render_skybox(ctx, cam);
+  } else {
+    sf_fill(ctx, cam, SF_CLR_BLACK);
+  }
 
   for (int i = 0; i < ctx->enti_count; i++) {
     sf_render_enti(ctx, cam, &ctx->entities[i]);
@@ -1002,6 +1025,66 @@ void sf_render_emitrs(sf_ctx_t *ctx, sf_cam_t *cam) {
         float scale_mult = em->particles[p].life / em->particles[p].max_life;
         sf_draw_sprite(ctx, cam, em->sprite, em->particles[p].pos, em->particles[p].anim_time, scale_mult);
       }
+    }
+  }
+}
+
+void sf_render_skybox(sf_ctx_t *ctx, sf_cam_t *cam) {
+  /* Fill the camera buffer with an equirectangular sky panorama using span interpolation.
+   * Exact UVs are computed every SF_SKYBOX_SPAN pixels and linearly interpolated between. */
+  if (!ctx->active_skybox || !ctx->active_skybox->tex) {
+    sf_fill(ctx, cam, SF_CLR_BLACK);
+    return;
+  }
+  sf_tex_t *tex = ctx->active_skybox->tex;
+  float rx = cam->V.m[0][0], ry = cam->V.m[1][0], rz = cam->V.m[2][0];
+  float ux = cam->V.m[0][1], uy = cam->V.m[1][1], uz = cam->V.m[2][1];
+  float fx = -cam->V.m[0][2], fy = -cam->V.m[1][2], fz = -cam->V.m[2][2];
+  float inv_px  = 1.0f / cam->P.m[0][0];
+  float inv_py  = 1.0f / cam->P.m[1][1];
+  float inv_w   = 1.0f / (float)cam->w;
+  float inv_h   = 1.0f / (float)cam->h;
+  float inv_2pi = 1.0f / (2.0f * SF_PI);
+  float inv_pi  = 1.0f / SF_PI;
+  float fw      = (float)tex->w;
+  float fh      = (float)tex->h;
+  float step_x  = rx * 2.0f * inv_px * inv_w;
+  float step_y  = ry * 2.0f * inv_px * inv_w;
+  float step_z  = rz * 2.0f * inv_px * inv_w;
+
+  for (int py = 0; py < cam->h; py++) {
+    float ndc_y = 1.0f - (2.0f * ((float)py + 0.5f)) * inv_h;
+    float vd_y  = ndc_y * inv_py;
+    float vd_x0 = (inv_w - 1.0f) * inv_px;
+    float wd_x  = vd_x0 * rx + vd_y * ux + fx;
+    float wd_y_ = vd_x0 * ry + vd_y * uy + fy;
+    float wd_z  = vd_x0 * rz + vd_y * uz + fz;
+    sf_pkd_clr_t *row = &cam->buffer[py * cam->w];
+    for (int px = 0; px < cam->w; px += SF_SKYBOX_SPAN) {
+      int span_len = cam->w - px;
+      if (span_len > SF_SKYBOX_SPAN) span_len = SF_SKYBOX_SPAN;
+      float xz0 = sqrtf(wd_x * wd_x + wd_z * wd_z);
+      float u0  = atan2f(wd_x, wd_z) * inv_2pi + 0.5f;
+      float v0  = atan2f(wd_y_, xz0)  * inv_pi  + 0.5f;
+      float ex  = wd_x  + step_x * (float)span_len;
+      float ey  = wd_y_ + step_y * (float)span_len;
+      float ez  = wd_z  + step_z * (float)span_len;
+      float xz1 = sqrtf(ex * ex + ez * ez);
+      float u1  = atan2f(ex, ez) * inv_2pi + 0.5f;
+      float v1  = atan2f(ey, xz1) * inv_pi  + 0.5f;
+      if (u1 - u0 >  0.5f) u1 -= 1.0f;
+      if (u0 - u1 >  0.5f) u1 += 1.0f;
+      float inv_span = 1.0f / (float)span_len;
+      float du = (u1 - u0) * inv_span;
+      float dv = (v1 - v0) * inv_span;
+      float u  = u0, v = v0;
+      for (int i = 0; i < span_len; i++) {
+        int tx = (int)(u * fw) & tex->w_mask;
+        int ty = (int)((1.0f - v) * fh) & tex->h_mask;
+        row[px + i] = tex->px[ty * tex->w + tx];
+        u += du; v += dv;
+      }
+      wd_x = ex; wd_y_ = ey; wd_z = ez;
     }
   }
 }
@@ -1809,6 +1892,51 @@ sf_light_t* sf_get_light_(sf_ctx_t *ctx, const char *lightname, bool should_log_
   return NULL;
 }
 
+sf_skybox_t* sf_load_skybox(sf_ctx_t *ctx, const char *filename, const char *skyboxname) {
+  /* Load an equirectangular BMP panorama as a skybox. The texture dimensions must be powers of two. */
+  if (ctx->skybox_count >= SF_MAX_SKYBOXES) {
+    SF_LOG(ctx, SF_LOG_ERROR, SF_LOG_INDENT "failed to load skybox '%s', max (%d) reached\n", skyboxname, SF_MAX_SKYBOXES);
+    return NULL;
+  }
+  if (sf_get_skybox_(ctx, skyboxname, false) != NULL) {
+    SF_LOG(ctx, SF_LOG_ERROR, SF_LOG_INDENT "failed to load skybox '%s', name in use\n", skyboxname);
+    return NULL;
+  }
+  sf_tex_t *tex = sf_load_texture_bmp(ctx, filename, skyboxname);
+  if (!tex) return NULL;
+  sf_skybox_t *sb   = &ctx->skyboxes[ctx->skybox_count++];
+  sb->id            = ctx->skybox_count - 1;
+  sb->tex           = tex;
+  size_t name_len   = strlen(skyboxname) + 1;
+  sb->name          = (const char*)sf_arena_alloc(ctx, &ctx->arena, name_len);
+  if (sb->name) memcpy((void*)sb->name, skyboxname, name_len);
+  SF_LOG(ctx, SF_LOG_INFO,
+              SF_LOG_INDENT "file   : %s\n"
+              SF_LOG_INDENT "name   : %s\n"
+              SF_LOG_INDENT "id     : %d\n"
+              SF_LOG_INDENT "used   : %d/%d\n",
+              filename, skyboxname, sb->id, ctx->skybox_count, SF_MAX_SKYBOXES);
+  return sb;
+}
+
+sf_skybox_t* sf_get_skybox_(sf_ctx_t *ctx, const char *skyboxname, bool should_log_failure) {
+  /* Linear search for a skybox by name; use the sf_get_skybox() macro instead. */
+  for (int32_t i = 0; i < ctx->skybox_count; ++i) {
+    if (ctx->skyboxes[i].name && strcmp(ctx->skyboxes[i].name, skyboxname) == 0) {
+      return &ctx->skyboxes[i];
+    }
+  }
+  if (should_log_failure) {
+    SF_LOG(ctx, SF_LOG_WARN, SF_LOG_INDENT "skybox '%s' not found\n", skyboxname);
+  }
+  return NULL;
+}
+
+void sf_set_active_skybox(sf_ctx_t *ctx, sf_skybox_t *skybox) {
+  /* Set or clear the active skybox rendered behind all scene geometry. Pass NULL to disable. */
+  ctx->active_skybox = skybox;
+}
+
 void sf_enti_set_pos(sf_ctx_t *ctx, sf_enti_t *enti, float x, float y, float z) {
   /* Set an entity's world position directly. */
   if (enti && enti->frame) {
@@ -1905,7 +2033,7 @@ void sf_camera_add_yp(sf_ctx_t *ctx, sf_cam_t *cam, float yaw_offset, float pitc
 }
 
 void sf_load_sff(sf_ctx_t *ctx, const char *filename, const char *worldname) {
-  /* Load a .sff world file, populating textures, objects, entities, cameras, lights, and emitters. */
+  /* Load a .sff world file, populating textures, objects, entities, cameras, lights, emitters, and skybox */
   char r_path[512];
   const char *open_path = filename;
   if (_sf_resolve_asset(filename, r_path, sizeof(r_path))) open_path = r_path;
@@ -1915,7 +2043,7 @@ void sf_load_sff(sf_ctx_t *ctx, const char *filename, const char *worldname) {
     return;
   }
   char line[512];
-  int obj_count = 0, enti_count = 0, light_count = 0, cam_count = 0, tex_count = 0, sprite_count = 0, emitr_count = 0, frame_count = 0;
+  int obj_count = 0, enti_count = 0, light_count = 0, cam_count = 0, tex_count = 0, sprite_count = 0, emitr_count = 0, frame_count = 0, skybox_count = 0;
   while (fgets(line, sizeof(line), file)) {
     _sf_sff_trim(line);
     if (line[0] == '#' || line[0] == '\0') continue;
@@ -1943,6 +2071,10 @@ void sf_load_sff(sf_ctx_t *ctx, const char *filename, const char *worldname) {
       sf_load_texture_bmp(ctx, filepath, name);
       tex_count++;
     }
+    else if (sscanf(line, "skybox %63s \"%255[^\"]\"", name, filepath) == 2) {
+      sf_skybox_t *sb = sf_load_skybox(ctx, filepath, name);
+      if (sb) { sf_set_active_skybox(ctx, sb); skybox_count++; }
+    }
     else if (sscanf(line, "include \"%255[^\"]\"", filepath) == 1) {
       sf_load_sff(ctx, filepath, filepath);
     }
@@ -1957,8 +2089,9 @@ void sf_load_sff(sf_ctx_t *ctx, const char *filename, const char *worldname) {
               SF_LOG_INDENT "texs   : %d\n"
               SF_LOG_INDENT "sprits : %d\n"
               SF_LOG_INDENT "emitrs : %d\n"
-              SF_LOG_INDENT "frames : %d\n",
-              filename, obj_count, enti_count, light_count, cam_count, tex_count, sprite_count, emitr_count, frame_count);
+              SF_LOG_INDENT "frames : %d\n"
+              SF_LOG_INDENT "skyboxs: %d\n",
+              filename, obj_count, enti_count, light_count, cam_count, tex_count, sprite_count, emitr_count, frame_count, skybox_count);
 }
 
 bool sf_save_sff(sf_ctx_t *ctx, const char *filepath) {
@@ -2019,6 +2152,10 @@ bool sf_save_sff(sf_ctx_t *ctx, const char *filepath) {
     fprintf(f, "texture %s \"%s.bmp\"\n", t->name, t->name);
   }
   if (ctx->tex_count) fprintf(f, "\n");
+
+  if (ctx->active_skybox && ctx->active_skybox->name) {
+    fprintf(f, "skybox %s \"%s.bmp\"\n\n", ctx->active_skybox->name, ctx->active_skybox->name);
+  }
 
   for (int i = 0; i < ctx->enti_count; i++) {
     sf_enti_t *e = &ctx->entities[i];

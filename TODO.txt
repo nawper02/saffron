@@ -9,6 +9,7 @@ TODO
   Sound / synthesis -- full audio backend (sources, pedals, sink)
 
 Things to make with the library
+  Asset generation apps (treegen, rockgen, buildgen) - load as modules / windows in sf_studio
   Video core module that makes simulated contexts for EO and ar and subscribed to drone and gimbal pose (simple orbweaver demo)
   OrbWeaver
   A classic FPS like cs1.6

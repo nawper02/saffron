@@ -33,6 +33,7 @@
 | `sf_render_ctx` | Core |
 | `sf_render_cam` | Core |
 | `sf_render_emitrs` | Core |
+| `sf_render_skybox` | Core |
 | `sf_update_emitrs` | Core |
 | `sf_time_update` | Core |
 | `sf_arena_init` | Memory / Arena |
@@ -65,6 +66,9 @@
 | `sf_get_cam_` | Scene |
 | `sf_add_light` | Scene |
 | `sf_get_light_` | Scene |
+| `sf_load_skybox` | Scene |
+| `sf_get_skybox_` | Scene |
+| `sf_set_active_skybox` | Scene |
 | `sf_enti_set_pos` | Scene |
 | `sf_enti_move` | Scene |
 | `sf_enti_set_rot` | Scene |
@@ -219,6 +223,8 @@
 | `SF_MAX_FRAMES` | `512` |
 | `SF_MAX_SPRITES` | `20` |
 | `SF_MAX_EMITRS` | `10` |
+| `SF_MAX_SKYBOXES` | `4` |
+| `SF_SKYBOX_SPAN` | `128` |
 | `SF_MAX_SPRITE_FRAMES` | `16` |
 | `SF_PERF_HIST_SIZE` | `64` |
 | `SF_PI` | `3.14159265359f` |
@@ -312,6 +318,8 @@
 
 **`sf_sprite_t`** — fields: `id`, `name`, `SF_MAX_SPRITE_FRAMES`, `frame_count`, `frame_duration`, `base_scale`
 
+**`sf_skybox_t`** — fields: `id`, `name`, `tex`, `sky_buf`, `d`, `sky_buf_w`, `sky_buf_h`, `sky_V`, `render`, `invalidation`
+
 **`sf_particle_t`** — fields: `pos`, `vel`, `life`, `max_life`, `anim_time`, `active`
 
 **`sf_emitr_t`** — fields: `id`, `name`, `type`, `sprite`, `frame`, `particles`, `max_particles`, `spawn_rate`, `spawn_acc`, `particle_life`, `speed`, `dir`, `spread`, `volume_size`
@@ -385,6 +393,15 @@ void sf_render_cam (sf_ctx_t *ctx, sf_cam_t *cam);
 
 ```c
 void sf_render_emitrs (sf_ctx_t *ctx, sf_cam_t *cam);
+```
+
+### `sf_render_skybox`
+
+Fast path: if the camera hasn't rotated since the last render, blit the pre-rendered
+sky_buf with a single memcpy.  Rebuilds only when the rotation actually changes.
+
+```c
+void sf_render_skybox (sf_ctx_t *ctx, sf_cam_t *cam);
 ```
 
 ### `sf_update_emitrs`
@@ -606,7 +623,27 @@ sf_light_t* sf_add_light (sf_ctx_t *ctx, const char *lightname, sf_light_type_t 
 sf_light_t* sf_get_light_ (sf_ctx_t *ctx, const char *lightname, bool should_log_failure);
 ```
 
+### `sf_load_skybox`
+
+```c
+sf_skybox_t* sf_load_skybox (sf_ctx_t *ctx, const char *filename, const char *skyboxname);
+```
+
+### `sf_get_skybox_`
+
+```c
+sf_skybox_t* sf_get_skybox_ (sf_ctx_t *ctx, const char *skyboxname, bool should_log_failure);
+```
+
+### `sf_set_active_skybox`
+
+```c
+void sf_set_active_skybox (sf_ctx_t *ctx, sf_skybox_t *skybox);
+```
+
 ### `sf_enti_set_pos`
+
+Set an entity's world position directly.
 
 ```c
 void sf_enti_set_pos (sf_ctx_t *ctx, sf_enti_t *enti, float x, float y, float z);

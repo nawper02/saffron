@@ -1,5 +1,7 @@
 # Saffron World File - Example World
 
+skybox sky_clouds "cloud_layers.bmp"
+
 camera main {
     pos    = (0, 0, 8)
     target = (0, 0, 0)
