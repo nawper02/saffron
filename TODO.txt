@@ -5,6 +5,7 @@ NOW
   Cant add multiple of the same sff /tree (at least the leaves dont show up)
   Loaded .sff doesnt load terrain (maybe terrain is missing from sff file def?)
   Make it so you can duplicate selection
+  FRAMES STILL NOT DELETED WHEN THING DELETED
   Add skybox selection to sf_studio
 
 TODO

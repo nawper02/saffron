@@ -2050,6 +2050,7 @@ static void bk_emit_roof(sf_obj_t *o, float cx, float cz, float y_base, float w,
     sf_fvec3_t bl = {cx-hw, y_base, cz-hd};
 
     static const sf_fvec3_t UP    = {0.f, 1.f, 0.f};
+    static const sf_fvec3_t DOWN  = {0.f,-1.f, 0.f};
     static const sf_fvec3_t FWD   = {0.f, 0.f, 1.f};
     static const sf_fvec3_t BACK  = {0.f, 0.f,-1.f};
     static const sf_fvec3_t RIGHT = {1.f, 0.f, 0.f};
@@ -2057,6 +2058,7 @@ static void bk_emit_roof(sf_obj_t *o, float cx, float cz, float y_base, float w,
 
     switch (rtype) {
     case 0: { /* Flat + parapet */
+        bk_quad(o, fl, fr, br, bl, DOWN, tile);  /* underside */
         bk_quad(o, fl, fr, br, bl, UP, tile);
         float ph = rh * 0.4f, po = 0.15f;
         sf_fvec3_t ofl={cx-hw-po,y_base,cz+hd+po}, ofr={cx+hw+po,y_base,cz+hd+po};
@@ -2075,6 +2077,7 @@ static void bk_emit_roof(sf_obj_t *o, float cx, float cz, float y_base, float w,
         break;
     }
     case 1: { /* Pitched (ridge along X) */
+        bk_quad(o, fl, fr, br, bl, DOWN, tile);  /* underside */
         sf_fvec3_t rl={cx-hw,y_base+rh,cz}, rr={cx+hw,y_base+rh,cz};
         sf_fvec3_t front_out = {0.f, hd, rh};   /* outward+upward for front slope */
         sf_fvec3_t back_out  = {0.f, hd,-rh};
@@ -2085,6 +2088,7 @@ static void bk_emit_roof(sf_obj_t *o, float cx, float cz, float y_base, float w,
         break;
     }
     case 2: { /* Hip roof */
+        bk_quad(o, fl, fr, br, bl, DOWN, tile);  /* underside */
         sf_fvec3_t rl={cx-hw*0.5f,y_base+rh,cz}, rr={cx+hw*0.5f,y_base+rh,cz};
         sf_fvec3_t front_out = {0.f, hd, rh};
         sf_fvec3_t back_out  = {0.f, hd,-rh};
@@ -2097,9 +2101,15 @@ static void bk_emit_roof(sf_obj_t *o, float cx, float cz, float y_base, float w,
     case 3: { /* Dome approximation (stacked rings) */
         int rings = 6, segs = 8;
         sf_fvec3_t prev_ring[8], cur_ring_v[8];
+        sf_fvec3_t center_base = {cx, y_base, cz};
         for (int s = 0; s < segs; s++) {
             float a_s = (float)s / segs * 3.14159f * 2.f;
             prev_ring[s] = (sf_fvec3_t){cx + hw*cosf(a_s), y_base, cz + hd*sinf(a_s)};
+        }
+        /* Bottom cap — fan of triangles facing down */
+        for (int s = 0; s < segs; s++) {
+            int ns = (s+1) % segs;
+            bk_tri(o, center_base, prev_ring[s], prev_ring[ns], DOWN, tile);
         }
         for (int r = 1; r <= rings; r++) {
             float phi = (float)r / rings * 3.14159f * 0.5f;
@@ -2131,7 +2141,8 @@ static void bk_emit_roof(sf_obj_t *o, float cx, float cz, float y_base, float w,
         }
         break;
     }
-    case 4: { /* Stepped / ziggurat — fixed: no duplicate faces */
+    case 4: { /* Stepped / ziggurat */
+        bk_quad(o, fl, fr, br, bl, DOWN, tile);  /* underside */
         int steps = 3;
         float sw = w, sd = d, sy = y_base;
         for (int s = 0; s < steps; s++) {
@@ -2163,6 +2174,7 @@ static void bk_emit_roof(sf_obj_t *o, float cx, float cz, float y_base, float w,
         int segs = 6;
         sf_fvec3_t base_ring[6];
         float r_s = (hw + hd) * 0.35f;
+        sf_fvec3_t center_base = {cx, y_base, cz};
         for (int s = 0; s < segs; s++) {
             float a_s = (float)s / segs * 3.14159f * 2.f;
             base_ring[s] = (sf_fvec3_t){cx + r_s*cosf(a_s), y_base, cz + r_s*sinf(a_s)};
@@ -2176,6 +2188,11 @@ static void bk_emit_roof(sf_obj_t *o, float cx, float cz, float y_base, float w,
                 (base_ring[s].z+base_ring[ns].z)*0.5f - cz
             };
             bk_tri(o, base_ring[s], apex, base_ring[ns], out, tile);
+        }
+        /* Bottom cap */
+        for (int s = 0; s < segs; s++) {
+            int ns = (s+1) % segs;
+            bk_tri(o, center_base, base_ring[s], base_ring[ns], DOWN, tile);
         }
         break;
     }
@@ -2245,8 +2262,8 @@ static void crft_generate_building(void) {
             /* inward offset for window/door depth */
             sf_fvec3_t inv = {-nrm.x*eff_inset, 0.f, -nrm.z*eff_inset};
             /* left-reveal outward direction = -right_v */
-            sf_fvec3_t lrev_out = {-right_v.x, 0.f, -right_v.z};
-            sf_fvec3_t rrev_out = { right_v.x, 0.f,  right_v.z};
+            sf_fvec3_t lrev_out = { right_v.x, 0.f,  right_v.z};
+            sf_fvec3_t rrev_out = {-right_v.x, 0.f, -right_v.z};
 
             #define BK_WP(u,v)  ((sf_fvec3_t){wbl.x+right_v.x*(u),(wbl.y+(v)),wbl.z+right_v.z*(u)})
             #define BK_WPI(u,v) ((sf_fvec3_t){wbl.x+right_v.x*(u)+inv.x,(wbl.y+(v)),wbl.z+right_v.z*(u)+inv.z})
@@ -2281,15 +2298,15 @@ static void crft_generate_building(void) {
                 bk_quad(obj_wall, BK_WP(u0,v1), BK_WP(u1,v1), BK_WP(u1,v2), BK_WP(u0,v2), nrm, tile);
                 bk_quad(obj_wall, BK_WP(u2,v1), BK_WP(u3,v1), BK_WP(u3,v2), BK_WP(u2,v2), nrm, tile);
 
-                /* Opening reveals (window mesh): sill↓, lintel↑, left←, right→, back→wall */
+                /* Opening reveals (window mesh): sill, lintel, left, right, back */
                 if (!is_door) {
-                    /* Sill faces down */
-                    bk_quad(obj_win, BK_WPI(u1,v1), BK_WPI(u2,v1), BK_WP(u2,v1), BK_WP(u1,v1), DN,       tile);
-                    /* Lintel faces up */
-                    bk_quad(obj_win, BK_WP(u1,v2),  BK_WP(u2,v2),  BK_WPI(u2,v2), BK_WPI(u1,v2), UP,       tile);
+                    /* Sill: bottom horizontal face, visible from above */
+                    bk_quad(obj_win, BK_WPI(u1,v1), BK_WPI(u2,v1), BK_WP(u2,v1), BK_WP(u1,v1), UP, tile);
+                    /* Lintel: top horizontal face, visible from below */
+                    bk_quad(obj_win, BK_WP(u1,v2),  BK_WP(u2,v2),  BK_WPI(u2,v2), BK_WPI(u1,v2), DN, tile);
                 } else {
                     /* Door: lintel only (no sill at ground level) */
-                    bk_quad(obj_win, BK_WP(u1,v2), BK_WP(u2,v2), BK_WPI(u2,v2), BK_WPI(u1,v2), UP, tile);
+                    bk_quad(obj_win, BK_WP(u1,v2), BK_WP(u2,v2), BK_WPI(u2,v2), BK_WPI(u1,v2), DN, tile);
                 }
                 /* Left reveal faces -right_v */
                 bk_quad(obj_win, BK_WP(u1,v1), BK_WP(u1,v2), BK_WPI(u1,v2), BK_WPI(u1,v1), lrev_out, tile);
@@ -2396,8 +2413,8 @@ static void crft_generate_building(void) {
                     prv.x /= wlen; prv.z /= wlen;
                     sf_fvec3_t pnrm = {-prv.z, 0.f, prv.x};
                     sf_fvec3_t pinv = {-pnrm.x*eff_inset, 0.f, -pnrm.z*eff_inset};
-                    sf_fvec3_t lro  = {-prv.x, 0.f, -prv.z};
-                    sf_fvec3_t rro  = { prv.x, 0.f,  prv.z};
+                    sf_fvec3_t lro  = { prv.x, 0.f,  prv.z};
+                    sf_fvec3_t rro  = {-prv.x, 0.f, -prv.z};
 
                     float margin_p = (1.f - bk_win_size) * 0.5f;
                     if (margin_p < 0.05f) margin_p = 0.05f;
@@ -2417,8 +2434,8 @@ static void crft_generate_building(void) {
                         bk_quad(obj_wall, PWP(u0,v2), PWP(u3,v2), PWP(u3,v3), PWP(u0,v3), pnrm, tile);
                         bk_quad(obj_wall, PWP(u0,v1), PWP(u1,v1), PWP(u1,v2), PWP(u0,v2), pnrm, tile);
                         bk_quad(obj_wall, PWP(u2,v1), PWP(u3,v1), PWP(u3,v2), PWP(u2,v2), pnrm, tile);
-                        bk_quad(obj_win,  PWP(u1,v1),  PWP(u2,v1),  PWPI(u2,v1), PWPI(u1,v1), DN,   tile);
-                        bk_quad(obj_win,  PWP(u1,v2),  PWP(u2,v2),  PWPI(u2,v2), PWPI(u1,v2), UP,   tile);
+                        bk_quad(obj_win,  PWP(u1,v1),  PWP(u2,v1),  PWPI(u2,v1), PWPI(u1,v1), UP,   tile);
+                        bk_quad(obj_win,  PWP(u1,v2),  PWP(u2,v2),  PWPI(u2,v2), PWPI(u1,v2), DN,   tile);
                         bk_quad(obj_win,  PWP(u1,v1),  PWP(u1,v2),  PWPI(u1,v2), PWPI(u1,v1), lro,  tile);
                         bk_quad(obj_win,  PWP(u2,v2),  PWP(u2,v1),  PWPI(u2,v1), PWPI(u2,v2), rro,  tile);
                         bk_quad(obj_win,  PWPI(u1,v1), PWPI(u2,v1), PWPI(u2,v2), PWPI(u1,v2), pnrm, tile);
