@@ -33,8 +33,8 @@
 #define PY0    18
 #define LX     5
 #define LX_TXT (LX + ICON_SZ + 2)   /* label x, after icon            */
-#define IX     78
-#define IX1    218
+#define IX     85
+#define IX1    195
 #define RH     15
 #define RY(n)  (PY0 + 22 + (n)*RH)
 
@@ -92,7 +92,7 @@ static int         g_ssel = 0;
 static char g_sff_path[SF_MAX_TEXT_INPUT_LEN] = "tree_out.sff";
 
 /* 3D leaf orientation toggle */
-static bool p_rand3d = false;
+static bool p_rand3d = true;
 
 /* Slider icons (one per drag-float row, 14 total) */
 static const char *k_row_icon_bmp[14] = {
@@ -217,7 +217,7 @@ static void grow(sf_obj_t *obj,
 
     if (depth == 0) {
         int n = (int)(p_ld + .5f);
-        for (int i = 0; i < n && g_ctx.bill_count < SF_MAX_BILLS; i++) {
+        for (int i = 0; i < n && g_ctx.sprite_3d_count < SF_MAX_SPRITE_3DS; i++) {
             float sp = len * 0.9f;
             sf_fvec3_t lp = {
                 end.x + rf2()*sp,
@@ -228,8 +228,8 @@ static void grow(sf_obj_t *obj,
             float lo = fminf(p_lo, 1.0f);
             float la = rf() * 2.f * SF_PI;  /* random screen-space rotation */
             char bname[32];
-            snprintf(bname, sizeof(bname), "lf_%d", g_ctx.bill_count);
-            sf_bill_t *bl = sf_add_bill(&g_ctx, g_leaf, bname, lp, ls, lo, la);
+            snprintf(bname, sizeof(bname), "lf_%d", g_ctx.sprite_3d_count);
+            sf_sprite_3d_t *bl = sf_add_sprite_3d(&g_ctx, g_leaf, bname, lp, ls, lo, la);
             if (bl && p_rand3d) {
                 bl->normal.x = rf2(); bl->normal.y = rf2(); bl->normal.z = rf2();
                 float nl = sqrtf(bl->normal.x*bl->normal.x + bl->normal.y*bl->normal.y + bl->normal.z*bl->normal.z);
@@ -291,7 +291,7 @@ static void generate_tree(void) {
     g_obj->vt_cnt = 0;
     g_obj->f_cnt  = 0;
     g_obj->src_path = NULL;
-    sf_clear_bills(&g_ctx);
+    sf_clear_sprite_3ds(&g_ctx);
 
     rseed((uint32_t)(p_seed * 17239.f) + 1);
     int maxd = (int)(p_depth + .5f);
@@ -385,6 +385,30 @@ static void load_leaf_sprites(void) {
     if (g_snc > 0 && g_sprites[0]) g_leaf = g_sprites[0];
 }
 
+/* Replace icon background with transparent magenta using top-left pixel as key. */
+static void key_icon_bg(sf_tex_t *t) {
+    if (!t || !t->px || t->w <= 0 || t->h <= 0) return;
+    sf_pkd_clr_t bg = t->px[0] & 0x00FFFFFF;
+    for (int p = 0; p < t->w * t->h; p++) {
+        if ((t->px[p] & 0x00FFFFFF) == bg)
+            t->px[p] = 0x00FF00FF;
+    }
+}
+
+/* Copy src file to dst path, returns true on success. */
+static bool copy_file(const char *src, const char *dst) {
+    FILE *in = fopen(src, "rb");
+    if (!in) return false;
+    FILE *out = fopen(dst, "wb");
+    if (!out) { fclose(in); return false; }
+    char buf[4096];
+    size_t n;
+    while ((n = fread(buf, 1, sizeof(buf), in)) > 0)
+        fwrite(buf, 1, n, out);
+    fclose(in); fclose(out);
+    return true;
+}
+
 /* Nearest-neighbour blit with magenta-keyed transparency. */
 static void blit_keyed(sf_tex_t *t, int px, int py, int pw, int ph) {
     if (!t || !t->px || t->w <= 0 || t->h <= 0) return;
@@ -476,11 +500,12 @@ static void save_tree(void) {
     }
 
     /* Billboard instances */
-    for (int i = 0; i < g_ctx.bill_count; i++) {
-        sf_bill_t *b = &g_ctx.bills[i];
+    for (int i = 0; i < g_ctx.sprite_3d_count; i++) {
+        sf_sprite_3d_t *b = &g_ctx.sprite_3ds[i];
         if (!b->sprite || !b->sprite->name) continue;
         fprintf(f, "billboard %s {\n", b->name[0] ? b->name : "bill");
         fprintf(f, "    sprite  = %s\n", b->sprite->name);
+        if (g_enti && g_enti->name) fprintf(f, "    frame   = %s\n", g_enti->name);
         fprintf(f, "    pos     = (%.4f, %.4f, %.4f)\n", b->pos.x, b->pos.y, b->pos.z);
         fprintf(f, "    scale   = %.4f\n", b->scale);
         fprintf(f, "    opacity = %.4f\n", b->opacity);
@@ -498,6 +523,38 @@ static void save_tree(void) {
    ============================================================ */
 static void cb_save(sf_ctx_t *ctx, void *ud) { (void)ctx; (void)ud; save_tree(); }
 static void cb_rand3d(sf_ctx_t *ctx, void *ud) { (void)ctx; (void)ud; p_rand3d = !p_rand3d; }
+
+static void cb_install(sf_ctx_t *ctx, void *ud) {
+    (void)ctx; (void)ud;
+    save_tree();   /* ensure files are up to date */
+
+    const char *sl = strrchr(g_sff_path, '/');
+    char base[256];
+    snprintf(base, sizeof(base), "%s", sl ? sl+1 : g_sff_path);
+    char *bdot = strrchr(base, '.');
+    if (bdot) *bdot = '\0';
+
+    char dir[512];
+    snprintf(dir, sizeof(dir), "%s", g_sff_path);
+    char *sl2 = strrchr(dir, '/');
+    if (sl2) *sl2 = '\0'; else { dir[0]='.'; dir[1]='\0'; }
+
+    char obj_src[512], sff_src[512];
+    snprintf(obj_src, sizeof(obj_src), "%s/%s.obj", dir, base);
+    snprintf(sff_src, sizeof(sff_src), "%s", g_sff_path);
+
+    char obj_dst[512], sff_dst[512];
+    snprintf(obj_dst, sizeof(obj_dst), SF_SRC_ASSET_PATH "/sf_objs/%s.obj", base);
+    snprintf(sff_dst, sizeof(sff_dst), SF_SRC_ASSET_PATH "/sf_sff/%s.sff", base);
+
+    bool ok1 = copy_file(obj_src, obj_dst);
+    bool ok2 = copy_file(sff_src, sff_dst);
+    if (ok1 && ok2)
+        SF_LOG(&g_ctx, SF_LOG_INFO, SF_LOG_INDENT "Installed %s.obj + %s.sff\n", base, base);
+    else
+        SF_LOG(&g_ctx, SF_LOG_WARN, SF_LOG_INDENT "Install: obj=%s sff=%s\n",
+               ok1 ? "ok" : "fail", ok2 ? "ok" : "fail");
+}
 
 static void apply_preset(const preset_t *p) {
     p_depth  = p->depth;   p_branch = p->branch;
@@ -570,13 +627,20 @@ static void build_ui(void) {
     sf_ui_add_checkbox(&g_ctx, "3D Leaves",
         (sf_ivec2_t){LX, RY(18)},
         (sf_ivec2_t){IX1, RY(18)+14},
-        p_rand3d, cb_rand3d, NULL);
+        true, cb_rand3d, NULL);
 
-    /* Save button */
-    sf_ui_add_button(&g_ctx, "Save",
-        (sf_ivec2_t){LX,  RY(19)},
-        (sf_ivec2_t){IX1, RY(19)+14},
-        cb_save, NULL);
+    /* Save / Install buttons */
+    {
+        int bw = (IX1 - LX - 2) / 2;
+        sf_ui_add_button(&g_ctx, "Save",
+            (sf_ivec2_t){LX,       RY(19)},
+            (sf_ivec2_t){LX+bw,    RY(19)+14},
+            cb_save, NULL);
+        sf_ui_add_button(&g_ctx, "Install",
+            (sf_ivec2_t){LX+bw+2,  RY(19)},
+            (sf_ivec2_t){IX1,       RY(19)+14},
+            cb_install, NULL);
+    }
 
     /* SFF path */
     sf_ui_add_label(&g_ctx, "SFF path", (sf_ivec2_t){LX_TXT, RY(20)+2}, 0);
@@ -638,11 +702,12 @@ int main(int argc, char *argv[]) {
     scan_bark_textures();
     load_leaf_sprites();
 
-    /* Load slider icons */
+    /* Load slider icons and key out backgrounds */
     for (int i = 0; i < 14; i++) {
         char iname[32];
         snprintf(iname, sizeof(iname), "ico_%d", i);
         g_row_icon[i] = sf_load_texture_bmp(&g_ctx, k_row_icon_bmp[i], iname);
+        key_icon_bg(g_row_icon[i]);
     }
 
     g_obj  = sf_obj_create_empty(&g_ctx, "tree", MAX_V, MAX_UV, MAX_F);
@@ -727,8 +792,8 @@ int main(int argc, char *argv[]) {
         sf_render_ctx(&g_ctx);
 
         /* Draw billboard leaves */
-        for (int i = 0; i < g_ctx.bill_count; i++)
-            sf_draw_bill(&g_ctx, &g_ctx.main_camera, &g_ctx.bills[i], 0.f);
+        for (int i = 0; i < g_ctx.sprite_3d_count; i++)
+            sf_draw_sprite_3d(&g_ctx, &g_ctx.main_camera, &g_ctx.sprite_3ds[i], 0.f);
 
         sf_draw_debug_perf(&g_ctx, &g_ctx.main_camera);
         sf_ui_render(&g_ctx, &g_ctx.main_camera, g_ctx.ui);

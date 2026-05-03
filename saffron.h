@@ -44,7 +44,7 @@ extern "C" {
 #define SF_MAX_SKYBOXES               4
 #define SF_SKYBOX_SPAN                128
 #define SF_MAX_SPRITE_FRAMES          16
-#define SF_MAX_BILLS                 8192
+#define SF_MAX_SPRITE_3DS                 8192
 #define SF_PERF_HIST_SIZE             64
 #define SF_LOG_INDENT                 "            "
 #define SF_PI                         3.14159265359f
@@ -215,7 +215,8 @@ typedef struct {
   float                             opacity;      /* 0..1 alpha                  */
   float                             angle;        /* screen-space rotation, radians */
   sf_fvec3_t                        normal;       /* (0,0,0) = billboard; non-zero = 3D-oriented quad */
-} sf_bill_t;
+  sf_frame_t                       *frame;        /* parent frame; NULL = world-space pos */
+} sf_sprite_3d_t;
 
 typedef struct {
   int32_t                           id;
@@ -452,8 +453,8 @@ struct sf_ctx_t_ {
   int32_t                           cam_count;
   sf_sprite_t                      *sprites;
   int32_t                           sprite_count;
-  sf_bill_t                        *bills;
-  int32_t                           bill_count;
+  sf_sprite_3d_t                        *sprite_3ds;
+  int32_t                           sprite_3d_count;
   sf_emitr_t                       *emitrs;
   int32_t                           emitr_count;
   sf_skybox_t                      *skyboxes;
@@ -591,7 +592,7 @@ void           sf_pixel_depth       (sf_ctx_t *ctx, sf_cam_t *cam, sf_pkd_clr_t 
 void           sf_line              (sf_ctx_t *ctx, sf_cam_t *cam, sf_pkd_clr_t c, sf_ivec2_t v0, sf_ivec2_t v1);
 void           sf_rect              (sf_ctx_t *ctx, sf_cam_t *cam, sf_pkd_clr_t c, sf_ivec2_t v0, sf_ivec2_t v1);
 void           sf_tri               (sf_ctx_t *ctx, sf_cam_t *cam, sf_pkd_clr_t c, sf_fvec3_t v0, sf_fvec3_t v1, sf_fvec3_t v2, bool use_depth);
-void           sf_tri_tex           (sf_ctx_t *ctx, sf_cam_t *cam, sf_tex_t *tex, sf_fvec3_t v0, sf_fvec3_t v1, sf_fvec3_t v2, sf_fvec3_t uvz0, sf_fvec3_t uvz1, sf_fvec3_t uvz2, sf_fvec3_t l_int);
+void           sf_tri_tex           (sf_ctx_t *ctx, sf_cam_t *cam, sf_tex_t *tex, sf_fvec3_t v0, sf_fvec3_t v1, sf_fvec3_t v2, sf_fvec3_t uvz0, sf_fvec3_t uvz1, sf_fvec3_t uvz2, sf_fvec3_t l_int, float opacity);
 void           sf_put_text          (sf_ctx_t *ctx, sf_cam_t *cam, const char *text, sf_ivec2_t p, sf_pkd_clr_t c, int scale);
 void           sf_clear_depth       (sf_ctx_t *ctx, sf_cam_t *cam);
 void           sf_draw_cam_pip      (sf_ctx_t *ctx, sf_cam_t *dest, sf_cam_t *src, sf_ivec2_t pos);
@@ -602,15 +603,16 @@ void           sf_draw_debug_lights (sf_ctx_t *ctx, sf_cam_t *cam, float size);
 void           sf_draw_debug_cams   (sf_ctx_t *ctx, sf_cam_t *view_cam, float ray_len);
 void           sf_draw_debug_perf   (sf_ctx_t *ctx, sf_cam_t *cam);
 void           sf_draw_sprite       (sf_ctx_t *ctx, sf_cam_t *cam, sf_sprite_t *spr, sf_fvec3_t pos_w, float anim_time, float scale_mult);
-void           sf_draw_bill         (sf_ctx_t *ctx, sf_cam_t *cam, sf_bill_t *bill, float anim_time);
-sf_bill_t*     sf_add_bill          (sf_ctx_t *ctx, sf_sprite_t *spr, const char *name, sf_fvec3_t pos, float scale, float opacity, float angle);
-void           sf_clear_bills       (sf_ctx_t *ctx);
-void           _sf_sff_prse_bill    (sf_ctx_t *ctx, FILE *f, const char *name, int *bill_count);
+void           sf_draw_sprite_3d         (sf_ctx_t *ctx, sf_cam_t *cam, sf_sprite_3d_t *bill, float anim_time);
+sf_sprite_3d_t*     sf_add_sprite_3d          (sf_ctx_t *ctx, sf_sprite_t *spr, const char *name, sf_fvec3_t pos, float scale, float opacity, float angle);
+void           sf_clear_sprite_3ds       (sf_ctx_t *ctx);
+void           _sf_sff_prse_sprite_3d    (sf_ctx_t *ctx, FILE *f, const char *name, int *sprite_3d_count);
 
 /* SF_UI_FUNCTIONS */
 sf_ui_t*       sf_ui_create         (sf_ctx_t *ctx);
 void           sf_ui_update         (sf_ctx_t *ctx, sf_ui_t *ui);
 void           sf_ui_render         (sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_t *ui);
+void           sf_ui_render_popups  (sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_t *ui);
 void           sf_ui_clear          (sf_ctx_t *ctx);
 sf_ui_lmn_t*   sf_ui_get_by_name    (sf_ui_t *ui, const char *name);
 void           sf_ui_set_callback   (sf_ui_lmn_t *el, sf_ui_cb cb, void *userdata);
@@ -747,7 +749,7 @@ void sf_init(sf_ctx_t *ctx, int w, int h) {
   ctx->frames                       = sf_arena_alloc(ctx, &ctx->arena, SF_MAX_FRAMES   * sizeof(sf_frame_t));
   ctx->sprites                      = sf_arena_alloc(ctx, &ctx->arena, SF_MAX_SPRITES  * sizeof(sf_sprite_t));
   ctx->emitrs                       = sf_arena_alloc(ctx, &ctx->arena, SF_MAX_EMITRS   * sizeof(sf_emitr_t));
-  ctx->bills                        = sf_arena_alloc(ctx, &ctx->arena, SF_MAX_BILLS    * sizeof(sf_bill_t));
+  ctx->sprite_3ds                        = sf_arena_alloc(ctx, &ctx->arena, SF_MAX_SPRITE_3DS    * sizeof(sf_sprite_3d_t));
   ctx->skyboxes                     = sf_arena_alloc(ctx, &ctx->arena, SF_MAX_SKYBOXES * sizeof(sf_skybox_t));
   ctx->obj_count                    = 0;
   ctx->enti_count                   = 0;
@@ -757,7 +759,7 @@ void sf_init(sf_ctx_t *ctx, int w, int h) {
   ctx->frames_count                 = 0;
   ctx->free_frames                  = NULL;
   ctx->sprite_count                 = 0;
-  ctx->bill_count                   = 0;
+  ctx->sprite_3d_count                   = 0;
   ctx->emitr_count                  = 0;
   ctx->skybox_count                 = 0;
   ctx->active_skybox                = NULL;
@@ -980,7 +982,7 @@ void sf_render_enti(sf_ctx_t *ctx, sf_cam_t *cam, sf_enti_t *enti) {
       }
     } else if (enti->tex && has_uvs) {
       if (inc == 3) {
-        sf_tri_tex(ctx, cam, enti->tex, _sf_project_vertex(ctx, cam, in[0], P), _sf_project_vertex(ctx, cam, in[1], P), _sf_project_vertex(ctx, cam, in[2], P), in_uvz[0], in_uvz[1], in_uvz[2], l_int);
+        sf_tri_tex(ctx, cam, enti->tex, _sf_project_vertex(ctx, cam, in[0], P), _sf_project_vertex(ctx, cam, in[1], P), _sf_project_vertex(ctx, cam, in[2], P), in_uvz[0], in_uvz[1], in_uvz[2], l_int, 1.0f);
       } else if (inc == 1) {
         float t1 = ((-near) - in[0].z) / (out[0].z - in[0].z);
         float t2 = ((-near) - in[0].z) / (out[1].z - in[0].z);
@@ -988,7 +990,7 @@ void sf_render_enti(sf_ctx_t *ctx, sf_cam_t *cam, sf_enti_t *enti) {
         sf_fvec3_t v2 = { in[0].x + (out[1].x - in[0].x) * t2, in[0].y + (out[1].y - in[0].y) * t2, -near };
         sf_fvec3_t uvz1 = { in_uvz[0].x + (out_uvz[0].x - in_uvz[0].x) * t1, in_uvz[0].y + (out_uvz[0].y - in_uvz[0].y) * t1, in_uvz[0].z + (out_uvz[0].z - in_uvz[0].z) * t1 };
         sf_fvec3_t uvz2 = { in_uvz[0].x + (out_uvz[1].x - in_uvz[0].x) * t2, in_uvz[0].y + (out_uvz[1].y - in_uvz[0].y) * t2, in_uvz[0].z + (out_uvz[1].z - in_uvz[0].z) * t2 };
-        sf_tri_tex(ctx, cam, enti->tex, _sf_project_vertex(ctx, cam, in[0], P), _sf_project_vertex(ctx, cam, v1, P), _sf_project_vertex(ctx, cam, v2, P), in_uvz[0], uvz1, uvz2, l_int);
+        sf_tri_tex(ctx, cam, enti->tex, _sf_project_vertex(ctx, cam, in[0], P), _sf_project_vertex(ctx, cam, v1, P), _sf_project_vertex(ctx, cam, v2, P), in_uvz[0], uvz1, uvz2, l_int, 1.0f);
       } else if (inc == 2) {
         float t1 = ((-near) - in[0].z) / (out[0].z - in[0].z);
         float t2 = ((-near) - in[1].z) / (out[0].z - in[1].z);
@@ -996,8 +998,8 @@ void sf_render_enti(sf_ctx_t *ctx, sf_cam_t *cam, sf_enti_t *enti) {
         sf_fvec3_t v2 = { in[1].x + (out[0].x - in[1].x) * t2, in[1].y + (out[0].y - in[1].y) * t2, -near };
         sf_fvec3_t uvz1 = { in_uvz[0].x + (out_uvz[0].x - in_uvz[0].x) * t1, in_uvz[0].y + (out_uvz[0].y - in_uvz[0].y) * t1, in_uvz[0].z + (out_uvz[0].z - in_uvz[0].z) * t1 };
         sf_fvec3_t uvz2 = { in_uvz[1].x + (out_uvz[0].x - in_uvz[1].x) * t2, in_uvz[1].y + (out_uvz[0].y - in_uvz[1].y) * t2, in_uvz[1].z + (out_uvz[0].z - in_uvz[1].z) * t2 };
-        sf_tri_tex(ctx, cam, enti->tex, _sf_project_vertex(ctx, cam, in[0], P), _sf_project_vertex(ctx, cam, in[1], P), _sf_project_vertex(ctx, cam, v1, P), in_uvz[0], in_uvz[1], uvz1, l_int);
-        sf_tri_tex(ctx, cam, enti->tex, _sf_project_vertex(ctx, cam, in[1], P), _sf_project_vertex(ctx, cam, v1, P), _sf_project_vertex(ctx, cam, v2, P), in_uvz[1], uvz1, uvz2, l_int);
+        sf_tri_tex(ctx, cam, enti->tex, _sf_project_vertex(ctx, cam, in[0], P), _sf_project_vertex(ctx, cam, in[1], P), _sf_project_vertex(ctx, cam, v1, P), in_uvz[0], in_uvz[1], uvz1, l_int, 1.0f);
+        sf_tri_tex(ctx, cam, enti->tex, _sf_project_vertex(ctx, cam, in[1], P), _sf_project_vertex(ctx, cam, v1, P), _sf_project_vertex(ctx, cam, v2, P), in_uvz[1], uvz1, uvz2, l_int, 1.0f);
       }
     } else {
       sf_pkd_clr_t shaded_color = _sf_pack_color((sf_unpkd_clr_t){(uint8_t)(l_int.x * 255), (uint8_t)(l_int.y * 255), (uint8_t)(l_int.z * 255), 255});
@@ -1063,6 +1065,10 @@ void sf_render_cam(sf_ctx_t *ctx, sf_cam_t *cam) {
     sf_render_enti(ctx, cam, &ctx->entities[i]);
   }
 
+  for (int i = 0; i < ctx->sprite_3d_count; i++) {
+    sf_draw_sprite_3d(ctx, cam, &ctx->sprite_3ds[i], 0.0f);
+  }
+
   sf_render_emitrs(ctx, cam);
   if (ctx->render_mode == SF_RENDER_DEPTH) {
     sf_render_depth(ctx, cam);
@@ -1126,10 +1132,18 @@ void sf_render_fog(sf_ctx_t *ctx, sf_cam_t *cam) {
 }
 
 void sf_render_depth(sf_ctx_t *ctx, sf_cam_t *cam) {
-  /* Visualise the z-buffer as a heatmap: blue (near) → cyan → green → yellow → red (far/sky). */
+  /* Visualise the z-buffer as a heatmap: blue (near) → cyan → green → yellow → red (far/sky).
+   * NDC z is highly nonlinear so we linearise to view-space depth first, then apply a power
+   * curve to spread the colours usefully across the visible scene range. */
   static const float kr[5] = {0.0f, 0.0f, 0.0f, 1.0f, 1.0f};
   static const float kg[5] = {0.0f, 1.0f, 1.0f, 1.0f, 0.0f};
   static const float kb[5] = {1.0f, 1.0f, 0.0f, 0.0f, 0.0f};
+  float near    = cam->near_plane;
+  float far     = cam->far_plane;
+  float A       = 2.0f * near * far;
+  float B       = far + near;
+  float C       = far - near;
+  float inv_rng = 1.0f / (far - near);
   int n = cam->w * cam->h;
   for (int i = 0; i < n; i++) {
     float z = cam->z_buffer[i];
@@ -1137,9 +1151,11 @@ void sf_render_depth(sf_ctx_t *ctx, sf_cam_t *cam) {
     if (z > 2.0f) {
       t = 1.0f;
     } else {
-      t = (z + 1.0f) * 0.5f;   /* NDC z=-1 (near) → t=0, z=+1 (far) → t=1 */
+      float depth = A / (B - z * C);         /* NDC z → linear view-space depth */
+      t = (depth - near) * inv_rng;          /* normalise to [0, 1] across near..far */
       if (t < 0.0f) t = 0.0f;
       if (t > 1.0f) t = 1.0f;
+      t = powf(t, 0.2f);                     /* power curve: expands near range visually */
     }
     float scaled = t * 4.0f;
     int seg = (int)scaled;
@@ -2174,7 +2190,7 @@ void sf_load_sff(sf_ctx_t *ctx, const char *filename, const char *worldname) {
     return;
   }
   char line[512];
-  int obj_count = 0, enti_count = 0, light_count = 0, cam_count = 0, tex_count = 0, sprite_count = 0, emitr_count = 0, frame_count = 0, skybox_count = 0, bill_count = 0;
+  int obj_count = 0, enti_count = 0, light_count = 0, cam_count = 0, tex_count = 0, sprite_count = 0, emitr_count = 0, frame_count = 0, skybox_count = 0, sprite_3d_count = 0;
   while (fgets(line, sizeof(line), file)) {
     _sf_sff_trim(line);
     if (line[0] == '#' || line[0] == '\0') continue;
@@ -2189,7 +2205,7 @@ void sf_load_sff(sf_ctx_t *ctx, const char *filename, const char *worldname) {
       else if (strcmp(keyword, "light")   == 0) _sf_sff_prse_light(ctx, file, name, &light_count);
       else if (strcmp(keyword, "sprite")  == 0) _sf_sff_prse_sprit(ctx, file, name, &sprite_count);
       else if (strcmp(keyword, "emitter") == 0) _sf_sff_prse_emitr(ctx, file, name, &emitr_count);
-      else if (strcmp(keyword, "billboard") == 0) _sf_sff_prse_bill(ctx, file, name, &bill_count);
+      else if (strcmp(keyword, "billboard") == 0) _sf_sff_prse_sprite_3d(ctx, file, name, &sprite_3d_count);
     }
     else if (sscanf(line, "mesh %63s \"%255[^\"]\"", name, filepath) == 2) {
       char r_path[512];
@@ -2318,8 +2334,8 @@ bool sf_save_sff(sf_ctx_t *ctx, const char *filepath) {
     fprintf(f, "}\n\n");
   }
 
-  for (int i = 0; i < ctx->bill_count; i++) {
-    sf_bill_t *b = &ctx->bills[i];
+  for (int i = 0; i < ctx->sprite_3d_count; i++) {
+    sf_sprite_3d_t *b = &ctx->sprite_3ds[i];
     if (!b->sprite || !b->sprite->name) continue;
     const char *bname = b->name[0] ? b->name : "bill";
     fprintf(f, "billboard %s {\n", bname);
@@ -2480,7 +2496,9 @@ void _sf_sff_prse_enti(sf_ctx_t *ctx, FILE *f, const char *name, int *enti_count
   }
   sf_obj_t *obj = sf_get_obj_(ctx, mesh_name, true);
   if (!obj) return;
-  sf_enti_t *enti = sf_add_enti(ctx, obj, name);
+  char enti_name[80]; snprintf(enti_name, sizeof(enti_name), "%s", name);
+  { int sfx = 1; while (sf_get_enti_(ctx, enti_name, false)) snprintf(enti_name, sizeof(enti_name), "%s_%d", name, sfx++); }
+  sf_enti_t *enti = sf_add_enti(ctx, obj, enti_name);
   if (!enti) return;
   sf_enti_set_pos(ctx, enti, pos.x, pos.y, pos.z);
   sf_enti_set_rot(ctx, enti, rot.x, rot.y, rot.z);
@@ -2590,24 +2608,30 @@ void _sf_sff_prse_emitr(sf_ctx_t *ctx, FILE *f, const char *name, int *emitr_cou
   (*emitr_count)++;
 }
 
-void _sf_sff_prse_bill(sf_ctx_t *ctx, FILE *f, const char *name, int *bill_count) {
+void _sf_sff_prse_sprite_3d(sf_ctx_t *ctx, FILE *f, const char *name, int *sprite_3d_count) {
   /* Parse a "billboard name { ... }" block from a .sff file. */
   char key[64], val[256];
-  char spr_name[64] = {0};
-  sf_fvec3_t pos = {0,0,0};
+  char spr_name[64] = {0}, frame_name[64] = {0};
+  sf_fvec3_t pos = {0,0,0}, normal = {0,0,0};
   float scale = 1.0f, opacity = 1.0f, angle = 0.0f;
   while (_sf_sff_read_kv(f, key, sizeof(key), val, sizeof(val))) {
-    if      (strcmp(key, "sprite")  == 0) snprintf(spr_name, sizeof(spr_name), "%s", val);
+    if      (strcmp(key, "sprite")  == 0) snprintf(spr_name,   sizeof(spr_name),   "%s", val);
+    else if (strcmp(key, "frame")   == 0) snprintf(frame_name, sizeof(frame_name), "%s", val);
     else if (strcmp(key, "pos")     == 0) pos     = _sf_sff_prse_vec3(val);
     else if (strcmp(key, "scale")   == 0) sscanf(val, "%f", &scale);
     else if (strcmp(key, "opacity") == 0) sscanf(val, "%f", &opacity);
     else if (strcmp(key, "angle")   == 0) sscanf(val, "%f", &angle);
+    else if (strcmp(key, "normal")  == 0) normal  = _sf_sff_prse_vec3(val);
   }
   if (!spr_name[0]) return;
   sf_sprite_t *spr = sf_get_sprite_(ctx, spr_name, true);
   if (!spr) return;
-  sf_add_bill(ctx, spr, name, pos, scale, opacity, angle);
-  (*bill_count)++;
+  sf_sprite_3d_t *b = sf_add_sprite_3d(ctx, spr, name, pos, scale, opacity, angle);
+  if (b) {
+    b->normal = normal;
+    if (frame_name[0]) b->frame = _sf_sff_get_frame_(ctx, frame_name);
+  }
+  (*sprite_3d_count)++;
 }
 
 /* SF_FRAME_FUNCTIONS */
@@ -2890,7 +2914,7 @@ void sf_tri(sf_ctx_t *ctx, sf_cam_t *cam, sf_pkd_clr_t c, sf_fvec3_t v0, sf_fvec
   }
 }
 
-void sf_tri_tex(sf_ctx_t *ctx, sf_cam_t *cam, sf_tex_t *tex, sf_fvec3_t v0, sf_fvec3_t v1, sf_fvec3_t v2, sf_fvec3_t uvz0, sf_fvec3_t uvz1, sf_fvec3_t uvz2, sf_fvec3_t l_int) {
+void sf_tri_tex(sf_ctx_t *ctx, sf_cam_t *cam, sf_tex_t *tex, sf_fvec3_t v0, sf_fvec3_t v1, sf_fvec3_t v2, sf_fvec3_t uvz0, sf_fvec3_t uvz1, sf_fvec3_t uvz2, sf_fvec3_t l_int, float opacity) {
   /* Rasterize a perspective-correct textured and lit triangle; uvz encodes u/z, v/z, 1/z per vertex. */
   if (v1.y < v0.y) { _sf_swap_fvec3(&v0, &v1); _sf_swap_fvec3(&uvz0, &uvz1); }
   if (v2.y < v0.y) { _sf_swap_fvec3(&v0, &v2); _sf_swap_fvec3(&uvz0, &uvz2); }
@@ -2909,6 +2933,9 @@ void sf_tri_tex(sf_ctx_t *ctx, sf_cam_t *cam, sf_tex_t *tex, sf_fvec3_t v0, sf_f
   int li_r = (int)(l_int.x * 256.0f + 0.5f); if (li_r > 256) li_r = 256;
   int li_g = (int)(l_int.y * 256.0f + 0.5f); if (li_g > 256) li_g = 256;
   int li_b = (int)(l_int.z * 256.0f + 0.5f); if (li_b > 256) li_b = 256;
+  uint8_t opa8 = (uint8_t)(opacity * 255.f + 0.5f);
+  bool opa_full = (opa8 >= 252);
+  uint8_t inv_opa8 = 255 - opa8;
   int tex_w = tex->w, tex_h = tex->h;
   int tex_wm = tex->w_mask, tex_hm = tex->h_mask;
   sf_pkd_clr_t *tex_px = tex->px;
@@ -2987,8 +3014,19 @@ void sf_tri_tex(sf_ctx_t *ctx, sf_cam_t *cam, sf_tex_t *tex, sf_fvec3_t v0, sf_f
           uint32_t lr = (tr * li_r) >> 8; if (lr > 255) lr = 255;
           uint32_t lg = (tg * li_g) >> 8; if (lg > 255) lg = 255;
           uint32_t lb = (tb * li_b) >> 8; if (lb > 255) lb = 255;
-          z_buf[bi] = cz;
-          cam_buf[bi] = 0xFF000000u | ((uint32_t)_sf_gamma_lut[lr] << 16) | ((uint32_t)_sf_gamma_lut[lg] << 8) | _sf_gamma_lut[lb];
+          if (opa_full) {
+            z_buf[bi] = cz;
+            cam_buf[bi] = 0xFF000000u | ((uint32_t)_sf_gamma_lut[lr] << 16) | ((uint32_t)_sf_gamma_lut[lg] << 8) | _sf_gamma_lut[lb];
+          } else {
+            uint32_t bg = cam_buf[bi];
+            uint32_t bg_r = _sf_degamma_lut[(bg >> 16) & 0xFF];
+            uint32_t bg_g = _sf_degamma_lut[(bg >> 8)  & 0xFF];
+            uint32_t bg_b = _sf_degamma_lut[ bg         & 0xFF];
+            uint32_t fr = (lr * opa8 + bg_r * inv_opa8) >> 8; if (fr > 255) fr = 255;
+            uint32_t fg = (lg * opa8 + bg_g * inv_opa8) >> 8; if (fg > 255) fg = 255;
+            uint32_t fb = (lb * opa8 + bg_b * inv_opa8) >> 8; if (fb > 255) fb = 255;
+            cam_buf[bi] = 0xFF000000u | ((uint32_t)_sf_gamma_lut[fr] << 16) | ((uint32_t)_sf_gamma_lut[fg] << 8) | _sf_gamma_lut[fb];
+          }
         }
       }
       ax += dxa; az += dza; aux += duxa; auy += duya; auz += duza;
@@ -3331,10 +3369,10 @@ void sf_draw_sprite(sf_ctx_t *ctx, sf_cam_t *cam, sf_sprite_t *spr, sf_fvec3_t p
   }
 }
 
-sf_bill_t* sf_add_bill(sf_ctx_t *ctx, sf_sprite_t *spr, const char *name, sf_fvec3_t pos, float scale, float opacity, float angle) {
+sf_sprite_3d_t* sf_add_sprite_3d(sf_ctx_t *ctx, sf_sprite_t *spr, const char *name, sf_fvec3_t pos, float scale, float opacity, float angle) {
   /* Add a billboard instance to the scene's bill pool. */
-  if (!ctx || ctx->bill_count >= SF_MAX_BILLS) return NULL;
-  sf_bill_t *b = &ctx->bills[ctx->bill_count++];
+  if (!ctx || ctx->sprite_3d_count >= SF_MAX_SPRITE_3DS) return NULL;
+  sf_sprite_3d_t *b = &ctx->sprite_3ds[ctx->sprite_3d_count++];
   if (name) { int i; for (i = 0; i < 31 && name[i]; i++) b->name[i] = name[i]; b->name[i] = '\0'; }
   else { b->name[0] = '\0'; }
   b->sprite  = spr;
@@ -3343,39 +3381,52 @@ sf_bill_t* sf_add_bill(sf_ctx_t *ctx, sf_sprite_t *spr, const char *name, sf_fve
   b->opacity = opacity;
   b->angle   = angle;
   b->normal  = (sf_fvec3_t){0.f, 0.f, 0.f};
+  b->frame   = NULL;
   return b;
 }
 
-void sf_clear_bills(sf_ctx_t *ctx) {
+void sf_clear_sprite_3ds(sf_ctx_t *ctx) {
   /* Remove all billboard instances from the scene. */
-  if (ctx) ctx->bill_count = 0;
+  if (ctx) ctx->sprite_3d_count = 0;
 }
 
-void sf_draw_bill(sf_ctx_t *ctx, sf_cam_t *cam, sf_bill_t *bill, float anim_time) {
+void sf_draw_sprite_3d(sf_ctx_t *ctx, sf_cam_t *cam, sf_sprite_3d_t *bill, float anim_time) {
   /* Billboard a sprite instance with per-instance scale, opacity, and screen-space rotation. */
   if (!bill || !bill->sprite || bill->sprite->frame_count == 0) return;
   int frame_idx = bill->sprite->frame_duration > 0.f
       ? (int)(anim_time / bill->sprite->frame_duration) % bill->sprite->frame_count : 0;
   sf_tex_t *tex = bill->sprite->frames[frame_idx];
   if (!tex) return;
-  sf_fvec3_t v_view = sf_fmat4_mul_vec3(cam->V, bill->pos);
+
+  /* apply parent frame transform if set */
+  sf_fvec3_t world_pos = bill->pos;
+  sf_fvec3_t world_normal = bill->normal;
+  if (bill->frame) {
+    sf_fmat4_t gM = bill->frame->global_M;
+    world_pos = sf_fmat4_mul_vec3(gM, bill->pos);
+    world_normal.x = bill->normal.x*gM.m[0][0] + bill->normal.y*gM.m[1][0] + bill->normal.z*gM.m[2][0];
+    world_normal.y = bill->normal.x*gM.m[0][1] + bill->normal.y*gM.m[1][1] + bill->normal.z*gM.m[2][1];
+    world_normal.z = bill->normal.x*gM.m[0][2] + bill->normal.y*gM.m[1][2] + bill->normal.z*gM.m[2][2];
+  }
+
+  sf_fvec3_t v_view = sf_fmat4_mul_vec3(cam->V, world_pos);
   if (v_view.z >= -cam->near_plane) return;
 
   /* 3D-oriented quad mode when normal is non-zero */
-  float nl2 = bill->normal.x*bill->normal.x + bill->normal.y*bill->normal.y + bill->normal.z*bill->normal.z;
+  float nl2 = world_normal.x*world_normal.x + world_normal.y*world_normal.y + world_normal.z*world_normal.z;
   if (nl2 > 0.001f) {
     float inv_nl = 1.f / sqrtf(nl2);
-    sf_fvec3_t N = {bill->normal.x*inv_nl, bill->normal.y*inv_nl, bill->normal.z*inv_nl};
+    sf_fvec3_t N = {world_normal.x*inv_nl, world_normal.y*inv_nl, world_normal.z*inv_nl};
     sf_fvec3_t up_ref = {0.f, 1.f, 0.f};
     if (fabsf(N.y) > 0.98f) up_ref = (sf_fvec3_t){1.f, 0.f, 0.f};
     sf_fvec3_t T = sf_fvec3_norm(sf_fvec3_cross(up_ref, N));
     sf_fvec3_t B3 = sf_fvec3_cross(N, T);
     float hs = bill->sprite->base_scale * bill->scale * 0.5f;
     sf_fvec3_t corners[4] = {
-      {bill->pos.x+(-T.x-B3.x)*hs, bill->pos.y+(-T.y-B3.y)*hs, bill->pos.z+(-T.z-B3.z)*hs},
-      {bill->pos.x+( T.x-B3.x)*hs, bill->pos.y+( T.y-B3.y)*hs, bill->pos.z+( T.z-B3.z)*hs},
-      {bill->pos.x+( T.x+B3.x)*hs, bill->pos.y+( T.y+B3.y)*hs, bill->pos.z+( T.z+B3.z)*hs},
-      {bill->pos.x+(-T.x+B3.x)*hs, bill->pos.y+(-T.y+B3.y)*hs, bill->pos.z+(-T.z+B3.z)*hs},
+      {world_pos.x+(-T.x-B3.x)*hs, world_pos.y+(-T.y-B3.y)*hs, world_pos.z+(-T.z-B3.z)*hs},
+      {world_pos.x+( T.x-B3.x)*hs, world_pos.y+( T.y-B3.y)*hs, world_pos.z+( T.z-B3.z)*hs},
+      {world_pos.x+( T.x+B3.x)*hs, world_pos.y+( T.y+B3.y)*hs, world_pos.z+( T.z+B3.z)*hs},
+      {world_pos.x+(-T.x+B3.x)*hs, world_pos.y+(-T.y+B3.y)*hs, world_pos.z+(-T.z+B3.z)*hs},
     };
     float uvals[4][2] = {{0.f,0.f},{0.999f,0.f},{0.999f,0.999f},{0.f,0.999f}};
     sf_fvec3_t vv[4], uvz[4], sv[4];
@@ -3386,9 +3437,9 @@ void sf_draw_bill(sf_ctx_t *ctx, sf_cam_t *cam, sf_bill_t *bill, float anim_time
       uvz[i] = (sf_fvec3_t){uvals[i][0]*iz, uvals[i][1]*iz, iz};
       sv[i] = _sf_project_vertex(ctx, cam, vv[i], cam->P);
     }
-    sf_fvec3_t l_int = {bill->opacity, bill->opacity, bill->opacity};
-    sf_tri_tex(ctx, cam, tex, sv[0], sv[1], sv[2], uvz[0], uvz[1], uvz[2], l_int);
-    sf_tri_tex(ctx, cam, tex, sv[0], sv[2], sv[3], uvz[0], uvz[2], uvz[3], l_int);
+    sf_fvec3_t l_int = {1.f, 1.f, 1.f};
+    sf_tri_tex(ctx, cam, tex, sv[0], sv[1], sv[2], uvz[0], uvz[1], uvz[2], l_int, bill->opacity);
+    sf_tri_tex(ctx, cam, tex, sv[0], sv[2], sv[3], uvz[0], uvz[2], uvz[3], l_int, bill->opacity);
     return;
   }
 
@@ -3584,6 +3635,17 @@ void sf_ui_render(sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_t *ui) {
   }
 }
 
+void sf_ui_render_popups(sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_t *ui) {
+  /* Re-draw only open dropdown popups — call after any custom blitting to keep them on top. */
+  if (!ui) return;
+  for (int i = 0; i < ui->count; ++i) {
+    sf_ui_lmn_t *el = &ui->elements[i];
+    if (!_sf_ui_eff_visible(el)) continue;
+    if (el->type == SF_UI_DROPDOWN && el->dropdown.is_open)
+      _sf_draw_drpdwn_popup(ctx, cam, el);
+  }
+}
+
 void sf_ui_update(sf_ctx_t *ctx, sf_ui_t *ui) {
   /* Process mouse hover/click input for every UI element and fire their callbacks. */
   if (!ui) return;
@@ -3594,6 +3656,18 @@ void sf_ui_update(sf_ctx_t *ctx, sf_ui_t *ui) {
   bool m_pressed = m_down && !ctx->input.mouse_btns_prev[SF_MOUSE_LEFT];
   bool m_released = !m_down && ctx->input.mouse_btns_prev[SF_MOUSE_LEFT];
 
+  /* Check if an open dropdown popup area is consuming this click */
+  bool click_blocked = false;
+  for (int i = 0; i < ui->count; ++i) {
+    sf_ui_lmn_t *el = &ui->elements[i];
+    if (el->type != SF_UI_DROPDOWN || !el->dropdown.is_open) continue;
+    int h = el->v1.y - el->v0.y, w = el->v1.x - el->v0.x;
+    int py0 = el->v1.y, py1 = el->v1.y + el->dropdown.n_items * h;
+    if (mx >= el->v0.x && mx <= el->v0.x + w && my >= py0 && my <= py1) {
+      click_blocked = true; break;
+    }
+  }
+
   for (int i = 0; i < ui->count; ++i) {
     sf_ui_lmn_t *el = &ui->elements[i];
 
@@ -3603,21 +3677,24 @@ void sf_ui_update(sf_ctx_t *ctx, sf_ui_t *ui) {
       continue;
     }
 
-    el->is_hovered = (mx >= el->v0.x && mx <= el->v1.x && 
+    el->is_hovered = (mx >= el->v0.x && mx <= el->v1.x &&
                       my >= el->v0.y && my <= el->v1.y);
 
-    if (el->is_hovered && m_pressed) {
+    bool eff_pressed  = m_pressed  && (el->type == SF_UI_DROPDOWN || !click_blocked);
+    bool eff_released = m_released && (el->type == SF_UI_DROPDOWN || !click_blocked);
+
+    if (el->is_hovered && eff_pressed) {
       el->is_pressed = true;
     }
 
     switch (el->type) {
-      case SF_UI_BUTTON:      _sf_update_button(ctx, el, m_down, m_pressed, m_released);   break;
-      case SF_UI_CHECKBOX:    _sf_update_checkbox(ctx, el, m_down, m_pressed, m_released); break;
-      case SF_UI_SLIDER:      _sf_update_slider(ctx, el, m_down, m_pressed, m_released);   break;
-      case SF_UI_TEXT_INPUT:  _sf_update_text_input(ctx, el, m_pressed);                   break;
-      case SF_UI_DRAG_FLOAT:  _sf_update_drag_float(ctx, el, m_down, m_pressed);           break;
-      case SF_UI_DROPDOWN:    _sf_update_dropdown(ctx, el, m_pressed);                     break;
-      case SF_UI_PANEL:       _sf_update_panel(ctx, el, m_pressed);                        break;
+      case SF_UI_BUTTON:      _sf_update_button(ctx, el, m_down, eff_pressed, eff_released);   break;
+      case SF_UI_CHECKBOX:    _sf_update_checkbox(ctx, el, m_down, eff_pressed, eff_released); break;
+      case SF_UI_SLIDER:      _sf_update_slider(ctx, el, m_down, eff_pressed, eff_released);   break;
+      case SF_UI_TEXT_INPUT:  _sf_update_text_input(ctx, el, eff_pressed);                     break;
+      case SF_UI_DRAG_FLOAT:  _sf_update_drag_float(ctx, el, m_down, eff_pressed);             break;
+      case SF_UI_DROPDOWN:    _sf_update_dropdown(ctx, el, m_pressed);                         break;
+      case SF_UI_PANEL:       _sf_update_panel(ctx, el, eff_pressed);                          break;
       case SF_UI_LABEL:       break;
     }
 
@@ -4912,6 +4989,9 @@ bool _sf_resolve_asset(const char* filename, char* out_path, size_t max_len) {
   char dir_stack[32][512];
   int stack_head = 0;
   snprintf(dir_stack[stack_head++], 512, "%s", SF_ASSET_PATH);
+#ifdef SF_SRC_ASSET_PATH
+  if (stack_head < 32) snprintf(dir_stack[stack_head++], 512, "%s", SF_SRC_ASSET_PATH);
+#endif
   while (stack_head > 0) {
     char current_dir[512];
     snprintf(current_dir, sizeof(current_dir), "%s", dir_stack[--stack_head]);

@@ -123,13 +123,14 @@
 | `sf_draw_debug_cams` | Drawing |
 | `sf_draw_debug_perf` | Drawing |
 | `sf_draw_sprite` | Drawing |
-| `sf_draw_bill` | Drawing |
-| `sf_add_bill` | Drawing |
-| `sf_clear_bills` | Drawing |
-| `_sf_sff_prse_bill` | Drawing |
+| `sf_draw_sprite_3d` | Drawing |
+| `sf_add_sprite_3d` | Drawing |
+| `sf_clear_sprite_3ds` | Drawing |
+| `_sf_sff_prse_sprite_3d` | Drawing |
 | `sf_ui_create` | UI |
 | `sf_ui_update` | UI |
 | `sf_ui_render` | UI |
+| `sf_ui_render_popups` | UI |
 | `sf_ui_clear` | UI |
 | `sf_ui_get_by_name` | UI |
 | `sf_ui_set_callback` | UI |
@@ -233,7 +234,7 @@
 | `SF_MAX_SKYBOXES` | `4` |
 | `SF_SKYBOX_SPAN` | `128` |
 | `SF_MAX_SPRITE_FRAMES` | `16` |
-| `SF_MAX_BILLS` | `8192` |
+| `SF_MAX_SPRITE_3DS` | `8192` |
 | `SF_PERF_HIST_SIZE` | `64` |
 | `SF_PI` | `3.14159265359f` |
 | `SF_NANOS_PER_SEC` | `1000000000ULL` |
@@ -328,7 +329,7 @@
 
 **`sf_sprite_t`** — fields: `id`, `name`, `SF_MAX_SPRITE_FRAMES`, `frame_count`, `frame_duration`, `base_scale`, `opacity`, `opacity`
 
-**`sf_bill_t`** — fields: `name`, `sprite`, `pos`, `scale`, `opacity`, `angle`, `rotation`, `normal`, `billboard`, `quad`
+**`sf_sprite_3d_t`** — fields: `name`, `sprite`, `pos`, `scale`, `opacity`, `angle`, `rotation`, `normal`, `billboard`, `frame`, `frame`, `pos`
 
 **`sf_skybox_t`** — fields: `id`, `name`, `tex`
 
@@ -958,7 +959,7 @@ void sf_tri (sf_ctx_t *ctx, sf_cam_t *cam, sf_pkd_clr_t c, sf_fvec3_t v0, sf_fve
 ### `sf_tri_tex`
 
 ```c
-void sf_tri_tex (sf_ctx_t *ctx, sf_cam_t *cam, sf_tex_t *tex, sf_fvec3_t v0, sf_fvec3_t v1, sf_fvec3_t v2, sf_fvec3_t uvz0, sf_fvec3_t uvz1, sf_fvec3_t uvz2, sf_fvec3_t l_int);
+void sf_tri_tex (sf_ctx_t *ctx, sf_cam_t *cam, sf_tex_t *tex, sf_fvec3_t v0, sf_fvec3_t v1, sf_fvec3_t v2, sf_fvec3_t uvz0, sf_fvec3_t uvz1, sf_fvec3_t uvz2, sf_fvec3_t l_int, float opacity);
 ```
 
 ### `sf_put_text`
@@ -1035,30 +1036,30 @@ Billboard a sprite frame at a world position with depth testing and alpha blendi
 void sf_draw_sprite (sf_ctx_t *ctx, sf_cam_t *cam, sf_sprite_t *spr, sf_fvec3_t pos_w, float anim_time, float scale_mult);
 ```
 
-### `sf_draw_bill`
+### `sf_draw_sprite_3d`
 
 ```c
-void sf_draw_bill (sf_ctx_t *ctx, sf_cam_t *cam, sf_bill_t *bill, float anim_time);
+void sf_draw_sprite_3d (sf_ctx_t *ctx, sf_cam_t *cam, sf_sprite_3d_t *bill, float anim_time);
 ```
 
-### `sf_add_bill`
+### `sf_add_sprite_3d`
 
 ```c
-sf_bill_t* sf_add_bill (sf_ctx_t *ctx, sf_sprite_t *spr, const char *name, sf_fvec3_t pos, float scale, float opacity, float angle);
+sf_sprite_3d_t* sf_add_sprite_3d (sf_ctx_t *ctx, sf_sprite_t *spr, const char *name, sf_fvec3_t pos, float scale, float opacity, float angle);
 ```
 
-### `sf_clear_bills`
+### `sf_clear_sprite_3ds`
 
 Remove all billboard instances from the scene.
 
 ```c
-void sf_clear_bills (sf_ctx_t *ctx);
+void sf_clear_sprite_3ds (sf_ctx_t *ctx);
 ```
 
-### `_sf_sff_prse_bill`
+### `_sf_sff_prse_sprite_3d`
 
 ```c
-void _sf_sff_prse_bill (sf_ctx_t *ctx, FILE *f, const char *name, int *bill_count);
+void _sf_sff_prse_sprite_3d (sf_ctx_t *ctx, FILE *f, const char *name, int *sprite_3d_count);
 ```
 
 
@@ -1080,6 +1081,12 @@ void sf_ui_update (sf_ctx_t *ctx, sf_ui_t *ui);
 
 ```c
 void sf_ui_render (sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_t *ui);
+```
+
+### `sf_ui_render_popups`
+
+```c
+void sf_ui_render_popups (sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_t *ui);
 ```
 
 ### `sf_ui_clear`
