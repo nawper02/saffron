@@ -1,0 +1,3261 @@
+# Saffron Tree Model
+
+mesh ctree "tree_out.obj"
+
+texture Tile_08-128x128 "Tile_08-128x128.bmp"
+texture Leaf "Leaf.bmp"
+
+sprite spr_Leaf {
+    duration = 1.00
+    scale    = 0.700
+    frames   = [Leaf]
+}
+
+entity ctree_enti {
+    mesh=ctree
+    pos=(0.000,0.000,0.000)
+    rot=(0.000,0.000,0.000)
+    scale=(1.000,1.000,1.000)
+    texture=Tile_08-128x128
+}
+
+billboard lf_0 {
+    sprite=spr_Leaf
+    pos=(-0.9901,6.0527,1.1486)
+    scale=0.8941
+    opacity=0.8500
+    angle=2.5865
+    normal=(0.4366,0.8642,-0.2500)
+    frame=ctree_enti
+}
+
+billboard lf_1 {
+    sprite=spr_Leaf
+    pos=(-1.0511,5.8617,1.1665)
+    scale=0.9822
+    opacity=0.8500
+    angle=5.6268
+    normal=(-0.8771,0.0711,0.4749)
+    frame=ctree_enti
+}
+
+billboard lf_2 {
+    sprite=spr_Leaf
+    pos=(-1.5480,5.9584,0.8393)
+    scale=0.8549
+    opacity=0.8500
+    angle=0.2638
+    normal=(0.5846,-0.1916,-0.7884)
+    frame=ctree_enti
+}
+
+billboard lf_3 {
+    sprite=spr_Leaf
+    pos=(-1.6212,5.9254,0.5717)
+    scale=0.9711
+    opacity=0.8500
+    angle=1.1238
+    normal=(-0.2687,0.9310,0.2471)
+    frame=ctree_enti
+}
+
+billboard lf_4 {
+    sprite=spr_Leaf
+    pos=(-1.9300,5.7377,0.8882)
+    scale=0.8031
+    opacity=0.8500
+    angle=3.3158
+    normal=(0.0269,-0.8663,0.4988)
+    frame=ctree_enti
+}
+
+billboard lf_5 {
+    sprite=spr_Leaf
+    pos=(-1.4820,5.6461,1.1379)
+    scale=0.9295
+    opacity=0.8500
+    angle=2.4018
+    normal=(0.1533,-0.7170,-0.6800)
+    frame=ctree_enti
+}
+
+billboard lf_6 {
+    sprite=spr_Leaf
+    pos=(-2.4178,5.7856,0.7905)
+    scale=0.8872
+    opacity=0.8500
+    angle=3.5152
+    normal=(-0.7387,-0.5156,-0.4341)
+    frame=ctree_enti
+}
+
+billboard lf_7 {
+    sprite=spr_Leaf
+    pos=(-1.5412,5.7134,1.2887)
+    scale=0.7404
+    opacity=0.8500
+    angle=0.9660
+    normal=(-0.1983,-0.6581,0.7264)
+    frame=ctree_enti
+}
+
+billboard lf_8 {
+    sprite=spr_Leaf
+    pos=(-0.8891,5.6413,1.2215)
+    scale=0.9063
+    opacity=0.8500
+    angle=5.1612
+    normal=(-0.0386,-0.6933,-0.7196)
+    frame=ctree_enti
+}
+
+billboard lf_9 {
+    sprite=spr_Leaf
+    pos=(-1.2259,5.7479,0.9580)
+    scale=0.8741
+    opacity=0.8500
+    angle=2.7334
+    normal=(0.0343,-0.5814,-0.8129)
+    frame=ctree_enti
+}
+
+billboard lf_10 {
+    sprite=spr_Leaf
+    pos=(-0.9156,5.7702,1.2898)
+    scale=0.7195
+    opacity=0.8500
+    angle=2.5800
+    normal=(0.4109,0.1033,0.9058)
+    frame=ctree_enti
+}
+
+billboard lf_11 {
+    sprite=spr_Leaf
+    pos=(-1.1621,5.8673,1.4254)
+    scale=0.7462
+    opacity=0.8500
+    angle=3.5710
+    normal=(-0.5963,0.5667,0.5685)
+    frame=ctree_enti
+}
+
+billboard lf_12 {
+    sprite=spr_Leaf
+    pos=(-1.2895,5.8961,-0.4018)
+    scale=0.8071
+    opacity=0.8500
+    angle=0.1631
+    normal=(-0.4224,0.7886,-0.4469)
+    frame=ctree_enti
+}
+
+billboard lf_13 {
+    sprite=spr_Leaf
+    pos=(-1.4098,5.8594,-0.4574)
+    scale=0.7783
+    opacity=0.8500
+    angle=3.6949
+    normal=(0.1444,-0.7702,0.6213)
+    frame=ctree_enti
+}
+
+billboard lf_14 {
+    sprite=spr_Leaf
+    pos=(-1.7183,5.6194,-0.3188)
+    scale=0.8630
+    opacity=0.8500
+    angle=5.5774
+    normal=(-0.7230,-0.5912,-0.3575)
+    frame=ctree_enti
+}
+
+billboard lf_15 {
+    sprite=spr_Leaf
+    pos=(-1.2617,5.6569,-0.3652)
+    scale=0.8691
+    opacity=0.8500
+    angle=2.4008
+    normal=(0.4724,-0.6389,0.6071)
+    frame=ctree_enti
+}
+
+billboard lf_16 {
+    sprite=spr_Leaf
+    pos=(-0.7946,5.9867,-0.6016)
+    scale=0.9655
+    opacity=0.8500
+    angle=1.9514
+    normal=(0.3138,-0.8455,-0.4320)
+    frame=ctree_enti
+}
+
+billboard lf_17 {
+    sprite=spr_Leaf
+    pos=(-0.8640,5.8435,-0.0775)
+    scale=0.8395
+    opacity=0.8500
+    angle=2.9408
+    normal=(-0.4693,-0.6769,0.5671)
+    frame=ctree_enti
+}
+
+billboard lf_18 {
+    sprite=spr_Leaf
+    pos=(-0.8096,5.8095,-0.4604)
+    scale=0.7085
+    opacity=0.8500
+    angle=4.7149
+    normal=(-0.6814,-0.6172,0.3934)
+    frame=ctree_enti
+}
+
+billboard lf_19 {
+    sprite=spr_Leaf
+    pos=(-1.1667,5.9962,-0.0777)
+    scale=0.8518
+    opacity=0.8500
+    angle=1.8969
+    normal=(-0.0920,0.8091,0.5804)
+    frame=ctree_enti
+}
+
+billboard lf_20 {
+    sprite=spr_Leaf
+    pos=(-1.5819,5.4867,-0.7340)
+    scale=0.9522
+    opacity=0.8500
+    angle=1.3891
+    normal=(-0.3339,-0.8821,0.3323)
+    frame=ctree_enti
+}
+
+billboard lf_21 {
+    sprite=spr_Leaf
+    pos=(-1.7068,5.6915,-0.8572)
+    scale=0.7834
+    opacity=0.8500
+    angle=4.4532
+    normal=(0.3476,-0.8016,-0.4864)
+    frame=ctree_enti
+}
+
+billboard lf_22 {
+    sprite=spr_Leaf
+    pos=(-1.5964,5.6789,-0.0759)
+    scale=0.8087
+    opacity=0.8500
+    angle=5.8906
+    normal=(-0.5215,-0.1601,0.8381)
+    frame=ctree_enti
+}
+
+billboard lf_23 {
+    sprite=spr_Leaf
+    pos=(-1.1867,5.5797,-0.1762)
+    scale=0.7191
+    opacity=0.8500
+    angle=2.8261
+    normal=(-0.0267,-0.8018,0.5969)
+    frame=ctree_enti
+}
+
+billboard lf_24 {
+    sprite=spr_Leaf
+    pos=(-1.6501,5.0227,0.2594)
+    scale=0.7302
+    opacity=0.8500
+    angle=3.9675
+    normal=(-0.0125,-0.9124,-0.4091)
+    frame=ctree_enti
+}
+
+billboard lf_25 {
+    sprite=spr_Leaf
+    pos=(-2.1073,4.9902,0.3834)
+    scale=0.8334
+    opacity=0.8500
+    angle=2.6219
+    normal=(0.3556,-0.7175,-0.5989)
+    frame=ctree_enti
+}
+
+billboard lf_26 {
+    sprite=spr_Leaf
+    pos=(-1.8360,4.9639,-0.0061)
+    scale=0.9914
+    opacity=0.8500
+    angle=0.4793
+    normal=(-0.4726,0.6611,-0.5827)
+    frame=ctree_enti
+}
+
+billboard lf_27 {
+    sprite=spr_Leaf
+    pos=(-1.5866,5.1259,-0.1334)
+    scale=0.9316
+    opacity=0.8500
+    angle=1.1088
+    normal=(0.7965,-0.4343,0.4206)
+    frame=ctree_enti
+}
+
+billboard lf_28 {
+    sprite=spr_Leaf
+    pos=(-2.1266,5.2892,1.0825)
+    scale=0.9596
+    opacity=0.8500
+    angle=2.4202
+    normal=(0.5809,0.0472,0.8126)
+    frame=ctree_enti
+}
+
+billboard lf_29 {
+    sprite=spr_Leaf
+    pos=(-2.4056,5.0690,1.1388)
+    scale=0.8025
+    opacity=0.8500
+    angle=3.6015
+    normal=(0.5790,-0.7576,0.3015)
+    frame=ctree_enti
+}
+
+billboard lf_30 {
+    sprite=spr_Leaf
+    pos=(-1.6405,5.2771,1.0859)
+    scale=0.9105
+    opacity=0.8500
+    angle=1.0353
+    normal=(0.4309,0.2497,-0.8672)
+    frame=ctree_enti
+}
+
+billboard lf_31 {
+    sprite=spr_Leaf
+    pos=(-2.2350,5.1010,0.8758)
+    scale=0.7857
+    opacity=0.8500
+    angle=3.1194
+    normal=(0.5650,-0.3080,0.7654)
+    frame=ctree_enti
+}
+
+billboard lf_32 {
+    sprite=spr_Leaf
+    pos=(-1.5290,5.3896,0.5638)
+    scale=0.9134
+    opacity=0.8500
+    angle=3.6878
+    normal=(-0.1004,-0.4440,-0.8904)
+    frame=ctree_enti
+}
+
+billboard lf_33 {
+    sprite=spr_Leaf
+    pos=(-1.8305,5.4272,0.5973)
+    scale=0.9936
+    opacity=0.8500
+    angle=5.0930
+    normal=(-0.6293,0.5010,0.5942)
+    frame=ctree_enti
+}
+
+billboard lf_34 {
+    sprite=spr_Leaf
+    pos=(-2.0307,5.4683,0.3133)
+    scale=0.9532
+    opacity=0.8500
+    angle=1.9280
+    normal=(-0.7717,-0.1275,0.6230)
+    frame=ctree_enti
+}
+
+billboard lf_35 {
+    sprite=spr_Leaf
+    pos=(-1.8892,5.4066,0.0731)
+    scale=0.7460
+    opacity=0.8500
+    angle=4.7803
+    normal=(0.8976,-0.2163,0.3841)
+    frame=ctree_enti
+}
+
+billboard lf_36 {
+    sprite=spr_Leaf
+    pos=(-2.2865,3.9239,2.5683)
+    scale=0.9726
+    opacity=0.8500
+    angle=0.9676
+    normal=(0.4293,-0.6556,0.6212)
+    frame=ctree_enti
+}
+
+billboard lf_37 {
+    sprite=spr_Leaf
+    pos=(-2.8884,4.3620,2.1736)
+    scale=0.7105
+    opacity=0.8500
+    angle=5.3326
+    normal=(-0.8506,0.4341,-0.2968)
+    frame=ctree_enti
+}
+
+billboard lf_38 {
+    sprite=spr_Leaf
+    pos=(-2.8270,4.3705,2.5309)
+    scale=0.8755
+    opacity=0.8500
+    angle=1.1859
+    normal=(0.9977,0.0654,0.0151)
+    frame=ctree_enti
+}
+
+billboard lf_39 {
+    sprite=spr_Leaf
+    pos=(-2.3896,4.0429,2.4339)
+    scale=0.7723
+    opacity=0.8500
+    angle=0.5919
+    normal=(0.3117,-0.8330,0.4571)
+    frame=ctree_enti
+}
+
+billboard lf_40 {
+    sprite=spr_Leaf
+    pos=(-2.1958,4.7409,1.8698)
+    scale=0.8484
+    opacity=0.8500
+    angle=1.0687
+    normal=(-0.4613,0.3802,0.8017)
+    frame=ctree_enti
+}
+
+billboard lf_41 {
+    sprite=spr_Leaf
+    pos=(-2.9381,4.9228,1.4968)
+    scale=0.7626
+    opacity=0.8500
+    angle=3.6713
+    normal=(-0.7418,-0.4981,0.4490)
+    frame=ctree_enti
+}
+
+billboard lf_42 {
+    sprite=spr_Leaf
+    pos=(-2.3672,4.6237,1.9968)
+    scale=0.8718
+    opacity=0.8500
+    angle=0.9105
+    normal=(0.1959,-0.3204,0.9268)
+    frame=ctree_enti
+}
+
+billboard lf_43 {
+    sprite=spr_Leaf
+    pos=(-2.2112,4.5979,2.0133)
+    scale=0.7517
+    opacity=0.8500
+    angle=1.1294
+    normal=(-0.0429,-0.1726,0.9840)
+    frame=ctree_enti
+}
+
+billboard lf_44 {
+    sprite=spr_Leaf
+    pos=(-2.5980,4.3156,1.9688)
+    scale=0.8800
+    opacity=0.8500
+    angle=5.7331
+    normal=(0.1961,0.7320,0.6525)
+    frame=ctree_enti
+}
+
+billboard lf_45 {
+    sprite=spr_Leaf
+    pos=(-2.2005,4.1092,1.3464)
+    scale=0.7423
+    opacity=0.8500
+    angle=2.1567
+    normal=(0.6031,0.5590,0.5691)
+    frame=ctree_enti
+}
+
+billboard lf_46 {
+    sprite=spr_Leaf
+    pos=(-2.2657,4.3769,1.6978)
+    scale=0.7819
+    opacity=0.8500
+    angle=2.6058
+    normal=(-0.2035,-0.9313,0.3022)
+    frame=ctree_enti
+}
+
+billboard lf_47 {
+    sprite=spr_Leaf
+    pos=(-2.0231,4.1737,1.0860)
+    scale=0.8188
+    opacity=0.8500
+    angle=0.8955
+    normal=(-0.3091,0.8374,0.4508)
+    frame=ctree_enti
+}
+
+billboard lf_48 {
+    sprite=spr_Leaf
+    pos=(-0.4972,4.3459,3.0505)
+    scale=0.9844
+    opacity=0.8500
+    angle=1.3298
+    normal=(-0.5252,-0.6549,-0.5433)
+    frame=ctree_enti
+}
+
+billboard lf_49 {
+    sprite=spr_Leaf
+    pos=(-0.5878,4.2649,2.3485)
+    scale=0.8350
+    opacity=0.8500
+    angle=2.1294
+    normal=(-0.6191,0.6104,0.4941)
+    frame=ctree_enti
+}
+
+billboard lf_50 {
+    sprite=spr_Leaf
+    pos=(-1.3946,4.4625,3.1131)
+    scale=0.9023
+    opacity=0.8500
+    angle=4.3318
+    normal=(-0.3579,0.1999,0.9121)
+    frame=ctree_enti
+}
+
+billboard lf_51 {
+    sprite=spr_Leaf
+    pos=(-0.4348,4.4606,3.2290)
+    scale=0.9359
+    opacity=0.8500
+    angle=1.8022
+    normal=(-0.3697,0.8855,0.2813)
+    frame=ctree_enti
+}
+
+billboard lf_52 {
+    sprite=spr_Leaf
+    pos=(-2.0312,4.7632,2.4541)
+    scale=0.8868
+    opacity=0.8500
+    angle=4.3241
+    normal=(-0.1359,-0.9358,-0.3252)
+    frame=ctree_enti
+}
+
+billboard lf_53 {
+    sprite=spr_Leaf
+    pos=(-1.3224,4.6419,3.0366)
+    scale=0.7211
+    opacity=0.8500
+    angle=3.6603
+    normal=(0.8204,0.3620,0.4426)
+    frame=ctree_enti
+}
+
+billboard lf_54 {
+    sprite=spr_Leaf
+    pos=(-1.3437,4.5361,2.6998)
+    scale=0.8825
+    opacity=0.8500
+    angle=4.5432
+    normal=(-0.5107,0.8539,0.1001)
+    frame=ctree_enti
+}
+
+billboard lf_55 {
+    sprite=spr_Leaf
+    pos=(-1.6660,4.6865,2.9985)
+    scale=0.9229
+    opacity=0.8500
+    angle=1.7701
+    normal=(-0.7596,-0.4017,0.5116)
+    frame=ctree_enti
+}
+
+billboard lf_56 {
+    sprite=spr_Leaf
+    pos=(-1.8402,4.1278,2.4227)
+    scale=0.9642
+    opacity=0.8500
+    angle=2.2721
+    normal=(-0.6584,0.7516,0.0406)
+    frame=ctree_enti
+}
+
+billboard lf_57 {
+    sprite=spr_Leaf
+    pos=(-1.7681,3.9820,2.5365)
+    scale=0.8624
+    opacity=0.8500
+    angle=4.2401
+    normal=(0.0200,0.8655,0.5005)
+    frame=ctree_enti
+}
+
+billboard lf_58 {
+    sprite=spr_Leaf
+    pos=(-1.7513,3.8499,3.2333)
+    scale=0.7335
+    opacity=0.8500
+    angle=4.6702
+    normal=(0.5490,-0.7706,0.3236)
+    frame=ctree_enti
+}
+
+billboard lf_59 {
+    sprite=spr_Leaf
+    pos=(-1.9117,3.7813,2.4104)
+    scale=0.8929
+    opacity=0.8500
+    angle=4.0556
+    normal=(0.8440,-0.5233,0.1179)
+    frame=ctree_enti
+}
+
+billboard lf_60 {
+    sprite=spr_Leaf
+    pos=(-2.0192,5.5213,1.7288)
+    scale=0.9126
+    opacity=0.8500
+    angle=6.2553
+    normal=(0.6086,-0.6954,-0.3821)
+    frame=ctree_enti
+}
+
+billboard lf_61 {
+    sprite=spr_Leaf
+    pos=(-1.8261,5.6242,2.1876)
+    scale=0.8888
+    opacity=0.8500
+    angle=1.8809
+    normal=(0.7450,-0.2239,-0.6283)
+    frame=ctree_enti
+}
+
+billboard lf_62 {
+    sprite=spr_Leaf
+    pos=(-2.0453,5.2647,1.7188)
+    scale=0.8564
+    opacity=0.8500
+    angle=4.1061
+    normal=(0.3003,-0.7933,0.5296)
+    frame=ctree_enti
+}
+
+billboard lf_63 {
+    sprite=spr_Leaf
+    pos=(-2.1300,5.5830,1.6620)
+    scale=0.7245
+    opacity=0.8500
+    angle=3.9023
+    normal=(0.3615,0.8307,0.4234)
+    frame=ctree_enti
+}
+
+billboard lf_64 {
+    sprite=spr_Leaf
+    pos=(-1.7052,5.2533,2.3296)
+    scale=0.7944
+    opacity=0.8500
+    angle=3.0801
+    normal=(-0.2204,-0.6370,0.7387)
+    frame=ctree_enti
+}
+
+billboard lf_65 {
+    sprite=spr_Leaf
+    pos=(-1.7420,5.1712,1.9263)
+    scale=0.7176
+    opacity=0.8500
+    angle=4.9120
+    normal=(-0.1503,-0.7848,0.6012)
+    frame=ctree_enti
+}
+
+billboard lf_66 {
+    sprite=spr_Leaf
+    pos=(-2.0487,4.8844,2.2746)
+    scale=0.8599
+    opacity=0.8500
+    angle=4.3761
+    normal=(0.2217,0.2911,-0.9306)
+    frame=ctree_enti
+}
+
+billboard lf_67 {
+    sprite=spr_Leaf
+    pos=(-2.4713,4.8862,2.5664)
+    scale=0.9849
+    opacity=0.8500
+    angle=5.7671
+    normal=(-0.4852,0.6587,0.5751)
+    frame=ctree_enti
+}
+
+billboard lf_68 {
+    sprite=spr_Leaf
+    pos=(-1.9039,5.4975,2.3390)
+    scale=0.9922
+    opacity=0.8500
+    angle=1.3640
+    normal=(-0.5132,-0.8518,-0.1053)
+    frame=ctree_enti
+}
+
+billboard lf_69 {
+    sprite=spr_Leaf
+    pos=(-1.2719,5.3915,1.9327)
+    scale=0.8408
+    opacity=0.8500
+    angle=2.9230
+    normal=(-0.3062,-0.5904,-0.7468)
+    frame=ctree_enti
+}
+
+billboard lf_70 {
+    sprite=spr_Leaf
+    pos=(-2.0739,5.6926,2.3101)
+    scale=0.7852
+    opacity=0.8500
+    angle=5.8296
+    normal=(-0.3544,0.9348,0.0219)
+    frame=ctree_enti
+}
+
+billboard lf_71 {
+    sprite=spr_Leaf
+    pos=(-2.0279,5.5326,1.6835)
+    scale=0.7835
+    opacity=0.8500
+    angle=2.2134
+    normal=(-0.1188,0.7556,0.6442)
+    frame=ctree_enti
+}
+
+billboard lf_72 {
+    sprite=spr_Leaf
+    pos=(-0.2142,5.8988,2.0398)
+    scale=0.8470
+    opacity=0.8500
+    angle=1.5978
+    normal=(0.8677,0.4950,0.0456)
+    frame=ctree_enti
+}
+
+billboard lf_73 {
+    sprite=spr_Leaf
+    pos=(-0.0302,5.7276,1.8797)
+    scale=0.8611
+    opacity=0.8500
+    angle=1.6355
+    normal=(-0.1877,0.3355,-0.9232)
+    frame=ctree_enti
+}
+
+billboard lf_74 {
+    sprite=spr_Leaf
+    pos=(0.3392,5.8266,2.1308)
+    scale=0.7372
+    opacity=0.8500
+    angle=5.6129
+    normal=(-0.2191,-0.2018,-0.9546)
+    frame=ctree_enti
+}
+
+billboard lf_75 {
+    sprite=spr_Leaf
+    pos=(-0.2307,5.8086,1.5450)
+    scale=0.8796
+    opacity=0.8500
+    angle=4.6882
+    normal=(0.4976,-0.6913,0.5240)
+    frame=ctree_enti
+}
+
+billboard lf_76 {
+    sprite=spr_Leaf
+    pos=(0.4925,6.2275,1.6353)
+    scale=0.7116
+    opacity=0.8500
+    angle=0.8652
+    normal=(0.6466,-0.7605,0.0589)
+    frame=ctree_enti
+}
+
+billboard lf_77 {
+    sprite=spr_Leaf
+    pos=(0.9968,5.9136,1.4912)
+    scale=0.7627
+    opacity=0.8500
+    angle=6.0448
+    normal=(0.7245,0.6141,-0.3130)
+    frame=ctree_enti
+}
+
+billboard lf_78 {
+    sprite=spr_Leaf
+    pos=(0.5303,5.9350,1.8276)
+    scale=0.9548
+    opacity=0.8500
+    angle=3.9623
+    normal=(-0.9604,0.0373,-0.2760)
+    frame=ctree_enti
+}
+
+billboard lf_79 {
+    sprite=spr_Leaf
+    pos=(0.7894,6.2707,1.1954)
+    scale=0.7991
+    opacity=0.8500
+    angle=5.2484
+    normal=(-0.5307,-0.7540,-0.3871)
+    frame=ctree_enti
+}
+
+billboard lf_80 {
+    sprite=spr_Leaf
+    pos=(-0.3114,6.0666,1.9172)
+    scale=0.9879
+    opacity=0.8500
+    angle=4.7134
+    normal=(-0.0514,-0.9557,-0.2900)
+    frame=ctree_enti
+}
+
+billboard lf_81 {
+    sprite=spr_Leaf
+    pos=(0.2754,6.1710,1.5685)
+    scale=0.9578
+    opacity=0.8500
+    angle=3.5785
+    normal=(0.2434,0.7853,-0.5692)
+    frame=ctree_enti
+}
+
+billboard lf_82 {
+    sprite=spr_Leaf
+    pos=(0.2788,6.2935,1.7837)
+    scale=0.7691
+    opacity=0.8500
+    angle=0.1648
+    normal=(-0.2578,-0.5776,0.7745)
+    frame=ctree_enti
+}
+
+billboard lf_83 {
+    sprite=spr_Leaf
+    pos=(0.1473,6.0712,1.8171)
+    scale=0.9852
+    opacity=0.8500
+    angle=1.5954
+    normal=(0.5143,-0.1242,-0.8486)
+    frame=ctree_enti
+}
+
+billboard lf_84 {
+    sprite=spr_Leaf
+    pos=(-0.6025,6.4342,0.7342)
+    scale=0.7504
+    opacity=0.8500
+    angle=2.1720
+    normal=(0.5167,-0.8501,-0.1018)
+    frame=ctree_enti
+}
+
+billboard lf_85 {
+    sprite=spr_Leaf
+    pos=(-0.4842,6.3524,1.4072)
+    scale=0.9277
+    opacity=0.8500
+    angle=1.7145
+    normal=(0.6298,0.7696,-0.1054)
+    frame=ctree_enti
+}
+
+billboard lf_86 {
+    sprite=spr_Leaf
+    pos=(-0.2238,6.2348,1.5235)
+    scale=0.7686
+    opacity=0.8500
+    angle=1.1416
+    normal=(-0.7477,-0.5087,0.4268)
+    frame=ctree_enti
+}
+
+billboard lf_87 {
+    sprite=spr_Leaf
+    pos=(-0.6990,6.3826,0.9934)
+    scale=0.8826
+    opacity=0.8500
+    angle=1.2086
+    normal=(0.1470,0.6927,-0.7061)
+    frame=ctree_enti
+}
+
+billboard lf_88 {
+    sprite=spr_Leaf
+    pos=(-1.0338,6.1547,0.1543)
+    scale=0.9825
+    opacity=0.8500
+    angle=2.0240
+    normal=(-0.6209,-0.5321,0.5756)
+    frame=ctree_enti
+}
+
+billboard lf_89 {
+    sprite=spr_Leaf
+    pos=(-0.9581,6.1390,0.0771)
+    scale=0.9802
+    opacity=0.8500
+    angle=0.9955
+    normal=(-0.1024,0.7721,-0.6272)
+    frame=ctree_enti
+}
+
+billboard lf_90 {
+    sprite=spr_Leaf
+    pos=(-1.0303,6.3761,0.5886)
+    scale=0.7212
+    opacity=0.8500
+    angle=1.0819
+    normal=(0.7727,0.6331,0.0462)
+    frame=ctree_enti
+}
+
+billboard lf_91 {
+    sprite=spr_Leaf
+    pos=(-0.6994,6.1176,0.3571)
+    scale=0.8308
+    opacity=0.8500
+    angle=0.8077
+    normal=(0.5769,0.5260,0.6249)
+    frame=ctree_enti
+}
+
+billboard lf_92 {
+    sprite=spr_Leaf
+    pos=(-0.5510,6.2964,0.9959)
+    scale=0.8291
+    opacity=0.8500
+    angle=3.6644
+    normal=(-0.9213,-0.2520,-0.2962)
+    frame=ctree_enti
+}
+
+billboard lf_93 {
+    sprite=spr_Leaf
+    pos=(-1.1856,6.1928,0.5101)
+    scale=0.9082
+    opacity=0.8500
+    angle=1.3252
+    normal=(-0.9787,0.1852,-0.0887)
+    frame=ctree_enti
+}
+
+billboard lf_94 {
+    sprite=spr_Leaf
+    pos=(-1.1763,6.3343,0.5229)
+    scale=0.8209
+    opacity=0.8500
+    angle=1.1109
+    normal=(-0.1303,0.6159,-0.7770)
+    frame=ctree_enti
+}
+
+billboard lf_95 {
+    sprite=spr_Leaf
+    pos=(-0.6295,6.2933,0.5723)
+    scale=0.8152
+    opacity=0.8500
+    angle=0.0501
+    normal=(-0.1760,0.0133,-0.9843)
+    frame=ctree_enti
+}
+
+billboard lf_96 {
+    sprite=spr_Leaf
+    pos=(-0.4462,5.6619,1.9328)
+    scale=0.8789
+    opacity=0.8500
+    angle=5.0291
+    normal=(-0.8764,0.4740,0.0849)
+    frame=ctree_enti
+}
+
+billboard lf_97 {
+    sprite=spr_Leaf
+    pos=(-0.5474,5.8962,2.3921)
+    scale=0.8203
+    opacity=0.8500
+    angle=4.0767
+    normal=(0.6300,0.7709,0.0936)
+    frame=ctree_enti
+}
+
+billboard lf_98 {
+    sprite=spr_Leaf
+    pos=(-0.8717,5.8371,2.0782)
+    scale=0.7603
+    opacity=0.8500
+    angle=6.1910
+    normal=(-0.5462,0.5287,0.6498)
+    frame=ctree_enti
+}
+
+billboard lf_99 {
+    sprite=spr_Leaf
+    pos=(-0.8014,5.7455,1.7852)
+    scale=0.9239
+    opacity=0.8500
+    angle=0.3400
+    normal=(0.7875,0.5466,0.2848)
+    frame=ctree_enti
+}
+
+billboard lf_100 {
+    sprite=spr_Leaf
+    pos=(-0.0958,5.9687,2.0695)
+    scale=0.7750
+    opacity=0.8500
+    angle=5.3598
+    normal=(-0.4797,0.7524,0.4515)
+    frame=ctree_enti
+}
+
+billboard lf_101 {
+    sprite=spr_Leaf
+    pos=(-0.1461,5.9024,1.8732)
+    scale=0.8364
+    opacity=0.8500
+    angle=5.5308
+    normal=(-0.9018,-0.2674,-0.3395)
+    frame=ctree_enti
+}
+
+billboard lf_102 {
+    sprite=spr_Leaf
+    pos=(-0.2127,6.0950,2.1151)
+    scale=0.8928
+    opacity=0.8500
+    angle=1.8713
+    normal=(0.6419,0.1101,-0.7589)
+    frame=ctree_enti
+}
+
+billboard lf_103 {
+    sprite=spr_Leaf
+    pos=(-0.7398,5.8952,1.7230)
+    scale=0.7955
+    opacity=0.8500
+    angle=0.7479
+    normal=(0.8312,-0.5202,0.1962)
+    frame=ctree_enti
+}
+
+billboard lf_104 {
+    sprite=spr_Leaf
+    pos=(-0.8947,5.9918,1.8568)
+    scale=0.8976
+    opacity=0.8500
+    angle=3.5327
+    normal=(0.4202,-0.8086,0.4118)
+    frame=ctree_enti
+}
+
+billboard lf_105 {
+    sprite=spr_Leaf
+    pos=(-1.0195,5.8195,1.5401)
+    scale=0.8013
+    opacity=0.8500
+    angle=1.8735
+    normal=(-0.4592,0.7827,-0.4202)
+    frame=ctree_enti
+}
+
+billboard lf_106 {
+    sprite=spr_Leaf
+    pos=(-0.6122,6.0313,2.1049)
+    scale=0.9242
+    opacity=0.8500
+    angle=4.5131
+    normal=(-0.4657,-0.8603,0.2073)
+    frame=ctree_enti
+}
+
+billboard lf_107 {
+    sprite=spr_Leaf
+    pos=(-0.4521,6.0188,2.0369)
+    scale=0.7365
+    opacity=0.8500
+    angle=4.1336
+    normal=(0.6215,-0.1304,0.7725)
+    frame=ctree_enti
+}
+
+billboard lf_108 {
+    sprite=spr_Leaf
+    pos=(3.8923,4.1405,-0.6913)
+    scale=0.7580
+    opacity=0.8500
+    angle=0.1661
+    normal=(-0.5908,0.5955,-0.5444)
+    frame=ctree_enti
+}
+
+billboard lf_109 {
+    sprite=spr_Leaf
+    pos=(3.8416,4.0635,-1.5998)
+    scale=0.7822
+    opacity=0.8500
+    angle=2.0199
+    normal=(-0.6075,0.4974,-0.6193)
+    frame=ctree_enti
+}
+
+billboard lf_110 {
+    sprite=spr_Leaf
+    pos=(3.8921,4.0440,-1.3931)
+    scale=0.8674
+    opacity=0.8500
+    angle=5.9904
+    normal=(-0.7769,0.5972,0.1995)
+    frame=ctree_enti
+}
+
+billboard lf_111 {
+    sprite=spr_Leaf
+    pos=(3.5913,4.2071,-1.5165)
+    scale=0.7514
+    opacity=0.8500
+    angle=5.6344
+    normal=(-0.7273,0.4597,0.5096)
+    frame=ctree_enti
+}
+
+billboard lf_112 {
+    sprite=spr_Leaf
+    pos=(4.6759,4.5382,-1.0811)
+    scale=0.9606
+    opacity=0.8500
+    angle=5.6938
+    normal=(0.6092,-0.7902,0.0668)
+    frame=ctree_enti
+}
+
+billboard lf_113 {
+    sprite=spr_Leaf
+    pos=(4.5461,4.7241,-1.0646)
+    scale=0.8521
+    opacity=0.8500
+    angle=2.8882
+    normal=(-0.8347,0.4655,-0.2943)
+    frame=ctree_enti
+}
+
+billboard lf_114 {
+    sprite=spr_Leaf
+    pos=(4.4371,4.7929,-0.8375)
+    scale=0.8440
+    opacity=0.8500
+    angle=1.4257
+    normal=(-0.2113,0.7094,0.6724)
+    frame=ctree_enti
+}
+
+billboard lf_115 {
+    sprite=spr_Leaf
+    pos=(4.4135,4.7250,-0.2971)
+    scale=0.7116
+    opacity=0.8500
+    angle=2.7952
+    normal=(-0.5500,0.7116,-0.4372)
+    frame=ctree_enti
+}
+
+billboard lf_116 {
+    sprite=spr_Leaf
+    pos=(3.5184,3.9737,-0.6955)
+    scale=0.7820
+    opacity=0.8500
+    angle=2.1284
+    normal=(0.8633,0.0674,-0.5001)
+    frame=ctree_enti
+}
+
+billboard lf_117 {
+    sprite=spr_Leaf
+    pos=(3.4880,3.8903,-0.1413)
+    scale=0.7039
+    opacity=0.8500
+    angle=3.1852
+    normal=(-0.9116,-0.2651,0.3142)
+    frame=ctree_enti
+}
+
+billboard lf_118 {
+    sprite=spr_Leaf
+    pos=(4.0072,3.7366,-0.4003)
+    scale=0.9187
+    opacity=0.8500
+    angle=4.9788
+    normal=(-0.6995,-0.1136,0.7055)
+    frame=ctree_enti
+}
+
+billboard lf_119 {
+    sprite=spr_Leaf
+    pos=(3.1896,3.9615,-0.7272)
+    scale=0.8367
+    opacity=0.8500
+    angle=0.9623
+    normal=(0.3659,-0.5917,-0.7184)
+    frame=ctree_enti
+}
+
+billboard lf_120 {
+    sprite=spr_Leaf
+    pos=(3.2500,5.0727,-0.3533)
+    scale=0.8856
+    opacity=0.8500
+    angle=0.0964
+    normal=(-0.4695,0.1725,-0.8659)
+    frame=ctree_enti
+}
+
+billboard lf_121 {
+    sprite=spr_Leaf
+    pos=(4.1353,4.9358,0.1885)
+    scale=0.8997
+    opacity=0.8500
+    angle=1.8533
+    normal=(0.2446,-0.8157,0.5242)
+    frame=ctree_enti
+}
+
+billboard lf_122 {
+    sprite=spr_Leaf
+    pos=(3.4340,5.2121,-0.0182)
+    scale=0.8054
+    opacity=0.8500
+    angle=1.6848
+    normal=(0.7023,0.1757,-0.6899)
+    frame=ctree_enti
+}
+
+billboard lf_123 {
+    sprite=spr_Leaf
+    pos=(3.3303,4.8840,0.0427)
+    scale=0.8236
+    opacity=0.8500
+    angle=2.0381
+    normal=(-0.6595,-0.0949,0.7457)
+    frame=ctree_enti
+}
+
+billboard lf_124 {
+    sprite=spr_Leaf
+    pos=(3.3225,5.7552,-0.2714)
+    scale=0.8798
+    opacity=0.8500
+    angle=0.9755
+    normal=(-0.8180,-0.5043,-0.2768)
+    frame=ctree_enti
+}
+
+billboard lf_125 {
+    sprite=spr_Leaf
+    pos=(3.8222,5.8290,-0.1962)
+    scale=0.7785
+    opacity=0.8500
+    angle=2.4705
+    normal=(0.4048,-0.7011,0.5870)
+    frame=ctree_enti
+}
+
+billboard lf_126 {
+    sprite=spr_Leaf
+    pos=(3.5320,5.5301,-0.7676)
+    scale=0.8101
+    opacity=0.8500
+    angle=6.0133
+    normal=(-0.0335,0.2314,0.9723)
+    frame=ctree_enti
+}
+
+billboard lf_127 {
+    sprite=spr_Leaf
+    pos=(3.5982,5.5680,-0.7937)
+    scale=0.9796
+    opacity=0.8500
+    angle=6.1049
+    normal=(0.7556,0.6547,0.0214)
+    frame=ctree_enti
+}
+
+billboard lf_128 {
+    sprite=spr_Leaf
+    pos=(3.1585,5.1865,0.3073)
+    scale=0.8532
+    opacity=0.8500
+    angle=0.1409
+    normal=(-0.0475,0.6127,0.7889)
+    frame=ctree_enti
+}
+
+billboard lf_129 {
+    sprite=spr_Leaf
+    pos=(3.9935,5.4280,0.3630)
+    scale=0.8206
+    opacity=0.8500
+    angle=0.5721
+    normal=(0.9946,0.0857,0.0589)
+    frame=ctree_enti
+}
+
+billboard lf_130 {
+    sprite=spr_Leaf
+    pos=(4.1580,5.6821,-0.2966)
+    scale=0.7585
+    opacity=0.8500
+    angle=0.1949
+    normal=(0.5381,-0.6179,-0.5733)
+    frame=ctree_enti
+}
+
+billboard lf_131 {
+    sprite=spr_Leaf
+    pos=(3.9985,5.2736,0.5011)
+    scale=0.8268
+    opacity=0.8500
+    angle=2.3529
+    normal=(-0.8040,0.1280,0.5807)
+    frame=ctree_enti
+}
+
+billboard lf_132 {
+    sprite=spr_Leaf
+    pos=(3.7292,3.8909,-0.3960)
+    scale=0.7910
+    opacity=0.8500
+    angle=5.4957
+    normal=(-0.9997,-0.0247,-0.0081)
+    frame=ctree_enti
+}
+
+billboard lf_133 {
+    sprite=spr_Leaf
+    pos=(4.5791,3.8879,-0.0261)
+    scale=0.9037
+    opacity=0.8500
+    angle=2.5505
+    normal=(-0.6539,-0.2924,-0.6978)
+    frame=ctree_enti
+}
+
+billboard lf_134 {
+    sprite=spr_Leaf
+    pos=(3.9980,3.9234,-0.0811)
+    scale=0.7079
+    opacity=0.8500
+    angle=0.8660
+    normal=(-0.4054,-0.8193,-0.4055)
+    frame=ctree_enti
+}
+
+billboard lf_135 {
+    sprite=spr_Leaf
+    pos=(3.6320,3.9916,-0.2446)
+    scale=0.9355
+    opacity=0.8500
+    angle=1.4883
+    normal=(0.1999,0.7306,0.6529)
+    frame=ctree_enti
+}
+
+billboard lf_136 {
+    sprite=spr_Leaf
+    pos=(3.5381,4.3900,-0.3843)
+    scale=0.8633
+    opacity=0.8500
+    angle=2.3121
+    normal=(-0.9618,-0.2582,-0.0909)
+    frame=ctree_enti
+}
+
+billboard lf_137 {
+    sprite=spr_Leaf
+    pos=(3.6993,4.6819,0.7855)
+    scale=0.8408
+    opacity=0.8500
+    angle=5.2896
+    normal=(-0.6641,0.0555,0.7456)
+    frame=ctree_enti
+}
+
+billboard lf_138 {
+    sprite=spr_Leaf
+    pos=(3.6475,4.3735,0.7113)
+    scale=0.8927
+    opacity=0.8500
+    angle=1.0774
+    normal=(0.4691,-0.8067,-0.3594)
+    frame=ctree_enti
+}
+
+billboard lf_139 {
+    sprite=spr_Leaf
+    pos=(4.1525,4.4555,0.7877)
+    scale=0.8771
+    opacity=0.8500
+    angle=5.4246
+    normal=(-0.4946,0.5297,0.6890)
+    frame=ctree_enti
+}
+
+billboard lf_140 {
+    sprite=spr_Leaf
+    pos=(4.4748,4.2950,0.4163)
+    scale=0.7686
+    opacity=0.8500
+    angle=4.4493
+    normal=(-0.9907,-0.1197,-0.0654)
+    frame=ctree_enti
+}
+
+billboard lf_141 {
+    sprite=spr_Leaf
+    pos=(3.6876,4.1297,0.8664)
+    scale=0.9777
+    opacity=0.8500
+    angle=1.7662
+    normal=(-0.0639,-0.8085,0.5850)
+    frame=ctree_enti
+}
+
+billboard lf_142 {
+    sprite=spr_Leaf
+    pos=(3.7235,3.8972,0.5556)
+    scale=0.8823
+    opacity=0.8500
+    angle=2.3286
+    normal=(0.4139,0.7968,-0.4403)
+    frame=ctree_enti
+}
+
+billboard lf_143 {
+    sprite=spr_Leaf
+    pos=(4.3850,3.9083,1.1739)
+    scale=0.9388
+    opacity=0.8500
+    angle=4.6528
+    normal=(0.1630,-0.8075,-0.5669)
+    frame=ctree_enti
+}
+
+billboard lf_144 {
+    sprite=spr_Leaf
+    pos=(1.3186,6.7909,-0.5256)
+    scale=0.7037
+    opacity=0.8500
+    angle=1.3421
+    normal=(-0.9540,0.1166,-0.2761)
+    frame=ctree_enti
+}
+
+billboard lf_145 {
+    sprite=spr_Leaf
+    pos=(1.5578,7.0384,-1.1032)
+    scale=0.9825
+    opacity=0.8500
+    angle=2.3304
+    normal=(0.2749,0.6009,-0.7506)
+    frame=ctree_enti
+}
+
+billboard lf_146 {
+    sprite=spr_Leaf
+    pos=(1.6540,6.7742,-0.6102)
+    scale=0.7975
+    opacity=0.8500
+    angle=3.2779
+    normal=(0.2705,0.2198,-0.9373)
+    frame=ctree_enti
+}
+
+billboard lf_147 {
+    sprite=spr_Leaf
+    pos=(2.2891,6.7281,-1.2195)
+    scale=0.8049
+    opacity=0.8500
+    angle=5.0303
+    normal=(-0.1621,-0.3416,-0.9258)
+    frame=ctree_enti
+}
+
+billboard lf_148 {
+    sprite=spr_Leaf
+    pos=(1.3758,6.9262,-0.4944)
+    scale=0.7910
+    opacity=0.8500
+    angle=0.3309
+    normal=(-0.2842,-0.6892,0.6665)
+    frame=ctree_enti
+}
+
+billboard lf_149 {
+    sprite=spr_Leaf
+    pos=(2.1105,6.8568,0.1259)
+    scale=0.7990
+    opacity=0.8500
+    angle=5.9304
+    normal=(0.4625,0.0627,-0.8844)
+    frame=ctree_enti
+}
+
+billboard lf_150 {
+    sprite=spr_Leaf
+    pos=(1.2679,7.1181,0.2663)
+    scale=0.9643
+    opacity=0.8500
+    angle=0.7224
+    normal=(0.6687,0.6069,-0.4295)
+    frame=ctree_enti
+}
+
+billboard lf_151 {
+    sprite=spr_Leaf
+    pos=(2.0101,6.8551,0.0520)
+    scale=0.7126
+    opacity=0.8500
+    angle=1.3950
+    normal=(0.1839,0.4244,-0.8866)
+    frame=ctree_enti
+}
+
+billboard lf_152 {
+    sprite=spr_Leaf
+    pos=(2.1484,6.6628,-0.8420)
+    scale=0.9032
+    opacity=0.8500
+    angle=5.6093
+    normal=(-0.4291,-0.6719,-0.6036)
+    frame=ctree_enti
+}
+
+billboard lf_153 {
+    sprite=spr_Leaf
+    pos=(1.7971,6.6492,-0.1745)
+    scale=0.9041
+    opacity=0.8500
+    angle=1.5958
+    normal=(-0.6044,0.4551,0.6540)
+    frame=ctree_enti
+}
+
+billboard lf_154 {
+    sprite=spr_Leaf
+    pos=(2.0125,6.5188,-0.6794)
+    scale=0.8603
+    opacity=0.8500
+    angle=0.1286
+    normal=(0.0439,-0.7382,0.6731)
+    frame=ctree_enti
+}
+
+billboard lf_155 {
+    sprite=spr_Leaf
+    pos=(2.3195,6.4571,-0.0763)
+    scale=0.9692
+    opacity=0.8500
+    angle=1.4259
+    normal=(-0.9207,0.3819,0.0802)
+    frame=ctree_enti
+}
+
+billboard lf_156 {
+    sprite=spr_Leaf
+    pos=(1.2529,6.0188,-1.7232)
+    scale=0.8845
+    opacity=0.8500
+    angle=5.7076
+    normal=(0.4263,-0.8691,-0.2510)
+    frame=ctree_enti
+}
+
+billboard lf_157 {
+    sprite=spr_Leaf
+    pos=(1.0446,6.0035,-1.7593)
+    scale=0.8550
+    opacity=0.8500
+    angle=0.7435
+    normal=(0.6603,-0.3835,0.6457)
+    frame=ctree_enti
+}
+
+billboard lf_158 {
+    sprite=spr_Leaf
+    pos=(1.0053,6.0668,-1.9895)
+    scale=0.7479
+    opacity=0.8500
+    angle=3.4567
+    normal=(0.6598,-0.7436,0.1083)
+    frame=ctree_enti
+}
+
+billboard lf_159 {
+    sprite=spr_Leaf
+    pos=(1.1089,6.1037,-2.2280)
+    scale=0.9886
+    opacity=0.8500
+    angle=5.4117
+    normal=(0.6825,-0.4839,-0.5478)
+    frame=ctree_enti
+}
+
+billboard lf_160 {
+    sprite=spr_Leaf
+    pos=(1.3906,5.7758,-1.6940)
+    scale=0.7107
+    opacity=0.8500
+    angle=4.8764
+    normal=(-0.3603,-0.6834,-0.6350)
+    frame=ctree_enti
+}
+
+billboard lf_161 {
+    sprite=spr_Leaf
+    pos=(0.9860,5.5550,-1.9593)
+    scale=0.8528
+    opacity=0.8500
+    angle=3.0271
+    normal=(-0.6500,-0.7515,0.1131)
+    frame=ctree_enti
+}
+
+billboard lf_162 {
+    sprite=spr_Leaf
+    pos=(1.4865,5.5476,-1.9965)
+    scale=0.8552
+    opacity=0.8500
+    angle=5.0339
+    normal=(-0.4310,-0.8255,-0.3644)
+    frame=ctree_enti
+}
+
+billboard lf_163 {
+    sprite=spr_Leaf
+    pos=(1.1483,5.5374,-1.6447)
+    scale=0.9188
+    opacity=0.8500
+    angle=2.3792
+    normal=(-0.1375,0.8321,0.5373)
+    frame=ctree_enti
+}
+
+billboard lf_164 {
+    sprite=spr_Leaf
+    pos=(0.7769,6.0625,-1.6909)
+    scale=0.9421
+    opacity=0.8500
+    angle=3.2319
+    normal=(0.3494,0.5139,-0.7835)
+    frame=ctree_enti
+}
+
+billboard lf_165 {
+    sprite=spr_Leaf
+    pos=(1.2029,6.0916,-1.5202)
+    scale=0.7705
+    opacity=0.8500
+    angle=3.2361
+    normal=(0.3719,-0.1601,-0.9144)
+    frame=ctree_enti
+}
+
+billboard lf_166 {
+    sprite=spr_Leaf
+    pos=(1.2873,5.9658,-1.5617)
+    scale=0.9515
+    opacity=0.8500
+    angle=3.4372
+    normal=(-0.0439,-0.2862,0.9572)
+    frame=ctree_enti
+}
+
+billboard lf_167 {
+    sprite=spr_Leaf
+    pos=(1.2454,6.0041,-2.1375)
+    scale=0.9441
+    opacity=0.8500
+    angle=4.0213
+    normal=(-0.4524,-0.6713,-0.5872)
+    frame=ctree_enti
+}
+
+billboard lf_168 {
+    sprite=spr_Leaf
+    pos=(0.9243,6.8601,-0.3652)
+    scale=0.8176
+    opacity=0.8500
+    angle=4.2940
+    normal=(-0.6218,0.0906,0.7779)
+    frame=ctree_enti
+}
+
+billboard lf_169 {
+    sprite=spr_Leaf
+    pos=(0.6230,6.6656,-0.9964)
+    scale=0.8682
+    opacity=0.8500
+    angle=3.3553
+    normal=(-0.1052,-0.2925,0.9505)
+    frame=ctree_enti
+}
+
+billboard lf_170 {
+    sprite=spr_Leaf
+    pos=(0.3368,6.6813,-1.2302)
+    scale=0.7384
+    opacity=0.8500
+    angle=5.8892
+    normal=(-0.4326,-0.8526,0.2933)
+    frame=ctree_enti
+}
+
+billboard lf_171 {
+    sprite=spr_Leaf
+    pos=(1.1732,6.9611,-1.0522)
+    scale=0.9615
+    opacity=0.8500
+    angle=0.0012
+    normal=(-0.2786,-0.7455,0.6055)
+    frame=ctree_enti
+}
+
+billboard lf_172 {
+    sprite=spr_Leaf
+    pos=(-0.1015,6.4224,-0.2766)
+    scale=0.7986
+    opacity=0.8500
+    angle=4.5658
+    normal=(-0.2218,0.8901,0.3982)
+    frame=ctree_enti
+}
+
+billboard lf_173 {
+    sprite=spr_Leaf
+    pos=(0.5611,6.6683,-0.3043)
+    scale=0.7104
+    opacity=0.8500
+    angle=3.3551
+    normal=(-0.6302,-0.3502,0.6930)
+    frame=ctree_enti
+}
+
+billboard lf_174 {
+    sprite=spr_Leaf
+    pos=(0.4391,6.4605,-0.7877)
+    scale=0.9054
+    opacity=0.8500
+    angle=5.1450
+    normal=(0.4734,0.5414,0.6948)
+    frame=ctree_enti
+}
+
+billboard lf_175 {
+    sprite=spr_Leaf
+    pos=(-0.0047,6.5532,-0.7268)
+    scale=0.9417
+    opacity=0.8500
+    angle=2.6134
+    normal=(-0.5597,0.7491,-0.3543)
+    frame=ctree_enti
+}
+
+billboard lf_176 {
+    sprite=spr_Leaf
+    pos=(0.7823,6.8754,-0.6670)
+    scale=0.7921
+    opacity=0.8500
+    angle=2.3403
+    normal=(-0.4700,-0.6945,0.5448)
+    frame=ctree_enti
+}
+
+billboard lf_177 {
+    sprite=spr_Leaf
+    pos=(1.0497,7.0035,-0.2912)
+    scale=0.7634
+    opacity=0.8500
+    angle=2.7250
+    normal=(0.6953,0.6873,0.2102)
+    frame=ctree_enti
+}
+
+billboard lf_178 {
+    sprite=spr_Leaf
+    pos=(1.3046,6.8561,0.1495)
+    scale=0.9522
+    opacity=0.8500
+    angle=6.0675
+    normal=(0.6484,-0.5029,-0.5716)
+    frame=ctree_enti
+}
+
+billboard lf_179 {
+    sprite=spr_Leaf
+    pos=(1.1776,6.8808,-0.7397)
+    scale=0.9707
+    opacity=0.8500
+    angle=5.8701
+    normal=(0.6179,-0.1163,0.7776)
+    frame=ctree_enti
+}
+
+billboard lf_180 {
+    sprite=spr_Leaf
+    pos=(1.4421,5.7288,1.2396)
+    scale=0.8642
+    opacity=0.8500
+    angle=5.6783
+    normal=(0.6107,-0.6061,0.5096)
+    frame=ctree_enti
+}
+
+billboard lf_181 {
+    sprite=spr_Leaf
+    pos=(1.8061,5.9073,1.9233)
+    scale=0.9804
+    opacity=0.8500
+    angle=2.5444
+    normal=(-0.1267,0.9409,-0.3140)
+    frame=ctree_enti
+}
+
+billboard lf_182 {
+    sprite=spr_Leaf
+    pos=(1.4556,5.6551,1.5195)
+    scale=0.9664
+    opacity=0.8500
+    angle=3.4013
+    normal=(-0.4770,-0.6713,0.5673)
+    frame=ctree_enti
+}
+
+billboard lf_183 {
+    sprite=spr_Leaf
+    pos=(1.7004,5.9184,1.4213)
+    scale=0.7641
+    opacity=0.8500
+    angle=2.8886
+    normal=(0.4960,-0.1163,-0.8605)
+    frame=ctree_enti
+}
+
+billboard lf_184 {
+    sprite=spr_Leaf
+    pos=(1.9308,6.0797,1.4689)
+    scale=0.8419
+    opacity=0.8500
+    angle=3.8813
+    normal=(0.4910,-0.5554,0.6712)
+    frame=ctree_enti
+}
+
+billboard lf_185 {
+    sprite=spr_Leaf
+    pos=(2.2558,6.2817,1.7642)
+    scale=0.7648
+    opacity=0.8500
+    angle=1.2404
+    normal=(0.8075,0.4193,0.4150)
+    frame=ctree_enti
+}
+
+billboard lf_186 {
+    sprite=spr_Leaf
+    pos=(2.3167,6.1397,1.2537)
+    scale=0.9645
+    opacity=0.8500
+    angle=2.0577
+    normal=(0.3410,-0.7384,-0.5817)
+    frame=ctree_enti
+}
+
+billboard lf_187 {
+    sprite=spr_Leaf
+    pos=(1.8973,6.2868,1.0188)
+    scale=0.7282
+    opacity=0.8500
+    angle=4.3029
+    normal=(0.0027,0.6969,0.7172)
+    frame=ctree_enti
+}
+
+billboard lf_188 {
+    sprite=spr_Leaf
+    pos=(1.3698,6.2585,1.6233)
+    scale=0.9585
+    opacity=0.8500
+    angle=2.4779
+    normal=(0.0202,-0.7982,0.6020)
+    frame=ctree_enti
+}
+
+billboard lf_189 {
+    sprite=spr_Leaf
+    pos=(1.9532,6.1118,0.9368)
+    scale=0.7844
+    opacity=0.8500
+    angle=1.9828
+    normal=(0.2476,-0.5939,0.7655)
+    frame=ctree_enti
+}
+
+billboard lf_190 {
+    sprite=spr_Leaf
+    pos=(2.0127,6.2093,1.3856)
+    scale=0.8589
+    opacity=0.8500
+    angle=5.0098
+    normal=(-0.5620,0.8253,0.0548)
+    frame=ctree_enti
+}
+
+billboard lf_191 {
+    sprite=spr_Leaf
+    pos=(1.6873,5.9521,1.5933)
+    scale=0.8110
+    opacity=0.8500
+    angle=3.1542
+    normal=(0.5830,0.5785,-0.5705)
+    frame=ctree_enti
+}
+
+billboard lf_192 {
+    sprite=spr_Leaf
+    pos=(1.6518,4.8589,1.7783)
+    scale=0.8157
+    opacity=0.8500
+    angle=1.2927
+    normal=(-0.7336,0.5227,-0.4343)
+    frame=ctree_enti
+}
+
+billboard lf_193 {
+    sprite=spr_Leaf
+    pos=(1.5675,5.0534,2.4937)
+    scale=0.7699
+    opacity=0.8500
+    angle=4.3887
+    normal=(0.8066,-0.5616,-0.1843)
+    frame=ctree_enti
+}
+
+billboard lf_194 {
+    sprite=spr_Leaf
+    pos=(2.4057,4.9956,2.5812)
+    scale=0.7427
+    opacity=0.8500
+    angle=4.4420
+    normal=(0.0205,0.0623,-0.9978)
+    frame=ctree_enti
+}
+
+billboard lf_195 {
+    sprite=spr_Leaf
+    pos=(2.5252,4.9115,2.0467)
+    scale=0.7130
+    opacity=0.8500
+    angle=2.3827
+    normal=(-0.5933,-0.0827,0.8007)
+    frame=ctree_enti
+}
+
+billboard lf_196 {
+    sprite=spr_Leaf
+    pos=(2.5683,4.6528,2.2189)
+    scale=0.7685
+    opacity=0.8500
+    angle=1.8127
+    normal=(-0.1610,0.7855,0.5976)
+    frame=ctree_enti
+}
+
+billboard lf_197 {
+    sprite=spr_Leaf
+    pos=(2.6019,4.2640,2.2379)
+    scale=0.7443
+    opacity=0.8500
+    angle=5.6843
+    normal=(0.4243,-0.8780,0.2217)
+    frame=ctree_enti
+}
+
+billboard lf_198 {
+    sprite=spr_Leaf
+    pos=(2.4634,4.4930,2.0422)
+    scale=0.9374
+    opacity=0.8500
+    angle=6.1787
+    normal=(0.6805,-0.7070,0.1926)
+    frame=ctree_enti
+}
+
+billboard lf_199 {
+    sprite=spr_Leaf
+    pos=(3.0875,4.1773,1.9730)
+    scale=0.8011
+    opacity=0.8500
+    angle=2.9229
+    normal=(0.1333,0.6382,-0.7582)
+    frame=ctree_enti
+}
+
+billboard lf_200 {
+    sprite=spr_Leaf
+    pos=(3.3292,5.0700,2.3657)
+    scale=0.9122
+    opacity=0.8500
+    angle=4.5291
+    normal=(0.6285,0.7535,-0.1931)
+    frame=ctree_enti
+}
+
+billboard lf_201 {
+    sprite=spr_Leaf
+    pos=(3.2783,4.9403,2.2863)
+    scale=0.9734
+    opacity=0.8500
+    angle=0.4060
+    normal=(-0.9149,-0.2140,0.3422)
+    frame=ctree_enti
+}
+
+billboard lf_202 {
+    sprite=spr_Leaf
+    pos=(2.9794,5.0904,2.0307)
+    scale=0.9857
+    opacity=0.8500
+    angle=0.7347
+    normal=(0.6670,0.2146,0.7135)
+    frame=ctree_enti
+}
+
+billboard lf_203 {
+    sprite=spr_Leaf
+    pos=(2.5670,5.2169,2.7452)
+    scale=0.8283
+    opacity=0.8500
+    angle=5.9939
+    normal=(0.3356,-0.4607,0.8217)
+    frame=ctree_enti
+}
+
+billboard lf_204 {
+    sprite=spr_Leaf
+    pos=(3.1077,5.4454,1.3379)
+    scale=0.7824
+    opacity=0.8500
+    angle=5.6475
+    normal=(0.6148,0.2774,-0.7383)
+    frame=ctree_enti
+}
+
+billboard lf_205 {
+    sprite=spr_Leaf
+    pos=(3.0210,5.3758,1.3316)
+    scale=0.8103
+    opacity=0.8500
+    angle=2.2692
+    normal=(-0.6739,-0.5805,-0.4570)
+    frame=ctree_enti
+}
+
+billboard lf_206 {
+    sprite=spr_Leaf
+    pos=(2.3004,5.4301,1.3312)
+    scale=0.8681
+    opacity=0.8500
+    angle=0.5642
+    normal=(0.4258,-0.4840,0.7645)
+    frame=ctree_enti
+}
+
+billboard lf_207 {
+    sprite=spr_Leaf
+    pos=(2.6756,5.3529,1.6294)
+    scale=0.7891
+    opacity=0.8500
+    angle=6.2259
+    normal=(0.4692,0.6163,-0.6324)
+    frame=ctree_enti
+}
+
+billboard lf_208 {
+    sprite=spr_Leaf
+    pos=(2.4959,5.9560,1.1566)
+    scale=0.9003
+    opacity=0.8500
+    angle=1.3670
+    normal=(0.0726,-0.9134,-0.4005)
+    frame=ctree_enti
+}
+
+billboard lf_209 {
+    sprite=spr_Leaf
+    pos=(3.0375,5.8225,1.0838)
+    scale=0.8866
+    opacity=0.8500
+    angle=2.3190
+    normal=(0.7137,0.2865,0.6392)
+    frame=ctree_enti
+}
+
+billboard lf_210 {
+    sprite=spr_Leaf
+    pos=(3.1379,5.7531,1.1581)
+    scale=0.8877
+    opacity=0.8500
+    angle=0.7272
+    normal=(0.1994,0.7618,0.6164)
+    frame=ctree_enti
+}
+
+billboard lf_211 {
+    sprite=spr_Leaf
+    pos=(3.0696,5.8123,1.0341)
+    scale=0.8671
+    opacity=0.8500
+    angle=4.7553
+    normal=(-0.3378,-0.6265,-0.7024)
+    frame=ctree_enti
+}
+
+billboard lf_212 {
+    sprite=spr_Leaf
+    pos=(2.2862,5.4806,1.7770)
+    scale=0.7046
+    opacity=0.8500
+    angle=0.7874
+    normal=(-0.5768,-0.5548,0.5995)
+    frame=ctree_enti
+}
+
+billboard lf_213 {
+    sprite=spr_Leaf
+    pos=(2.3845,5.6529,1.8634)
+    scale=0.7851
+    opacity=0.8500
+    angle=0.5698
+    normal=(0.7604,0.1884,-0.6216)
+    frame=ctree_enti
+}
+
+billboard lf_214 {
+    sprite=spr_Leaf
+    pos=(2.8448,5.7499,1.3989)
+    scale=0.7439
+    opacity=0.8500
+    angle=6.1101
+    normal=(-0.1676,0.6759,-0.7177)
+    frame=ctree_enti
+}
+
+billboard lf_215 {
+    sprite=spr_Leaf
+    pos=(2.5087,5.5636,1.6173)
+    scale=0.9049
+    opacity=0.8500
+    angle=1.4258
+    normal=(0.3517,0.8356,-0.4221)
+    frame=ctree_enti
+}
+
+billboard lf_216 {
+    sprite=spr_Leaf
+    pos=(-0.5709,6.4247,-1.8714)
+    scale=0.9243
+    opacity=0.8500
+    angle=2.9419
+    normal=(-0.6610,-0.7348,0.1521)
+    frame=ctree_enti
+}
+
+billboard lf_217 {
+    sprite=spr_Leaf
+    pos=(-0.7757,6.6087,-0.9164)
+    scale=0.8100
+    opacity=0.8500
+    angle=4.4322
+    normal=(0.2947,-0.5670,0.7692)
+    frame=ctree_enti
+}
+
+billboard lf_218 {
+    sprite=spr_Leaf
+    pos=(-1.4154,6.3908,-0.9283)
+    scale=0.7424
+    opacity=0.8500
+    angle=1.7664
+    normal=(0.6849,-0.7187,0.1199)
+    frame=ctree_enti
+}
+
+billboard lf_219 {
+    sprite=spr_Leaf
+    pos=(-0.9531,6.5101,-1.2593)
+    scale=0.9952
+    opacity=0.8500
+    angle=0.3321
+    normal=(0.6341,0.7732,-0.0063)
+    frame=ctree_enti
+}
+
+billboard lf_220 {
+    sprite=spr_Leaf
+    pos=(-0.5942,6.7052,-0.6410)
+    scale=0.7439
+    opacity=0.8500
+    angle=2.7800
+    normal=(-0.8369,-0.0763,-0.5420)
+    frame=ctree_enti
+}
+
+billboard lf_221 {
+    sprite=spr_Leaf
+    pos=(-1.0473,6.6703,-1.5232)
+    scale=0.8929
+    opacity=0.8500
+    angle=1.5635
+    normal=(-0.9247,0.3699,0.0898)
+    frame=ctree_enti
+}
+
+billboard lf_222 {
+    sprite=spr_Leaf
+    pos=(-0.8795,6.7253,-1.4299)
+    scale=0.7202
+    opacity=0.8500
+    angle=3.6041
+    normal=(0.9144,-0.3823,-0.1332)
+    frame=ctree_enti
+}
+
+billboard lf_223 {
+    sprite=spr_Leaf
+    pos=(-0.8977,6.5742,-0.9885)
+    scale=0.7802
+    opacity=0.8500
+    angle=4.1520
+    normal=(0.9565,-0.1823,-0.2276)
+    frame=ctree_enti
+}
+
+billboard lf_224 {
+    sprite=spr_Leaf
+    pos=(-0.3284,6.4128,-1.4509)
+    scale=0.8366
+    opacity=0.8500
+    angle=3.8391
+    normal=(-0.8848,0.2862,0.3677)
+    frame=ctree_enti
+}
+
+billboard lf_225 {
+    sprite=spr_Leaf
+    pos=(-0.9352,6.5360,-1.3549)
+    scale=0.7162
+    opacity=0.8500
+    angle=3.7780
+    normal=(0.7386,0.5473,-0.3937)
+    frame=ctree_enti
+}
+
+billboard lf_226 {
+    sprite=spr_Leaf
+    pos=(-0.2456,6.4399,-1.8932)
+    scale=0.8969
+    opacity=0.8500
+    angle=1.8630
+    normal=(-0.3872,-0.9050,0.1762)
+    frame=ctree_enti
+}
+
+billboard lf_227 {
+    sprite=spr_Leaf
+    pos=(-1.1149,6.5131,-1.1962)
+    scale=0.9229
+    opacity=0.8500
+    angle=5.6158
+    normal=(0.0485,0.3955,-0.9172)
+    frame=ctree_enti
+}
+
+billboard lf_228 {
+    sprite=spr_Leaf
+    pos=(-1.0860,6.1233,0.1394)
+    scale=0.7844
+    opacity=0.8500
+    angle=5.6438
+    normal=(-0.6606,0.5460,-0.5153)
+    frame=ctree_enti
+}
+
+billboard lf_229 {
+    sprite=spr_Leaf
+    pos=(-0.8473,6.0430,0.2181)
+    scale=0.9227
+    opacity=0.8500
+    angle=3.8641
+    normal=(0.2119,0.8483,-0.4853)
+    frame=ctree_enti
+}
+
+billboard lf_230 {
+    sprite=spr_Leaf
+    pos=(-1.1035,6.3745,0.3900)
+    scale=0.9947
+    opacity=0.8500
+    angle=1.0126
+    normal=(0.5903,-0.6456,0.4845)
+    frame=ctree_enti
+}
+
+billboard lf_231 {
+    sprite=spr_Leaf
+    pos=(-0.4079,6.3572,0.0423)
+    scale=0.7814
+    opacity=0.8500
+    angle=2.8757
+    normal=(0.2836,-0.9158,-0.2844)
+    frame=ctree_enti
+}
+
+billboard lf_232 {
+    sprite=spr_Leaf
+    pos=(-1.0900,6.4695,0.0153)
+    scale=0.9059
+    opacity=0.8500
+    angle=1.4217
+    normal=(0.1383,-0.0594,0.9886)
+    frame=ctree_enti
+}
+
+billboard lf_233 {
+    sprite=spr_Leaf
+    pos=(-1.5644,6.2748,-0.8379)
+    scale=0.9174
+    opacity=0.8500
+    angle=3.7498
+    normal=(0.4741,-0.4352,-0.7654)
+    frame=ctree_enti
+}
+
+billboard lf_234 {
+    sprite=spr_Leaf
+    pos=(-1.3038,6.2059,-0.3439)
+    scale=0.8211
+    opacity=0.8500
+    angle=1.6149
+    normal=(-0.1182,0.4845,0.8667)
+    frame=ctree_enti
+}
+
+billboard lf_235 {
+    sprite=spr_Leaf
+    pos=(-0.9862,6.2981,-0.6216)
+    scale=0.9676
+    opacity=0.8500
+    angle=0.8857
+    normal=(-0.5454,-0.7867,0.2893)
+    frame=ctree_enti
+}
+
+billboard lf_236 {
+    sprite=spr_Leaf
+    pos=(-1.6081,5.8465,0.4798)
+    scale=0.7174
+    opacity=0.8500
+    angle=2.7038
+    normal=(-0.6265,0.5961,0.5021)
+    frame=ctree_enti
+}
+
+billboard lf_237 {
+    sprite=spr_Leaf
+    pos=(-1.5377,6.1332,0.1418)
+    scale=0.9876
+    opacity=0.8500
+    angle=5.1313
+    normal=(-0.7440,0.3984,-0.5365)
+    frame=ctree_enti
+}
+
+billboard lf_238 {
+    sprite=spr_Leaf
+    pos=(-1.6034,6.1453,-0.0591)
+    scale=0.9398
+    opacity=0.8500
+    angle=5.2757
+    normal=(0.0478,-0.8501,-0.5244)
+    frame=ctree_enti
+}
+
+billboard lf_239 {
+    sprite=spr_Leaf
+    pos=(-1.5960,5.8592,0.2066)
+    scale=0.9409
+    opacity=0.8500
+    angle=3.3846
+    normal=(0.6020,0.7345,-0.3132)
+    frame=ctree_enti
+}
+
+billboard lf_240 {
+    sprite=spr_Leaf
+    pos=(-0.3446,6.4496,-0.2968)
+    scale=0.7670
+    opacity=0.8500
+    angle=3.8051
+    normal=(-0.3949,0.7968,-0.4574)
+    frame=ctree_enti
+}
+
+billboard lf_241 {
+    sprite=spr_Leaf
+    pos=(-0.7508,6.3498,-0.6512)
+    scale=0.9047
+    opacity=0.8500
+    angle=2.5077
+    normal=(-0.1716,-0.7217,0.6706)
+    frame=ctree_enti
+}
+
+billboard lf_242 {
+    sprite=spr_Leaf
+    pos=(-0.3755,6.5308,-1.1241)
+    scale=0.8106
+    opacity=0.8500
+    angle=4.7563
+    normal=(-0.1175,0.6615,-0.7407)
+    frame=ctree_enti
+}
+
+billboard lf_243 {
+    sprite=spr_Leaf
+    pos=(-0.8012,6.6308,-0.3915)
+    scale=0.9828
+    opacity=0.8500
+    angle=4.8376
+    normal=(-0.5659,0.8207,-0.0781)
+    frame=ctree_enti
+}
+
+billboard lf_244 {
+    sprite=spr_Leaf
+    pos=(-0.1895,6.1381,0.0556)
+    scale=0.9262
+    opacity=0.8500
+    angle=0.4478
+    normal=(0.6383,0.7673,-0.0624)
+    frame=ctree_enti
+}
+
+billboard lf_245 {
+    sprite=spr_Leaf
+    pos=(0.3165,5.9544,-0.2893)
+    scale=0.8198
+    opacity=0.8500
+    angle=4.1232
+    normal=(-0.7133,-0.3174,-0.6249)
+    frame=ctree_enti
+}
+
+billboard lf_246 {
+    sprite=spr_Leaf
+    pos=(0.2736,6.1992,-0.1981)
+    scale=0.7204
+    opacity=0.8500
+    angle=0.8909
+    normal=(0.2102,-0.9772,-0.0298)
+    frame=ctree_enti
+}
+
+billboard lf_247 {
+    sprite=spr_Leaf
+    pos=(0.0869,5.9629,-0.3556)
+    scale=0.9756
+    opacity=0.8500
+    angle=4.0863
+    normal=(0.6705,-0.7190,-0.1826)
+    frame=ctree_enti
+}
+
+billboard lf_248 {
+    sprite=spr_Leaf
+    pos=(-0.1953,6.3448,-1.1656)
+    scale=0.7293
+    opacity=0.8500
+    angle=2.2191
+    normal=(0.5415,0.8066,0.2369)
+    frame=ctree_enti
+}
+
+billboard lf_249 {
+    sprite=spr_Leaf
+    pos=(-0.3423,6.2113,-1.0473)
+    scale=0.8068
+    opacity=0.8500
+    angle=5.8049
+    normal=(0.8949,-0.3693,-0.2506)
+    frame=ctree_enti
+}
+
+billboard lf_250 {
+    sprite=spr_Leaf
+    pos=(-0.0306,6.3686,-0.8707)
+    scale=0.8010
+    opacity=0.8500
+    angle=0.5160
+    normal=(0.8104,-0.0135,0.5857)
+    frame=ctree_enti
+}
+
+billboard lf_251 {
+    sprite=spr_Leaf
+    pos=(0.3001,6.1262,-0.9028)
+    scale=0.8553
+    opacity=0.8500
+    angle=1.2653
+    normal=(-0.7214,0.6922,-0.0201)
+    frame=ctree_enti
+}
+
+billboard lf_252 {
+    sprite=spr_Leaf
+    pos=(-2.0661,4.2373,-2.4800)
+    scale=0.7677
+    opacity=0.8500
+    angle=5.8215
+    normal=(0.0689,-0.8516,0.5196)
+    frame=ctree_enti
+}
+
+billboard lf_253 {
+    sprite=spr_Leaf
+    pos=(-1.1367,4.2045,-3.0273)
+    scale=0.9386
+    opacity=0.8500
+    angle=1.4636
+    normal=(0.4388,0.3740,0.8170)
+    frame=ctree_enti
+}
+
+billboard lf_254 {
+    sprite=spr_Leaf
+    pos=(-1.7912,4.2510,-2.6018)
+    scale=0.9650
+    opacity=0.8500
+    angle=1.5266
+    normal=(0.7652,-0.6293,0.1360)
+    frame=ctree_enti
+}
+
+billboard lf_255 {
+    sprite=spr_Leaf
+    pos=(-1.6941,4.0120,-2.8344)
+    scale=0.7216
+    opacity=0.8500
+    angle=5.3265
+    normal=(-0.6732,-0.4013,0.6211)
+    frame=ctree_enti
+}
+
+billboard lf_256 {
+    sprite=spr_Leaf
+    pos=(-1.7076,3.9888,-2.5489)
+    scale=0.7533
+    opacity=0.8500
+    angle=6.0369
+    normal=(0.3210,0.9017,0.2897)
+    frame=ctree_enti
+}
+
+billboard lf_257 {
+    sprite=spr_Leaf
+    pos=(-2.0661,3.8871,-2.9634)
+    scale=0.7039
+    opacity=0.8500
+    angle=2.5348
+    normal=(-0.5554,0.4946,-0.6685)
+    frame=ctree_enti
+}
+
+billboard lf_258 {
+    sprite=spr_Leaf
+    pos=(-2.2589,4.1881,-2.1134)
+    scale=0.7360
+    opacity=0.8500
+    angle=4.3440
+    normal=(-0.8663,-0.3582,-0.3482)
+    frame=ctree_enti
+}
+
+billboard lf_259 {
+    sprite=spr_Leaf
+    pos=(-1.4401,3.9023,-2.7766)
+    scale=0.7751
+    opacity=0.8500
+    angle=0.1204
+    normal=(0.4585,-0.8817,0.1112)
+    frame=ctree_enti
+}
+
+billboard lf_260 {
+    sprite=spr_Leaf
+    pos=(-1.6379,4.3196,-3.1191)
+    scale=0.9500
+    opacity=0.8500
+    angle=2.5287
+    normal=(0.7009,-0.5882,0.4034)
+    frame=ctree_enti
+}
+
+billboard lf_261 {
+    sprite=spr_Leaf
+    pos=(-1.5880,4.5088,-3.2193)
+    scale=0.8511
+    opacity=0.8500
+    angle=5.6866
+    normal=(0.9927,-0.1097,0.0494)
+    frame=ctree_enti
+}
+
+billboard lf_262 {
+    sprite=spr_Leaf
+    pos=(-2.0742,4.2973,-2.4641)
+    scale=0.8878
+    opacity=0.8500
+    angle=2.6483
+    normal=(-0.5940,0.0479,0.8031)
+    frame=ctree_enti
+}
+
+billboard lf_263 {
+    sprite=spr_Leaf
+    pos=(-1.8156,4.3161,-2.4820)
+    scale=0.7749
+    opacity=0.8500
+    angle=5.8090
+    normal=(0.7241,0.6864,-0.0675)
+    frame=ctree_enti
+}
+
+billboard lf_264 {
+    sprite=spr_Leaf
+    pos=(-1.1610,5.3323,-2.6947)
+    scale=0.7463
+    opacity=0.8500
+    angle=0.3876
+    normal=(0.4389,-0.5917,0.6762)
+    frame=ctree_enti
+}
+
+billboard lf_265 {
+    sprite=spr_Leaf
+    pos=(-1.8828,5.6684,-3.0519)
+    scale=0.7238
+    opacity=0.8500
+    angle=3.2925
+    normal=(0.7178,0.1839,0.6715)
+    frame=ctree_enti
+}
+
+billboard lf_266 {
+    sprite=spr_Leaf
+    pos=(-1.8858,5.5302,-2.4397)
+    scale=0.8730
+    opacity=0.8500
+    angle=3.4198
+    normal=(-0.7604,-0.0220,-0.6491)
+    frame=ctree_enti
+}
+
+billboard lf_267 {
+    sprite=spr_Leaf
+    pos=(-1.9501,5.5233,-3.1038)
+    scale=0.7332
+    opacity=0.8500
+    angle=3.0358
+    normal=(-0.8204,0.2823,0.4972)
+    frame=ctree_enti
+}
+
+billboard lf_268 {
+    sprite=spr_Leaf
+    pos=(-0.7524,5.6417,-2.9092)
+    scale=0.8748
+    opacity=0.8500
+    angle=2.0844
+    normal=(-0.3638,0.9146,0.1765)
+    frame=ctree_enti
+}
+
+billboard lf_269 {
+    sprite=spr_Leaf
+    pos=(-0.4149,5.8397,-2.7582)
+    scale=0.8750
+    opacity=0.8500
+    angle=1.5476
+    normal=(-0.3148,0.7647,0.5623)
+    frame=ctree_enti
+}
+
+billboard lf_270 {
+    sprite=spr_Leaf
+    pos=(-0.2842,5.9932,-2.2619)
+    scale=0.7880
+    opacity=0.8500
+    angle=0.6964
+    normal=(-0.5826,0.7203,0.3765)
+    frame=ctree_enti
+}
+
+billboard lf_271 {
+    sprite=spr_Leaf
+    pos=(-0.3820,5.6817,-2.6355)
+    scale=0.9066
+    opacity=0.8500
+    angle=0.4403
+    normal=(-0.0272,-0.3782,0.9253)
+    frame=ctree_enti
+}
+
+billboard lf_272 {
+    sprite=spr_Leaf
+    pos=(-1.1058,5.3233,-2.8609)
+    scale=0.7563
+    opacity=0.8500
+    angle=1.2378
+    normal=(0.3680,-0.8558,-0.3636)
+    frame=ctree_enti
+}
+
+billboard lf_273 {
+    sprite=spr_Leaf
+    pos=(-1.2826,5.2909,-3.4848)
+    scale=0.7262
+    opacity=0.8500
+    angle=4.3935
+    normal=(0.4953,0.8278,0.2634)
+    frame=ctree_enti
+}
+
+billboard lf_274 {
+    sprite=spr_Leaf
+    pos=(-1.2508,5.2879,-2.9395)
+    scale=0.7210
+    opacity=0.8500
+    angle=0.6225
+    normal=(-0.8694,0.0766,0.4881)
+    frame=ctree_enti
+}
+
+billboard lf_275 {
+    sprite=spr_Leaf
+    pos=(-0.9410,5.2211,-3.3960)
+    scale=0.7531
+    opacity=0.8500
+    angle=6.2732
+    normal=(-0.8203,0.4043,-0.4046)
+    frame=ctree_enti
+}
+
+billboard lf_276 {
+    sprite=spr_Leaf
+    pos=(-1.1757,3.6948,-2.9471)
+    scale=0.7624
+    opacity=0.8500
+    angle=0.1502
+    normal=(0.4334,-0.0511,-0.8997)
+    frame=ctree_enti
+}
+
+billboard lf_277 {
+    sprite=spr_Leaf
+    pos=(-0.8909,3.9635,-2.8782)
+    scale=0.7051
+    opacity=0.8500
+    angle=4.3404
+    normal=(0.5181,-0.5274,-0.6734)
+    frame=ctree_enti
+}
+
+billboard lf_278 {
+    sprite=spr_Leaf
+    pos=(-1.1199,3.7330,-3.3498)
+    scale=0.8202
+    opacity=0.8500
+    angle=5.3192
+    normal=(0.4416,-0.6057,0.6619)
+    frame=ctree_enti
+}
+
+billboard lf_279 {
+    sprite=spr_Leaf
+    pos=(-1.1875,3.8301,-2.5112)
+    scale=0.8097
+    opacity=0.8500
+    angle=3.6533
+    normal=(-0.1188,0.8228,-0.5557)
+    frame=ctree_enti
+}
+
+billboard lf_280 {
+    sprite=spr_Leaf
+    pos=(-1.1817,4.2755,-3.4332)
+    scale=0.8439
+    opacity=0.8500
+    angle=5.8911
+    normal=(0.7437,0.5094,0.4329)
+    frame=ctree_enti
+}
+
+billboard lf_281 {
+    sprite=spr_Leaf
+    pos=(-0.9484,4.2710,-3.2772)
+    scale=0.8584
+    opacity=0.8500
+    angle=2.6204
+    normal=(0.3239,-0.9318,0.1640)
+    frame=ctree_enti
+}
+
+billboard lf_282 {
+    sprite=spr_Leaf
+    pos=(-0.6533,4.1796,-2.6454)
+    scale=0.9672
+    opacity=0.8500
+    angle=2.7617
+    normal=(0.0864,-0.8728,0.4803)
+    frame=ctree_enti
+}
+
+billboard lf_283 {
+    sprite=spr_Leaf
+    pos=(-1.0246,4.4428,-3.5618)
+    scale=0.8528
+    opacity=0.8500
+    angle=3.7039
+    normal=(-0.1216,-0.5055,-0.8542)
+    frame=ctree_enti
+}
+
+billboard lf_284 {
+    sprite=spr_Leaf
+    pos=(-0.4748,3.8299,-3.2940)
+    scale=0.7694
+    opacity=0.8500
+    angle=3.9488
+    normal=(-0.3977,-0.3593,-0.8443)
+    frame=ctree_enti
+}
+
+billboard lf_285 {
+    sprite=spr_Leaf
+    pos=(-0.4049,3.8684,-2.6093)
+    scale=0.9542
+    opacity=0.8500
+    angle=1.5366
+    normal=(0.6410,0.6509,0.4066)
+    frame=ctree_enti
+}
+
+billboard lf_286 {
+    sprite=spr_Leaf
+    pos=(-1.0603,3.9165,-2.6629)
+    scale=0.9784
+    opacity=0.8500
+    angle=1.1247
+    normal=(0.7134,0.4621,-0.5268)
+    frame=ctree_enti
+}
+
+billboard lf_287 {
+    sprite=spr_Leaf
+    pos=(-0.4357,3.9756,-3.1828)
+    scale=0.9199
+    opacity=0.8500
+    angle=2.0896
+    normal=(-0.2831,-0.5370,0.7947)
+    frame=ctree_enti
+}
+
+billboard lf_288 {
+    sprite=spr_Leaf
+    pos=(-1.8773,6.0154,1.3846)
+    scale=0.9700
+    opacity=0.8500
+    angle=6.0073
+    normal=(-0.4724,-0.5714,-0.6711)
+    frame=ctree_enti
+}
+
+billboard lf_289 {
+    sprite=spr_Leaf
+    pos=(-2.4927,5.5671,0.1554)
+    scale=0.9405
+    opacity=0.8500
+    angle=2.5793
+    normal=(0.5657,0.6597,-0.4947)
+    frame=ctree_enti
+}
+
+billboard lf_290 {
+    sprite=spr_Leaf
+    pos=(-1.8617,5.7041,0.1222)
+    scale=0.9063
+    opacity=0.8500
+    angle=3.1022
+    normal=(-0.5132,0.5370,-0.6696)
+    frame=ctree_enti
+}
+
+billboard lf_291 {
+    sprite=spr_Leaf
+    pos=(-2.2025,5.7877,0.5426)
+    scale=0.9968
+    opacity=0.8500
+    angle=1.9549
+    normal=(0.3814,-0.9051,-0.1877)
+    frame=ctree_enti
+}
+
+billboard lf_292 {
+    sprite=spr_Leaf
+    pos=(-2.5124,5.6993,0.3554)
+    scale=0.7972
+    opacity=0.8500
+    angle=3.4584
+    normal=(-0.8837,-0.4266,0.1927)
+    frame=ctree_enti
+}
+
+billboard lf_293 {
+    sprite=spr_Leaf
+    pos=(-2.9750,5.6739,0.0225)
+    scale=0.7106
+    opacity=0.8500
+    angle=4.1880
+    normal=(0.8775,-0.4292,-0.2141)
+    frame=ctree_enti
+}
+
+billboard lf_294 {
+    sprite=spr_Leaf
+    pos=(-3.2880,5.4738,-0.2597)
+    scale=0.8820
+    opacity=0.8500
+    angle=2.3901
+    normal=(0.6380,-0.7629,0.1051)
+    frame=ctree_enti
+}
+
+billboard lf_295 {
+    sprite=spr_Leaf
+    pos=(-3.5354,5.6580,-0.2271)
+    scale=0.8397
+    opacity=0.8500
+    angle=0.2327
+    normal=(-0.8500,0.2590,-0.4588)
+    frame=ctree_enti
+}
+
+billboard lf_296 {
+    sprite=spr_Leaf
+    pos=(-2.1591,5.0574,1.1582)
+    scale=0.7948
+    opacity=0.8500
+    angle=0.1453
+    normal=(0.6688,-0.5076,0.5431)
+    frame=ctree_enti
+}
+
+billboard lf_297 {
+    sprite=spr_Leaf
+    pos=(-2.2365,5.5150,0.2294)
+    scale=0.9770
+    opacity=0.8500
+    angle=0.8362
+    normal=(-0.0437,-0.4848,0.8735)
+    frame=ctree_enti
+}
+
+billboard lf_298 {
+    sprite=spr_Leaf
+    pos=(-2.8313,5.0936,1.3307)
+    scale=0.7843
+    opacity=0.8500
+    angle=2.0190
+    normal=(0.6655,-0.6764,0.3155)
+    frame=ctree_enti
+}
+
+billboard lf_299 {
+    sprite=spr_Leaf
+    pos=(-2.5266,5.3685,1.3908)
+    scale=0.9803
+    opacity=0.8500
+    angle=2.1002
+    normal=(0.7234,-0.6612,-0.1988)
+    frame=ctree_enti
+}
+
+billboard lf_300 {
+    sprite=spr_Leaf
+    pos=(-3.4175,6.1056,-1.0640)
+    scale=0.9122
+    opacity=0.8500
+    angle=0.0850
+    normal=(-0.4372,0.6077,0.6630)
+    frame=ctree_enti
+}
+
+billboard lf_301 {
+    sprite=spr_Leaf
+    pos=(-3.5158,6.2632,-0.3228)
+    scale=0.9894
+    opacity=0.8500
+    angle=1.5768
+    normal=(-0.3103,-0.7871,0.5331)
+    frame=ctree_enti
+}
+
+billboard lf_302 {
+    sprite=spr_Leaf
+    pos=(-2.9869,6.0666,-1.2365)
+    scale=0.7009
+    opacity=0.8500
+    angle=0.8078
+    normal=(-0.2424,-0.3207,0.9156)
+    frame=ctree_enti
+}
+
+billboard lf_303 {
+    sprite=spr_Leaf
+    pos=(-3.4731,5.9391,-0.8869)
+    scale=0.7227
+    opacity=0.8500
+    angle=5.7854
+    normal=(0.2484,-0.6205,-0.7438)
+    frame=ctree_enti
+}
+
+billboard lf_304 {
+    sprite=spr_Leaf
+    pos=(-2.4824,6.2083,-0.9623)
+    scale=0.8357
+    opacity=0.8500
+    angle=3.3316
+    normal=(-0.4717,-0.7315,0.4923)
+    frame=ctree_enti
+}
+
+billboard lf_305 {
+    sprite=spr_Leaf
+    pos=(-1.9128,6.0958,-1.0260)
+    scale=0.8719
+    opacity=0.8500
+    angle=0.8245
+    normal=(0.1233,0.1467,0.9815)
+    frame=ctree_enti
+}
+
+billboard lf_306 {
+    sprite=spr_Leaf
+    pos=(-2.9570,6.1881,-1.7982)
+    scale=0.9442
+    opacity=0.8500
+    angle=0.1833
+    normal=(0.5886,-0.5446,0.5974)
+    frame=ctree_enti
+}
+
+billboard lf_307 {
+    sprite=spr_Leaf
+    pos=(-2.3378,6.4526,-0.8043)
+    scale=0.9632
+    opacity=0.8500
+    angle=4.2115
+    normal=(-0.3501,-0.6730,0.6516)
+    frame=ctree_enti
+}
+
+billboard lf_308 {
+    sprite=spr_Leaf
+    pos=(-3.3757,5.7756,-0.5797)
+    scale=0.7189
+    opacity=0.8500
+    angle=5.1023
+    normal=(-0.6507,-0.7587,-0.0318)
+    frame=ctree_enti
+}
+
+billboard lf_309 {
+    sprite=spr_Leaf
+    pos=(-3.0848,5.7084,-1.1391)
+    scale=0.7040
+    opacity=0.8500
+    angle=4.7601
+    normal=(0.5101,0.2877,0.8106)
+    frame=ctree_enti
+}
+
+billboard lf_310 {
+    sprite=spr_Leaf
+    pos=(-3.1147,5.5329,-0.8161)
+    scale=0.8687
+    opacity=0.8500
+    angle=2.4674
+    normal=(-0.4122,0.6471,-0.6414)
+    frame=ctree_enti
+}
+
+billboard lf_311 {
+    sprite=spr_Leaf
+    pos=(-2.5474,5.8596,-1.7238)
+    scale=0.9423
+    opacity=0.8500
+    angle=2.5722
+    normal=(0.9777,0.0899,0.1899)
+    frame=ctree_enti
+}
+
+billboard lf_312 {
+    sprite=spr_Leaf
+    pos=(-2.9025,4.3595,0.0823)
+    scale=0.9097
+    opacity=0.8500
+    angle=3.0063
+    normal=(0.6864,0.0562,-0.7251)
+    frame=ctree_enti
+}
+
+billboard lf_313 {
+    sprite=spr_Leaf
+    pos=(-3.5830,4.4122,-0.6870)
+    scale=0.8345
+    opacity=0.8500
+    angle=0.9382
+    normal=(-0.6962,-0.4711,0.5416)
+    frame=ctree_enti
+}
+
+billboard lf_314 {
+    sprite=spr_Leaf
+    pos=(-3.4553,4.6242,-0.2430)
+    scale=0.9465
+    opacity=0.8500
+    angle=3.3209
+    normal=(-0.6368,-0.6967,0.3304)
+    frame=ctree_enti
+}
+
+billboard lf_315 {
+    sprite=spr_Leaf
+    pos=(-3.4083,4.5456,-0.3616)
+    scale=0.7753
+    opacity=0.8500
+    angle=1.4995
+    normal=(-0.2896,-0.6736,-0.6801)
+    frame=ctree_enti
+}
+
+billboard lf_316 {
+    sprite=spr_Leaf
+    pos=(-3.2422,4.7746,-0.1978)
+    scale=0.8516
+    opacity=0.8500
+    angle=6.2235
+    normal=(-0.7211,-0.6749,0.1567)
+    frame=ctree_enti
+}
+
+billboard lf_317 {
+    sprite=spr_Leaf
+    pos=(-3.7720,5.0506,-0.2319)
+    scale=0.8821
+    opacity=0.8500
+    angle=1.7344
+    normal=(-0.8404,-0.5142,-0.1712)
+    frame=ctree_enti
+}
+
+billboard lf_318 {
+    sprite=spr_Leaf
+    pos=(-3.2027,5.1115,0.8867)
+    scale=0.7008
+    opacity=0.8500
+    angle=3.0429
+    normal=(-0.0230,0.8957,0.4441)
+    frame=ctree_enti
+}
+
+billboard lf_319 {
+    sprite=spr_Leaf
+    pos=(-3.1217,4.7870,0.7484)
+    scale=0.8994
+    opacity=0.8500
+    angle=3.4581
+    normal=(0.6785,0.1808,0.7120)
+    frame=ctree_enti
+}
+
+billboard lf_320 {
+    sprite=spr_Leaf
+    pos=(-3.3397,4.8655,-0.5425)
+    scale=0.8670
+    opacity=0.8500
+    angle=4.2680
+    normal=(0.4751,0.2928,-0.8298)
+    frame=ctree_enti
+}
+
+billboard lf_321 {
+    sprite=spr_Leaf
+    pos=(-3.3130,5.1221,-0.8961)
+    scale=0.7022
+    opacity=0.8500
+    angle=6.0848
+    normal=(-0.1831,0.6458,-0.7413)
+    frame=ctree_enti
+}
+
+billboard lf_322 {
+    sprite=spr_Leaf
+    pos=(-3.3597,4.9681,-0.6417)
+    scale=0.8915
+    opacity=0.8500
+    angle=3.0447
+    normal=(0.5672,0.6370,0.5221)
+    frame=ctree_enti
+}
+
+billboard lf_323 {
+    sprite=spr_Leaf
+    pos=(-3.4396,4.8585,-0.4162)
+    scale=0.9055
+    opacity=0.8500
+    angle=2.3550
+    normal=(-0.9644,-0.2263,-0.1371)
+    frame=ctree_enti
+}
+

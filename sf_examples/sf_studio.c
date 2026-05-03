@@ -11,7 +11,7 @@
 #include <dirent.h>
 
 typedef enum { SEL_NONE = 0, SEL_ENTI, SEL_LIGHT, SEL_CAM, SEL_EMITR } sel_kind_t;
-typedef enum { TAB_SFF = 0, TAB_SFUI, TAB_SFCRFT } tab_t;
+typedef enum { TAB_SFF = 0, TAB_SFUI, TAB_SFGEN } tab_t;
 
 static sf_ctx_t     sf_ctx;
 static sel_kind_t   g_sel_kind      = SEL_NONE;
@@ -87,6 +87,7 @@ static const char *g_ct_sitem[CRFT_MAX_SPR];
 static sf_sprite_t*g_ct_sprites[CRFT_MAX_SPR];
 static int         g_ct_snc = 0, g_ct_ssel = 0;
 static sf_sprite_t*g_crft_leaf = NULL;
+static sf_ui_lmn_t *g_sfgen_panel = NULL; /* SFGEN left panel — for icon visibility check */
 
 /* Generated objects */
 #define CRFT_MAX_V     32000
@@ -205,8 +206,6 @@ static const char *k_emitr_items[3] = { "dir", "omni", "vol" };
 static const char *k_spawn_labels[9]    = { "Pln", "Box", "Sph", "Cyl", "Ter", "Lt", "Cam", "Em", "Mdl" };
 static const char *k_spawn_icon_bmp[9]  = { "plane.bmp", "box.bmp", "sphere.bmp", "cylinder.bmp", "terrain.bmp", "light.bmp", "camera.bmp", "emitter.bmp", "model.bmp" };
 static sf_tex_t   *g_spawn_icon_tex[9]  = { 0 };
-static sf_ivec2_t  g_spawn_btn_pos[9];  /* filled in build_spawn_buttons, read post-render */
-static bool        g_spawn_btn_has_pos  = false;
 static sf_ui_lmn_t *g_spawn_btn_el[9]   = { 0 };
 
 /* Generic icon registry: per-frame list of (button, icon) to overlay after ui render */
@@ -222,17 +221,21 @@ static const char *k_icon_bmp[ICN_COUNT] = {
 };
 static sf_tex_t *g_icon_tex[ICN_COUNT] = { 0 };
 
-#define STUDIO_MAX_ICON_REG 64
-static sf_ui_lmn_t *g_icon_reg_el[STUDIO_MAX_ICON_REG];
-static int          g_icon_reg_id[STUDIO_MAX_ICON_REG];
-static int          g_icon_reg_n = 0;
-
 static sf_ui_lmn_t *icon_btn(icon_id_t id, const char *label, sf_ivec2_t v0, sf_ivec2_t v1, sf_ui_cb cb, void *ud) {
   sf_ui_lmn_t *e = sf_ui_add_button(&sf_ctx, label, v0, v1, cb, ud);
-  if (g_icon_reg_n < STUDIO_MAX_ICON_REG) {
-    g_icon_reg_el[g_icon_reg_n] = e;
-    g_icon_reg_id[g_icon_reg_n] = (int)id;
-    g_icon_reg_n++;
+  if (g_icon_tex[id]) {
+    int bw = v1.x - v0.x, bh = v1.y - v0.y;
+    int sz = bh - 2; if (sz > 18) sz = 18; if (sz < 10) sz = 10;
+    int ix, iy;
+    int txt_w = label ? (int)strlen(label) * 8 : 0;
+    if (txt_w == 0) {
+      ix = v0.x + (bw - sz) / 2;
+    } else {
+      int txt_x = v0.x + (bw - txt_w) / 2;
+      ix = txt_x + 3;
+    }
+    iy = v0.y + (bh - sz) / 2;
+    sf_ui_add_image(&sf_ctx, g_icon_tex[id], (sf_ivec2_t){ix, iy}, (sf_ivec2_t){ix+sz, iy+sz}, true);
   }
   return e;
 }
@@ -323,8 +326,7 @@ static bool _scan_dir_once(const char *path, char visited[][512], int *nv, int c
 static void scan_models(void) {
   g_model_count = 0;
   char vis[6][512]; int nv = 0;
-  const char *obj_paths[] = { SF_ASSET_PATH "/sf_objs", SF_SRC_ASSET_PATH "/sf_objs",
-                               "./sf_assets/sf_objs", NULL };
+  const char *obj_paths[] = { SF_ASSET_PATH "/sf_objs", SF_SRC_ASSET_PATH "/sf_objs", NULL };
   for (int p = 0; obj_paths[p] && g_model_count < STUDIO_MAX_MODELS; p++) {
     if (!_scan_dir_once(obj_paths[p], vis, &nv, 6)) continue;
     DIR *d = opendir(obj_paths[p]);
@@ -343,8 +345,7 @@ static void scan_models(void) {
     closedir(d);
   }
   /* also add .sff files from sf_sff directories */
-  const char *sff_paths[] = { SF_ASSET_PATH "/sf_sff", SF_SRC_ASSET_PATH "/sf_sff",
-                               "./sf_assets/sf_sff", NULL };
+  const char *sff_paths[] = { SF_ASSET_PATH "/sf_sff", SF_SRC_ASSET_PATH "/sf_sff", NULL };
   for (int p = 0; sff_paths[p] && g_model_count < STUDIO_MAX_MODELS; p++) {
     if (!_scan_dir_once(sff_paths[p], vis, &nv, 6)) continue;
     DIR *d = opendir(sff_paths[p]);
@@ -409,16 +410,15 @@ static bool _scan_dir_once(const char *path, char visited[][512], int *nv, int c
 static void scan_textures(void) {
   g_tex_count = 0;
   char visited[4][512]; int nv = 0;
-  const char *dirs[] = { SF_ASSET_PATH "/sf_textures", SF_SRC_ASSET_PATH "/sf_textures",
-                         "./sf_assets/sf_textures", NULL };
+  const char *dirs[] = { SF_ASSET_PATH "/sf_textures", SF_SRC_ASSET_PATH "/sf_textures", NULL };
   for (int i = 0; dirs[i]; i++)
     if (_scan_dir_once(dirs[i], visited, &nv, 4)) scan_textures_dir(dirs[i]);
 }
 
 static void scan_sffs(void) {
   g_sff_count = 0;
-  const char *paths[3] = { SF_ASSET_PATH "/sf_sff", SF_SRC_ASSET_PATH "/sf_sff", "./sf_assets/sf_sff" };
-  for (int p = 0; p < 3 && g_sff_count < STUDIO_MAX_SFFS; p++) {
+  const char *paths[2] = { SF_ASSET_PATH "/sf_sff", SF_SRC_ASSET_PATH "/sf_sff" };
+  for (int p = 0; p < 2 && g_sff_count < STUDIO_MAX_SFFS; p++) {
     DIR *d = opendir(paths[p]);
     if (!d) continue;
     struct dirent *e;
@@ -680,15 +680,60 @@ static void cb_spawn_kind(sf_ctx_t *ctx, void *ud) {
   spawn_primitive((int)(intptr_t)ud);
 }
 
+/* Compact sprite_3ds, removing any whose frame is in the subtree rooted at df */
+static bool _frame_in_subtree(sf_frame_t *f, sf_frame_t *root) {
+  for (sf_frame_t *p = f; p; p = p->parent) if (p == root) return true;
+  return false;
+}
+static void _purge_sprites_under(sf_frame_t *df) {
+  int nc = 0;
+  for (int bi = 0; bi < sf_ctx.sprite_3d_count; bi++)
+    if (!sf_ctx.sprite_3ds[bi].frame || !_frame_in_subtree(sf_ctx.sprite_3ds[bi].frame, df))
+      sf_ctx.sprite_3ds[nc++] = sf_ctx.sprite_3ds[bi];
+  sf_ctx.sprite_3d_count = nc;
+}
+/* Remove entities/lights/cameras/emitters whose frame is a child of parent_frame */
+static void _purge_entities_under(sf_frame_t *df) {
+  for (int i = sf_ctx.enti_count - 1; i >= 0; i--) {
+    if (sf_ctx.entities[i].frame && sf_ctx.entities[i].frame != df &&
+        _frame_in_subtree(sf_ctx.entities[i].frame, df)) {
+      for (int j = i; j < sf_ctx.enti_count - 1; j++) sf_ctx.entities[j] = sf_ctx.entities[j + 1];
+      if (sf_ctx.enti_count - 1 < SF_MAX_ENTITIES) memset(&g_enti_meta[sf_ctx.enti_count - 1], 0, sizeof(prim_meta_t));
+      sf_ctx.enti_count--;
+    }
+  }
+  for (int i = sf_ctx.light_count - 1; i >= 0; i--) {
+    if (sf_ctx.lights[i].frame && _frame_in_subtree(sf_ctx.lights[i].frame, df)) {
+      for (int j = i; j < sf_ctx.light_count - 1; j++) sf_ctx.lights[j] = sf_ctx.lights[j + 1];
+      sf_ctx.light_count--;
+    }
+  }
+  for (int i = sf_ctx.cam_count - 1; i >= 0; i--) {
+    if (sf_ctx.cameras[i].frame && _frame_in_subtree(sf_ctx.cameras[i].frame, df)) {
+      for (int j = i; j < sf_ctx.cam_count - 1; j++) sf_ctx.cameras[j] = sf_ctx.cameras[j + 1];
+      sf_ctx.cam_count--;
+    }
+  }
+  for (int i = sf_ctx.emitr_count - 1; i >= 0; i--) {
+    if (sf_ctx.emitrs[i].frame && _frame_in_subtree(sf_ctx.emitrs[i].frame, df)) {
+      for (int j = i; j < sf_ctx.emitr_count - 1; j++) sf_ctx.emitrs[j] = sf_ctx.emitrs[j + 1];
+      sf_ctx.emitr_count--;
+    }
+  }
+}
+
 static void cb_delete(sf_ctx_t *ctx, void *ud) {
   (void)ctx; (void)ud;
   if (g_sel_kind == SEL_ENTI && g_sel) {
     int idx = (int)(g_sel - sf_ctx.entities);
     if (idx < 0 || idx >= sf_ctx.enti_count) return;
-    { sf_frame_t *df = g_sel->frame;
-      for (int bi = 0; bi < sf_ctx.sprite_3d_count; bi++)
-        if (sf_ctx.sprite_3ds[bi].frame == df) sf_ctx.sprite_3ds[bi].frame = NULL; }
-    sf_remove_frame(&sf_ctx, g_sel->frame);
+    sf_frame_t *df = g_sel->frame;
+    _purge_sprites_under(df);
+    _purge_entities_under(df);
+    /* recompute idx since _purge_entities_under may have shifted the array */
+    idx = (int)(g_sel - sf_ctx.entities);
+    if (idx < 0 || idx >= sf_ctx.enti_count) { sel_clear(); g_ui_dirty = true; return; }
+    sf_remove_frame(&sf_ctx, df);
     for (int i = idx; i < sf_ctx.enti_count - 1; i++) sf_ctx.entities[i] = sf_ctx.entities[i + 1];
     for (int i = idx; i < sf_ctx.enti_count - 1 && i < SF_MAX_ENTITIES - 1; i++) g_enti_meta[i] = g_enti_meta[i + 1];
     if (sf_ctx.enti_count - 1 >= 0 && sf_ctx.enti_count - 1 < SF_MAX_ENTITIES) {
@@ -743,8 +788,8 @@ static void cb_load_sff_from_list(sf_ctx_t *ctx, void *ud) {
   (void)ctx; (void)ud;
   if (g_sff_sel < 0 || g_sff_sel >= g_sff_count) return;
   /* build full path using the same two search dirs */
-  const char *dirs[3] = { SF_ASSET_PATH "/sf_sff", SF_SRC_ASSET_PATH "/sf_sff", "./sf_assets/sf_sff" };
-  for (int p = 0; p < 3; p++) {
+  const char *dirs[2] = { SF_ASSET_PATH "/sf_sff", SF_SRC_ASSET_PATH "/sf_sff" };
+  for (int p = 0; p < 2; p++) {
     char path[512];
     snprintf(path, sizeof(path), "%s/%s", dirs[p], g_sff_files[g_sff_sel]);
     FILE *f = fopen(path, "r");
@@ -775,6 +820,11 @@ static void cb_install_sff(sf_ctx_t *ctx, void *ud) {
   } else {
     SF_LOG(&sf_ctx, SF_LOG_ERROR, "Install failed: %s\n", dst);
   }
+}
+
+static void cb_save_install_sff(sf_ctx_t *ctx, void *ud) {
+  cb_save_sff(ctx, ud);
+  cb_install_sff(ctx, ud);
 }
 
 /* ---- SFUI DESIGNER ---- */
@@ -1138,34 +1188,50 @@ static float        s_thumb_zbuf[THUMB_CAM_SZ * THUMB_CAM_SZ];
 static sf_cam_t     s_thumb_cam;
 static bool         s_thumb_cam_init = false;
 
-static void picker_render_model_thumb(int i) {
-  if (!s_thumb_cam_init) {
-    memset(&s_thumb_cam, 0, sizeof(s_thumb_cam));
-    s_thumb_cam.w           = THUMB_CAM_SZ;
-    s_thumb_cam.h           = THUMB_CAM_SZ;
-    s_thumb_cam.buffer_size = THUMB_CAM_SZ * THUMB_CAM_SZ;
-    s_thumb_cam.buffer      = s_thumb_buf;
-    s_thumb_cam.z_buffer    = s_thumb_zbuf;
-    s_thumb_cam.fov         = 45.0f;
-    s_thumb_cam.near_plane  = 0.01f;
-    s_thumb_cam.far_plane   = 1000.0f;
-    s_thumb_cam_init = true;
+/* Load a BMP from a full path into a malloc'd sf_tex_t (caller frees px + struct).
+   Returns NULL on failure. */
+static sf_tex_t *picker_load_bmp_private(const char *path) {
+  FILE *file = fopen(path, "rb");
+  if (!file) return NULL;
+  uint8_t hdr[54];
+  if (fread(hdr, 1, 54, file) != 54 || hdr[0]!='B' || hdr[1]!='M') { fclose(file); return NULL; }
+  uint32_t off = hdr[10]|(hdr[11]<<8)|(hdr[12]<<16)|(hdr[13]<<24);
+  int32_t w  = hdr[18]|(hdr[19]<<8)|(hdr[20]<<16)|(hdr[21]<<24);
+  int32_t h  = hdr[22]|(hdr[23]<<8)|(hdr[24]<<16)|(hdr[25]<<24);
+  int32_t ha = abs(h);
+  if (w<=0||ha<=0) { fclose(file); return NULL; }
+  sf_pkd_clr_t *px = (sf_pkd_clr_t*)malloc((size_t)w*(size_t)ha*sizeof(sf_pkd_clr_t));
+  if (!px) { fclose(file); return NULL; }
+  fseek(file, off, SEEK_SET);
+  int pad = (4-(w*3)%4)%4;
+  uint8_t bgr[3];
+  for (int y=0;y<ha;y++) {
+    int dy = (h>0)?(ha-1-y):y;
+    for (int x=0;x<w;x++) {
+      if (fread(bgr,1,3,file)!=3) bgr[0]=bgr[1]=bgr[2]=0;
+      if (bgr[2]==255&&bgr[1]==0&&bgr[0]==255) { px[dy*w+x]=0; }
+      else {
+        uint8_t lr=(uint8_t)(powf(bgr[2]/255.f,2.2f)*255.f+.5f);
+        uint8_t lg=(uint8_t)(powf(bgr[1]/255.f,2.2f)*255.f+.5f);
+        uint8_t lb=(uint8_t)(powf(bgr[0]/255.f,2.2f)*255.f+.5f);
+        px[dy*w+x]=(0xFFu<<24)|((uint32_t)lr<<16)|((uint32_t)lg<<8)|lb;
+      }
+    }
+    fseek(file,pad,SEEK_CUR);
   }
+  fclose(file);
+  sf_tex_t *t=(sf_tex_t*)malloc(sizeof(sf_tex_t));
+  if (!t){free(px);return NULL;}
+  memset(t,0,sizeof(sf_tex_t));
+  t->px=px; t->w=w; t->h=ha; t->w_mask=w-1; t->h_mask=ha-1;
+  return t;
+}
 
-  const char *fname = g_model_files[i];
-  const char *dot = strrchr(fname, '.');
-  if (!dot || strcmp(dot, ".obj") != 0) return; /* skip non-obj (e.g. .sff) */
-
-  char r_path[512];
-  if (!_sf_resolve_asset(fname, r_path, sizeof(r_path))) return;
-
-  /* Load obj if not already in ctx */
-  char nm[64];
-  int stem = (int)(dot - fname); if (stem > 60) stem = 60;
-  snprintf(nm, sizeof(nm), "%.*s", stem, fname);
-  sf_obj_t *obj = sf_get_obj_(&sf_ctx, nm, false);
-  if (!obj) obj = sf_load_obj(&sf_ctx, r_path, nm);
-  if (!obj) return;
+/* Render a loaded sf_obj_t into the thumb cam and store a malloc'd sf_tex_t at g_picker_thumbs[i].
+   tex_path is the full path to a BMP to apply, or NULL for untextured. */
+static void picker_render_obj_thumb(sf_obj_t *obj, const char *tex_path, int i) {
+  /* Optionally load a temporary texture for this render */
+  sf_tex_t *tmp_tex = tex_path ? picker_load_bmp_private(tex_path) : NULL;
 
   /* Set up a temporary entity on the stack */
   sf_enti_t tmp_enti; memset(&tmp_enti, 0, sizeof(tmp_enti));
@@ -1173,6 +1239,7 @@ static void picker_render_model_thumb(int i) {
   tmp_frame.global_M = sf_make_idn_fmat4();
   tmp_enti.frame = &tmp_frame;
   tmp_enti.obj = *obj;
+  tmp_enti.tex = tmp_tex;
 
   /* Aim camera at the bounding sphere from upper-right-front */
   sf_fvec3_t ctr = obj->bs_center;
@@ -1192,10 +1259,9 @@ static void picker_render_model_thumb(int i) {
     s_thumb_zbuf[k] = 1e30f;
   }
 
-  /* Inject a temporary key light pointing down-right-forward */
+  /* Inject a temporary key light */
   sf_frame_t tmp_lf; memset(&tmp_lf, 0, sizeof(tmp_lf));
   tmp_lf.global_M = sf_make_idn_fmat4();
-  /* -Z column = light direction in world: {-0.577, -0.577, -0.577} */
   tmp_lf.global_M.m[2][0] = 0.577f;
   tmp_lf.global_M.m[2][1] = 0.577f;
   tmp_lf.global_M.m[2][2] = 0.577f;
@@ -1210,27 +1276,163 @@ static void picker_render_model_thumb(int i) {
   }
 
   sf_render_enti(&sf_ctx, &s_thumb_cam, &tmp_enti);
+  sf_ctx.light_count = saved_lc;
 
-  sf_ctx.light_count = saved_lc; /* remove temp light */
+  /* Release the temporary render texture */
+  if (tmp_tex) { free((void*)tmp_tex->px); free(tmp_tex); }
 
-  /* Copy buffer into a new sf_tex_t */
-  sf_tex_t *t    = (sf_tex_t*)malloc(sizeof(sf_tex_t));
+  /* Copy buffer into a malloc'd sf_tex_t */
+  sf_tex_t *t = (sf_tex_t*)malloc(sizeof(sf_tex_t));
   sf_pkd_clr_t *px = (sf_pkd_clr_t*)malloc(THUMB_CAM_SZ * THUMB_CAM_SZ * sizeof(sf_pkd_clr_t));
   if (!t || !px) { free(t); free(px); return; }
   memcpy(px, s_thumb_buf, THUMB_CAM_SZ * THUMB_CAM_SZ * sizeof(sf_pkd_clr_t));
   memset(t, 0, sizeof(sf_tex_t));
-  t->px     = px;
-  t->w      = THUMB_CAM_SZ;
-  t->h      = THUMB_CAM_SZ;
-  t->w_mask = THUMB_CAM_SZ - 1;
-  t->h_mask = THUMB_CAM_SZ - 1;
+  t->px = px; t->w = THUMB_CAM_SZ; t->h = THUMB_CAM_SZ;
+  t->w_mask = THUMB_CAM_SZ - 1; t->h_mask = THUMB_CAM_SZ - 1;
+  g_picker_thumbs[i] = t;
+}
+
+static void picker_render_model_thumb(int i) {
+  if (!s_thumb_cam_init) {
+    memset(&s_thumb_cam, 0, sizeof(s_thumb_cam));
+    s_thumb_cam.w           = THUMB_CAM_SZ;
+    s_thumb_cam.h           = THUMB_CAM_SZ;
+    s_thumb_cam.buffer_size = THUMB_CAM_SZ * THUMB_CAM_SZ;
+    s_thumb_cam.buffer      = s_thumb_buf;
+    s_thumb_cam.z_buffer    = s_thumb_zbuf;
+    s_thumb_cam.fov         = 45.0f;
+    s_thumb_cam.near_plane  = 0.01f;
+    s_thumb_cam.far_plane   = 1000.0f;
+    s_thumb_cam_init = true;
+  }
+
+  const char *fname = g_model_files[i];
+  const char *dot = strrchr(fname, '.');
+  if (!dot) return;
+
+  if (strcmp(dot, ".obj") == 0) {
+    char r_path[512];
+    if (!_sf_resolve_asset(fname, r_path, sizeof(r_path))) return;
+    char nm[64];
+    int stem = (int)(dot - fname); if (stem > 60) stem = 60;
+    snprintf(nm, sizeof(nm), "%.*s", stem, fname);
+    sf_obj_t *obj = sf_get_obj_(&sf_ctx, nm, false);
+    if (!obj) obj = sf_load_obj(&sf_ctx, r_path, nm);
+    if (!obj) return;
+    /* Try stem-name texture match: tux.obj -> tux.bmp */
+    char tex_bmp[80], tex_path[512];
+    snprintf(tex_bmp, sizeof(tex_bmp), "%s.bmp", nm);
+    const char *tex_full = _sf_resolve_asset(tex_bmp, tex_path, sizeof(tex_path)) ? tex_path : NULL;
+    picker_render_obj_thumb(obj, tex_full, i);
+  } else if (strcmp(dot, ".sff") == 0) {
+    /* Parse .sff to find the first entity's mesh and texture */
+    char r_path[512];
+    if (!_sf_resolve_asset(fname, r_path, sizeof(r_path))) return;
+    FILE *sf = fopen(r_path, "r");
+    if (!sf) return;
+
+    /* Maps: mesh_name -> obj_file, tex_name -> bmp_file */
+    char mesh_names[8][64]={}, mesh_files[8][128]={};
+    char tex_names [8][64]={}, tex_files [8][128]={};
+    int  n_mesh=0, n_tex=0;
+    char ent_obj_file[128]={}, ent_tex_file[128]={};
+    bool in_entity=false;
+    char line[512], cur_mesh_name[64]={};
+
+    while (fgets(line, sizeof(line), sf)) {
+      char a[128], b[128];
+      if (!in_entity) {
+        if (sscanf(line," mesh %63s \"%127[^\"]\"",a,b)==2 && n_mesh<8) {
+          snprintf(mesh_names[n_mesh],64,"%s",a);
+          snprintf(mesh_files[n_mesh],128,"%s",b); n_mesh++;
+        } else if (sscanf(line," texture %63s \"%127[^\"]\"",a,b)==2 && n_tex<8) {
+          snprintf(tex_names[n_tex],64,"%s",a);
+          snprintf(tex_files[n_tex],128,"%s",b); n_tex++;
+        } else if (strstr(line,"entity ") && strstr(line,"{")) {
+          in_entity=true; cur_mesh_name[0]=0;
+        }
+      } else {
+        if (strstr(line,"}")) { in_entity=false; }
+        else if (sscanf(line," mesh=%63s",a)==1 && !ent_obj_file[0]) {
+          for(int m=0;m<n_mesh;m++) if(strcmp(mesh_names[m],a)==0){
+            snprintf(ent_obj_file,128,"%s",mesh_files[m]); break;}
+        } else if (sscanf(line," texture=%63s",a)==1 && !ent_tex_file[0]) {
+          for(int t=0;t<n_tex;t++) if(strcmp(tex_names[t],a)==0){
+            snprintf(ent_tex_file,128,"%s",tex_files[t]); break;}
+        }
+        if (ent_obj_file[0] && ent_tex_file[0]) break; /* got both */
+      }
+    }
+    fclose(sf);
+    if (!ent_obj_file[0]) return;
+
+    char obj_path[512];
+    if (!_sf_resolve_asset(ent_obj_file, obj_path, sizeof(obj_path))) return;
+    const char *odot = strrchr(ent_obj_file, '.');
+    char nm[64];
+    int stem = odot ? (int)(odot - ent_obj_file) : (int)strlen(ent_obj_file);
+    if (stem > 60) stem = 60;
+    snprintf(nm, sizeof(nm), "%.*s", stem, ent_obj_file);
+    sf_obj_t *obj = sf_get_obj_(&sf_ctx, nm, false);
+    if (!obj) obj = sf_load_obj(&sf_ctx, obj_path, nm);
+    if (!obj) return;
+
+    char tex_path[512];
+    const char *tex_full = (ent_tex_file[0] && _sf_resolve_asset(ent_tex_file, tex_path, sizeof(tex_path)))
+                           ? tex_path : NULL;
+    picker_render_obj_thumb(obj, tex_full, i);
+  }
+}
+
+/* Load a BMP texture from disk into a privately malloc'd sf_tex_t (bypasses sf_ctx pool) */
+static void picker_load_tex_thumb(int i) {
+  const char *fname = g_tex_files[i];
+  char path[512];
+  if (!_sf_resolve_asset(fname, path, sizeof(path))) return;
+  FILE *file = fopen(path, "rb");
+  if (!file) return;
+  uint8_t header[54];
+  if (fread(header, 1, 54, file) != 54 || header[0] != 'B' || header[1] != 'M') {
+    fclose(file); return;
+  }
+  uint32_t data_offset = header[10]|(header[11]<<8)|(header[12]<<16)|(header[13]<<24);
+  int32_t w = header[18]|(header[19]<<8)|(header[20]<<16)|(header[21]<<24);
+  int32_t h = header[22]|(header[23]<<8)|(header[24]<<16)|(header[25]<<24);
+  int32_t h_abs = abs(h);
+  if (w <= 0 || h_abs <= 0) { fclose(file); return; }
+  sf_pkd_clr_t *px = (sf_pkd_clr_t*)malloc((size_t)w * (size_t)h_abs * sizeof(sf_pkd_clr_t));
+  if (!px) { fclose(file); return; }
+  fseek(file, data_offset, SEEK_SET);
+  int padding = (4 - (w * 3) % 4) % 4;
+  uint8_t bgr[3];
+  for (int y = 0; y < h_abs; y++) {
+    int dest_y = (h > 0) ? (h_abs - 1 - y) : y;
+    for (int x = 0; x < w; x++) {
+      if (fread(bgr, 1, 3, file) != 3) { bgr[0]=bgr[1]=bgr[2]=0; }
+      if (bgr[2]==255 && bgr[1]==0 && bgr[0]==255) {
+        px[dest_y*w+x] = 0x00000000;
+      } else {
+        uint8_t lr = (uint8_t)(powf(bgr[2]/255.0f,2.2f)*255.0f+0.5f);
+        uint8_t lg = (uint8_t)(powf(bgr[1]/255.0f,2.2f)*255.0f+0.5f);
+        uint8_t lb = (uint8_t)(powf(bgr[0]/255.0f,2.2f)*255.0f+0.5f);
+        px[dest_y*w+x] = (0xFFu<<24)|((uint32_t)lr<<16)|((uint32_t)lg<<8)|lb;
+      }
+    }
+    fseek(file, padding, SEEK_CUR);
+  }
+  fclose(file);
+  sf_tex_t *t = (sf_tex_t*)malloc(sizeof(sf_tex_t));
+  if (!t) { free(px); return; }
+  memset(t, 0, sizeof(sf_tex_t));
+  t->px = px; t->w = w; t->h = h_abs;
+  t->w_mask = w - 1; t->h_mask = h_abs - 1;
   g_picker_thumbs[i] = t;
 }
 
 static void picker_load_thumbs(void) {
-  /* Free any previously malloc'd model thumbnails */
+  /* Free all previously malloc'd thumbnails (model renders and private tex loads are all malloc'd) */
   for (int i = 0; i < g_picker_thumbs_n; i++) {
-    if (g_picker_open == PICK_MODEL && g_picker_thumbs[i] && g_picker_thumbs[i]->px) {
+    if (g_picker_thumbs[i]) {
       free((void*)g_picker_thumbs[i]->px);
       free(g_picker_thumbs[i]);
     }
@@ -1242,22 +1444,9 @@ static void picker_load_thumbs(void) {
     g_picker_thumbs[i] = NULL;
     if (g_picker_open == PICK_MODEL) {
       picker_render_model_thumb(i);
-      continue;
+    } else {
+      picker_load_tex_thumb(i);
     }
-    const char *fname = g_tex_files[i];
-    char nm[64]; const char *dot = strrchr(fname, '.');
-    int stem = dot ? (int)(dot - fname) : (int)strlen(fname);
-    if (stem > 60) stem = 60;
-    snprintf(nm, sizeof(nm), "%.*s", stem, fname);
-    /* look up already-loaded texture */
-    for (int j = 0; j < sf_ctx.tex_count; j++) {
-      if (sf_ctx.textures[j].name && strcmp(sf_ctx.textures[j].name, nm) == 0) {
-        g_picker_thumbs[i] = &sf_ctx.textures[j]; break;
-      }
-    }
-    /* load from disk if not yet in memory */
-    if (!g_picker_thumbs[i])
-      g_picker_thumbs[i] = sf_load_texture_bmp(&sf_ctx, fname, nm);
   }
 }
 
@@ -2437,6 +2626,8 @@ static void crft_save_building(void) {
                 base,roof_mesh_name,p.x,p.y,p.z,r.x,r.y,r.z,s.x,s.y,s.z);
         if (g_ck_enti_roof->tex&&g_ck_enti_roof->tex->name)
             fprintf(f,"    texture=%s\n",g_ck_enti_roof->tex->name);
+        if (g_ck_enti&&g_ck_enti->name)
+            fprintf(f,"    frame=%s\n",g_ck_enti->name);
         fprintf(f,"}\n");
     }
     fclose(f);
@@ -2522,8 +2713,9 @@ static void cb_crft_install(sf_ctx_t *c, void *u) {
     else if (g_crft_type==CRFT_ROCK) crft_install_rock();
     else crft_install_building();
 }
+static void cb_crft_save_install(sf_ctx_t *c, void *u) { cb_crft_save(c,u); cb_crft_install(c,u); }
 static void cb_crft_rand3d(sf_ctx_t *c, void *u) { (void)c;(void)u; ct_rand3d=!ct_rand3d; }
-static void cb_tab_sfcrft(sf_ctx_t *c, void *u) { (void)c;(void)u; g_tab=TAB_SFCRFT; g_picker_open=PICK_NONE; g_ui_dirty=true; }
+static void cb_tab_sfgen(sf_ctx_t *c, void *u) { (void)c;(void)u; g_tab=TAB_SFGEN; g_picker_open=PICK_NONE; g_ui_dirty=true; }
 
 /* Tree presets */
 typedef struct { const char *name; float depth,branch,angle,len,taper,grav,wiggle,twist,tr,tl,ls,ld,lo; } crft_tree_preset_t;
@@ -2684,7 +2876,7 @@ static void build_sfcrft_tab(void) {
 #define CRFT_RY(n) (TOP+44+(n)*RH)
 
     /* Left panel */
-    sf_ui_add_panel(&sf_ctx, "SFCRFT", (sf_ivec2_t){PNL_X0, TOP}, (sf_ivec2_t){PNL_X1, g_h-10});
+    g_sfgen_panel = sf_ui_add_panel(&sf_ctx, "SFGen", (sf_ivec2_t){PNL_X0, TOP}, (sf_ivec2_t){PNL_X1, g_h-10});
 
     /* Type selector row */
     int ty = TOP + 22;
@@ -2726,24 +2918,28 @@ static void build_sfcrft_tab(void) {
         CRFT_DF(12, "Leaf Cnt", ct_ld,     1.f);
         CRFT_DF(13, "Leaf Opa", ct_lo,     0.01f);
 
+        for (int i = 0; i < 14; i++)
+            if (g_crft_tree_icons[i])
+                sf_ui_add_image(&sf_ctx, g_crft_tree_icons[i],
+                    (sf_ivec2_t){LX, CRFT_RY(i)},
+                    (sf_ivec2_t){LX+CRFT_ICON_SZ, CRFT_RY(i)+CRFT_ICON_SZ}, true);
+
         /* Bark texture */
         sf_ui_add_label(&sf_ctx,"Bark Tex",(sf_ivec2_t){LX,CRFT_RY(14)+2},0);
         { const char *bn = (g_ct_enti&&g_ct_enti->tex&&g_ct_enti->tex->name)?g_ct_enti->tex->name:"(none)";
           sf_ui_add_label(&sf_ctx, bn, (sf_ivec2_t){LX,CRFT_RY(15)+2}, 0xFFAAAAAA); }
-        sf_ui_add_button(&sf_ctx,"Browse",(sf_ivec2_t){LX,CRFT_RY(16)},(sf_ivec2_t){IX1,CRFT_RY(16)+12},
+        icon_btn(ICN_OPEN,"  Browse",(sf_ivec2_t){LX,CRFT_RY(16)},(sf_ivec2_t){IX1,CRFT_RY(16)+12},
             cb_browse_crft_bark, NULL);
 
         /* Leaf sprite */
         sf_ui_add_label(&sf_ctx,"Leaf Spr",(sf_ivec2_t){LX,CRFT_RY(17)+2},0);
         { const char *sn = (g_crft_leaf&&g_crft_leaf->name)?g_crft_leaf->name:"(none)";
           sf_ui_add_label(&sf_ctx, sn, (sf_ivec2_t){LX,CRFT_RY(18)+2}, 0xFFAAAAAA); }
-        sf_ui_add_button(&sf_ctx,"Browse",(sf_ivec2_t){LX,CRFT_RY(19)},(sf_ivec2_t){IX1,CRFT_RY(19)+12},
+        icon_btn(ICN_OPEN,"  Browse",(sf_ivec2_t){LX,CRFT_RY(19)},(sf_ivec2_t){IX1,CRFT_RY(19)+12},
             cb_browse_crft_leaf, NULL);
 
-        /* Save/Install */
-        { int bw=(IX1-LX-2)/2;
-          sf_ui_add_button(&sf_ctx,"Save",(sf_ivec2_t){LX,CRFT_RY(20)},(sf_ivec2_t){LX+bw,CRFT_RY(20)+14},cb_crft_save,NULL);
-          sf_ui_add_button(&sf_ctx,"Install",(sf_ivec2_t){LX+bw+2,CRFT_RY(20)},(sf_ivec2_t){IX1,CRFT_RY(20)+14},cb_crft_install,NULL); }
+        /* Save */
+        icon_btn(ICN_SAVE,"  Save",(sf_ivec2_t){LX,CRFT_RY(20)},(sf_ivec2_t){IX1,CRFT_RY(20)+14},cb_crft_save_install,NULL);
 
         sf_ui_add_label(&sf_ctx,"SFF path",(sf_ivec2_t){LX,CRFT_RY(21)+2},0);
         sf_ui_add_text_input(&sf_ctx,(sf_ivec2_t){LX,CRFT_RY(22)},(sf_ivec2_t){IX1,CRFT_RY(22)+12},
@@ -2771,17 +2967,21 @@ static void build_sfcrft_tab(void) {
         CRFT_DF( 9, "Pointy",    cr_pointy,  0.05f);
         CRFT_DF(10, "Bump",      cr_bump,    0.02f);
 
+        for (int i = 0; i < 11; i++)
+            if (g_crft_rock_icons[i])
+                sf_ui_add_image(&sf_ctx, g_crft_rock_icons[i],
+                    (sf_ivec2_t){LX, CRFT_RY(i)},
+                    (sf_ivec2_t){LX+CRFT_ICON_SZ, CRFT_RY(i)+CRFT_ICON_SZ}, true);
+
         /* Stone texture */
         sf_ui_add_label(&sf_ctx,"Stone Tex",(sf_ivec2_t){LX,CRFT_RY(11)+2},0);
         { const char *stn = (g_cr_enti&&g_cr_enti->tex&&g_cr_enti->tex->name)?g_cr_enti->tex->name:"(none)";
           sf_ui_add_label(&sf_ctx, stn, (sf_ivec2_t){LX,CRFT_RY(12)+2}, 0xFFAAAAAA); }
-        sf_ui_add_button(&sf_ctx,"Browse",(sf_ivec2_t){LX,CRFT_RY(13)},(sf_ivec2_t){IX1,CRFT_RY(13)+12},
+        icon_btn(ICN_OPEN,"  Browse",(sf_ivec2_t){LX,CRFT_RY(13)},(sf_ivec2_t){IX1,CRFT_RY(13)+12},
             cb_browse_crft_stone, NULL);
 
-        /* Save/Install */
-        { int bw=(IX1-LX-2)/2;
-          sf_ui_add_button(&sf_ctx,"Save",(sf_ivec2_t){LX,CRFT_RY(14)},(sf_ivec2_t){LX+bw,CRFT_RY(14)+14},cb_crft_save,NULL);
-          sf_ui_add_button(&sf_ctx,"Install",(sf_ivec2_t){LX+bw+2,CRFT_RY(14)},(sf_ivec2_t){IX1,CRFT_RY(14)+14},cb_crft_install,NULL); }
+        /* Save */
+        icon_btn(ICN_SAVE,"  Save",(sf_ivec2_t){LX,CRFT_RY(14)},(sf_ivec2_t){IX1,CRFT_RY(14)+14},cb_crft_save_install,NULL);
 
         sf_ui_add_label(&sf_ctx,"SFF path",(sf_ivec2_t){LX,CRFT_RY(15)+2},0);
         sf_ui_add_text_input(&sf_ctx,(sf_ivec2_t){LX,CRFT_RY(16)},(sf_ivec2_t){IX1,CRFT_RY(16)+12},
@@ -2813,22 +3013,26 @@ static void build_sfcrft_tab(void) {
         CRFT_DF(13, "Roof Scl",  bk_roof_scale,0.05f);
         CRFT_DF(14, "Asym",      bk_asym,      0.05f);
 
+        for (int i = 0; i < 14; i++)
+            if (g_crft_bldg_icons[i])
+                sf_ui_add_image(&sf_ctx, g_crft_bldg_icons[i],
+                    (sf_ivec2_t){LX, CRFT_RY(i)},
+                    (sf_ivec2_t){LX+CRFT_ICON_SZ, CRFT_RY(i)+CRFT_ICON_SZ}, true);
+
         /* Wall and Roof textures */
         sf_ui_add_label(&sf_ctx,"Wall Tex",(sf_ivec2_t){LX,CRFT_RY(15)+2},0);
         { const char *wn2 = (g_ck_enti&&g_ck_enti->tex&&g_ck_enti->tex->name)?g_ck_enti->tex->name:"(none)";
           sf_ui_add_label(&sf_ctx, wn2, (sf_ivec2_t){LX,CRFT_RY(16)+2}, 0xFFAAAAAA); }
-        sf_ui_add_button(&sf_ctx,"Browse",(sf_ivec2_t){LX,CRFT_RY(17)},(sf_ivec2_t){IX1,CRFT_RY(17)+12},
+        icon_btn(ICN_OPEN,"  Browse",(sf_ivec2_t){LX,CRFT_RY(17)},(sf_ivec2_t){IX1,CRFT_RY(17)+12},
             cb_browse_crft_bwall, NULL);
         sf_ui_add_label(&sf_ctx,"Roof Tex",(sf_ivec2_t){LX,CRFT_RY(18)+2},0);
         { const char *rn2 = (g_ck_enti_roof&&g_ck_enti_roof->tex&&g_ck_enti_roof->tex->name)?g_ck_enti_roof->tex->name:"(none)";
           sf_ui_add_label(&sf_ctx, rn2, (sf_ivec2_t){LX,CRFT_RY(19)+2}, 0xFFAAAAAA); }
-        sf_ui_add_button(&sf_ctx,"Browse",(sf_ivec2_t){LX,CRFT_RY(20)},(sf_ivec2_t){IX1,CRFT_RY(20)+12},
+        icon_btn(ICN_OPEN,"  Browse",(sf_ivec2_t){LX,CRFT_RY(20)},(sf_ivec2_t){IX1,CRFT_RY(20)+12},
             cb_browse_crft_broof, NULL);
 
-        /* Save/Install */
-        { int bw=(IX1-LX-2)/2;
-          sf_ui_add_button(&sf_ctx,"Save",(sf_ivec2_t){LX,CRFT_RY(21)},(sf_ivec2_t){LX+bw,CRFT_RY(21)+14},cb_crft_save,NULL);
-          sf_ui_add_button(&sf_ctx,"Install",(sf_ivec2_t){LX+bw+2,CRFT_RY(21)},(sf_ivec2_t){IX1,CRFT_RY(21)+14},cb_crft_install,NULL); }
+        /* Save */
+        icon_btn(ICN_SAVE,"  Save",(sf_ivec2_t){LX,CRFT_RY(21)},(sf_ivec2_t){IX1,CRFT_RY(21)+14},cb_crft_save_install,NULL);
 
         sf_ui_add_label(&sf_ctx,"SFF path",(sf_ivec2_t){LX,CRFT_RY(22)+2},0);
         sf_ui_add_text_input(&sf_ctx,(sf_ivec2_t){LX,CRFT_RY(23)},(sf_ivec2_t){IX1,CRFT_RY(23)+12},
@@ -2859,15 +3063,15 @@ static void build_tab_bar(void) {
   int bw = 56, bh = 16, bx = 80, by = 0;
   const char *sff_lbl   = (g_tab == TAB_SFF)    ? "[SFF]"    : "SFF";
   const char *sfui_lbl  = (g_tab == TAB_SFUI)   ? "[SFUI]"   : "SFUI";
-  const char *crft_lbl  = (g_tab == TAB_SFCRFT) ? "[SFCRFT]" : "SFCRFT";
+  const char *crft_lbl  = (g_tab == TAB_SFGEN) ? "[SFGen]" : "SFGen";
   sf_ui_lmn_t *b0 = sf_ui_add_button(&sf_ctx, sff_lbl,  (sf_ivec2_t){bx,             by}, (sf_ivec2_t){bx + bw,      by + bh}, cb_tab_sff,    NULL);
   sf_ui_lmn_t *b1 = sf_ui_add_button(&sf_ctx, sfui_lbl, (sf_ivec2_t){bx + bw + 4,   by}, (sf_ivec2_t){bx + 2*bw+4,  by + bh}, cb_tab_sfui,   NULL);
-  sf_ui_lmn_t *b2 = sf_ui_add_button(&sf_ctx, crft_lbl, (sf_ivec2_t){bx + 2*bw + 8, by}, (sf_ivec2_t){bx + 3*bw+8,  by + bh}, cb_tab_sfcrft, NULL);
+  sf_ui_lmn_t *b2 = sf_ui_add_button(&sf_ctx, crft_lbl, (sf_ivec2_t){bx + 2*bw + 8, by}, (sf_ivec2_t){bx + 3*bw+8,  by + bh}, cb_tab_sfgen, NULL);
   sf_pkd_clr_t transp = (sf_pkd_clr_t)0xFF111111;
   sf_pkd_clr_t blue   = (sf_pkd_clr_t)0xFF88AAFF;
   if (b0) { b0->style.color_base = transp; b0->style.color_hover = (sf_pkd_clr_t)0xFF222233; b0->style.color_active = (sf_pkd_clr_t)0xFF222233; if (g_tab == TAB_SFF)    b0->style.color_text = blue; }
   if (b1) { b1->style.color_base = transp; b1->style.color_hover = (sf_pkd_clr_t)0xFF222233; b1->style.color_active = (sf_pkd_clr_t)0xFF222233; if (g_tab == TAB_SFUI)   b1->style.color_text = blue; }
-  if (b2) { b2->style.color_base = transp; b2->style.color_hover = (sf_pkd_clr_t)0xFF222233; b2->style.color_active = (sf_pkd_clr_t)0xFF222233; if (g_tab == TAB_SFCRFT) b2->style.color_text = blue; }
+  if (b2) { b2->style.color_base = transp; b2->style.color_hover = (sf_pkd_clr_t)0xFF222233; b2->style.color_active = (sf_pkd_clr_t)0xFF222233; if (g_tab == TAB_SFGEN) b2->style.color_text = blue; }
 }
 
 static void build_section_sep(int y, const char *title) {
@@ -2956,11 +3160,14 @@ static void cb_outliner_pick(sf_ctx_t *c, void *ud) {
 static void cb_outl_scroll_up  (sf_ctx_t *c, void *ud) { (void)c; (void)ud; g_outl_scroll -= 5; if (g_outl_scroll < 0) g_outl_scroll = 0; g_ui_dirty = true; }
 static void cb_outl_scroll_dn  (sf_ctx_t *c, void *ud) { (void)c; (void)ud; g_outl_scroll += 5; g_ui_dirty = true; }
 
-static void blit_tex_scaled(sf_tex_t *tex, int dx, int dy, int dw, int dh); /* forward decl */
 
 /* ============================================================
    Asset browser — UI panel (called from build_sff_tab)
    ============================================================ */
+/* persistent string storage for per-cell labels built each UI rebuild */
+static char s_cell_name[STUDIO_MAX_TEXS][8];
+static char s_cell_badge[STUDIO_MAX_TEXS][8];
+
 static void build_browser_panel(void) {
   if (g_picker_open == PICK_NONE) return;
   int bx0 = BROWSER_X0, bx1 = BROWSER_X1;
@@ -2968,7 +3175,7 @@ static void build_browser_panel(void) {
   const char *title = (g_picker_open == PICK_MODEL) ? "Browse Models" :
                       (g_picker_open == PICK_SPRITE) ? "Browse Sprites" : "Browse Textures";
   sf_ui_add_panel(&sf_ctx, title, (sf_ivec2_t){bx0, by0}, (sf_ivec2_t){bx1, by1});
-  sf_ui_add_button(&sf_ctx, "X", (sf_ivec2_t){bx0+2, by0+2}, (sf_ivec2_t){bx0+18, by0+16},
+  sf_ui_add_button(&sf_ctx, "X", (sf_ivec2_t){bx0-1, by0+2}, (sf_ivec2_t){bx0+15, by0+16},
                    cb_picker_close, NULL);
   int content_y0 = by0 + 24;
   int content_y1 = by1 - 26;
@@ -2986,16 +3193,51 @@ static void build_browser_panel(void) {
       if (idx >= n) break;
       int cx = bx0 + 6 + col * (BROWSER_CELL_W + 2);
       int cy = content_y0 + row * BROWSER_CELL_H;
+      int tx = cx + 4, ty = cy + 4;
+      const char *lb = picker_item_label(idx);
+      sf_tex_t *thumb = (idx < g_picker_thumbs_n) ? g_picker_thumbs[idx] : NULL;
+
+      /* Cell click button — background color = hash-tint when no thumb */
+      sf_pkd_clr_t base_clr = (sf_pkd_clr_t)0xFF2A2A2A;
+      if (!thumb) {
+        uint32_t hh = 0x811c9dc5u;
+        for (const char *p = lb; *p; p++) hh = (hh ^ (unsigned char)*p) * 0x01000193u;
+        uint32_t r = 0x20 + (hh & 0x3F), g2 = 0x20 + (hh>>8 & 0x3F), b2 = 0x20 + (hh>>16 & 0x3F);
+        base_clr = (sf_pkd_clr_t)(0xFF000000u | (r<<16) | (g2<<8) | b2);
+      }
       sf_ui_lmn_t *b = sf_ui_add_button(&sf_ctx, "",
         (sf_ivec2_t){cx, cy},
         (sf_ivec2_t){cx + BROWSER_CELL_W, cy + BROWSER_CELL_H - 2},
         cb_picker_pick, (void*)(intptr_t)idx);
       if (b) {
-        b->style.color_base   = (sf_pkd_clr_t)0xFF2A2A2A;
+        b->style.color_base   = base_clr;
         b->style.color_hover  = (sf_pkd_clr_t)0xFF3A4A5A;
         b->style.color_active = (sf_pkd_clr_t)0xFF5A7ACA;
         b->style.draw_outline = true;
       }
+
+      /* Thumbnail image (renders on top of button, hides when panel collapses) */
+      if (thumb && thumb->px)
+        sf_ui_add_image(&sf_ctx, thumb,
+                        (sf_ivec2_t){tx, ty},
+                        (sf_ivec2_t){tx + BROWSER_THUMB_SZ, ty + BROWSER_THUMB_SZ}, false);
+
+      /* Filename label (truncated, no extension) */
+      int si = idx < STUDIO_MAX_TEXS ? idx : STUDIO_MAX_TEXS - 1;
+      { int k = 0;
+        for (const char *p = lb; *p && *p != '.' && k < 5; p++) s_cell_name[si][k++] = *p;
+        s_cell_name[si][k] = '\0'; }
+      sf_ui_add_label(&sf_ctx, s_cell_name[si],
+                      (sf_ivec2_t){tx, ty + BROWSER_THUMB_SZ + 2}, 0xFFCCCCCC);
+
+      /* File-type badge label (top-left of thumbnail) */
+      { const char *ext = strrchr(lb, '.');
+        const char *badge = ext ? ext+1 : "?";
+        int k = 0;
+        for (const char *p = badge; *p && k < 7; p++) s_cell_badge[si][k++] = *p;
+        s_cell_badge[si][k] = '\0'; }
+      sf_ui_add_label(&sf_ctx, s_cell_badge[si],
+                      (sf_ivec2_t){tx+1, ty+1}, 0xFFFFFF44);
     }
   }
   static char s_bpageinfo[32];
@@ -3004,50 +3246,9 @@ static void build_browser_panel(void) {
   int sy = by1 - 24;
   sf_ui_add_button(&sf_ctx, "<", (sf_ivec2_t){bx0+6,  sy}, (sf_ivec2_t){bx0+30, sy+18}, cb_picker_scroll_up, NULL);
   sf_ui_add_label (&sf_ctx, s_bpageinfo, (sf_ivec2_t){bx0+34, sy+4}, 0xFFAAAAAA);
-  sf_ui_add_button(&sf_ctx, "R", (sf_ivec2_t){bx0+90, sy}, (sf_ivec2_t){bx0+114,sy+18}, cb_picker_refresh, NULL);
   sf_ui_add_button(&sf_ctx, ">", (sf_ivec2_t){bx1-30, sy}, (sf_ivec2_t){bx1-6,  sy+18}, cb_picker_scroll_dn, NULL);
-}
-
-/* ============================================================
-   Asset browser — thumbnail blit (called after sf_ui_render)
-   ============================================================ */
-static void draw_browser_thumbs(void) {
-  if (g_picker_open == PICK_NONE || (g_tab != TAB_SFF && g_tab != TAB_SFCRFT)) return;
-  int bx0 = BROWSER_X0;
-  int content_y0 = 30 + 24;
-  int content_y1 = g_h - 10 - 26;
-  int rows_vis = (content_y1 - content_y0) / BROWSER_CELL_H;
-  if (rows_vis < 1) rows_vis = 1;
-  int n = picker_item_count();
-  int first = g_picker_scroll * BROWSER_COLS;
-  for (int row = 0; row < rows_vis; row++) {
-    for (int col = 0; col < BROWSER_COLS; col++) {
-      int idx = first + row * BROWSER_COLS + col;
-      if (idx >= n) break;
-      int cx = bx0 + 6 + col * (BROWSER_CELL_W + 2);
-      int cy = content_y0 + row * BROWSER_CELL_H;
-      int tx = cx + 4, ty = cy + 4;
-      const char *lb = picker_item_label(idx);
-      sf_tex_t *thumb = (idx < g_picker_thumbs_n) ? g_picker_thumbs[idx] : NULL;
-      if (thumb && thumb->px) {
-        blit_tex_scaled(thumb, tx, ty, BROWSER_THUMB_SZ, BROWSER_THUMB_SZ);
-      } else {
-        uint32_t hh = 0x811c9dc5u;
-        for (const char *p = lb; *p; p++) hh = (hh ^ (unsigned char)*p) * 0x01000193u;
-        uint32_t r = 0x20 + (hh & 0x3F), g2 = 0x20 + (hh>>8 & 0x3F), b2 = 0x20 + (hh>>16 & 0x3F);
-        sf_pkd_clr_t pc = 0xFF000000 | (r<<16) | (g2<<8) | b2;
-        sf_rect(&sf_ctx, &sf_ctx.main_camera, pc,
-                (sf_ivec2_t){tx, ty},
-                (sf_ivec2_t){tx + BROWSER_THUMB_SZ, ty + BROWSER_THUMB_SZ});
-      }
-      /* label: strip extension, cap 5 chars */
-      char s[8]; int k = 0;
-      for (const char *p = lb; *p && *p != '.' && k < 5; p++) s[k++] = *p;
-      s[k] = '\0';
-      sf_put_text(&sf_ctx, &sf_ctx.main_camera, s,
-                  (sf_ivec2_t){tx, ty + BROWSER_THUMB_SZ + 2}, 0xFFCCCCCC, 1);
-    }
-  }
+  /* Refresh button: outside panel (x0 > bx1) so it is not a panel child and survives collapse */
+  sf_ui_add_button(&sf_ctx, "R", (sf_ivec2_t){bx1+2, by0+2}, (sf_ivec2_t){bx1+18, by0+16}, cb_picker_refresh, NULL);
 }
 
 static void build_outliner_panel(int rx0, int rx1, int top, int bottom) {
@@ -3145,45 +3346,15 @@ static int build_spawn_buttons(int y) {
     int col = i % cols;
     int x0 = 22 + col * (BTN + GAP);
     int yy = y0 + row * (BTN + GAP);
-    g_spawn_btn_pos[i] = (sf_ivec2_t){x0, yy};
     const char *label = g_spawn_icon_tex[i] ? "" : k_spawn_labels[i];
     g_spawn_btn_el[i] = sf_ui_add_button(&sf_ctx, label, (sf_ivec2_t){x0, yy}, (sf_ivec2_t){x0 + BTN, yy + BTN}, cb_spawn_kind, (void*)(intptr_t)i);
+    if (g_spawn_icon_tex[i])
+      sf_ui_add_image(&sf_ctx, g_spawn_icon_tex[i],
+                      (sf_ivec2_t){x0+1, yy+1}, (sf_ivec2_t){x0+BTN-1, yy+BTN-1}, true);
   }
-  g_spawn_btn_has_pos = true;
   return y0 + 2 * (BTN + GAP);
 }
 
-/* nearest-neighbor blit of a texture into the main camera buffer at dest rect */
-static void blit_tex_scaled(sf_tex_t *tex, int dx, int dy, int dw, int dh) {
-  if (!tex || !tex->px || dw <= 0 || dh <= 0) return;
-  sf_cam_t *cam = &sf_ctx.main_camera;
-  for (int y = 0; y < dh; y++) {
-    int py = dy + y; if (py < 0 || py >= cam->h) continue;
-    int sy = (y * tex->h) / dh;
-    for (int x = 0; x < dw; x++) {
-      int px_ = dx + x; if (px_ < 0 || px_ >= cam->w) continue;
-      int sx = (x * tex->w) / dw;
-      cam->buffer[py * cam->w + px_] = tex->px[sy * tex->w + sx];
-    }
-  }
-}
-
-/* blit with magic-pink (0xFF00FF) treated as transparent — matches sf_png2bmp key */
-static void blit_tex_keyed(sf_tex_t *tex, int dx, int dy, int dw, int dh) {
-  if (!tex || !tex->px || dw <= 0 || dh <= 0) return;
-  sf_cam_t *cam = &sf_ctx.main_camera;
-  for (int y = 0; y < dh; y++) {
-    int py = dy + y; if (py < 0 || py >= cam->h) continue;
-    int sy = (y * tex->h) / dh;
-    for (int x = 0; x < dw; x++) {
-      int px_ = dx + x; if (px_ < 0 || px_ >= cam->w) continue;
-      int sx = (x * tex->w) / dw;
-      sf_pkd_clr_t c = tex->px[sy * tex->w + sx];
-      if ((c >> 24) == 0) continue;   /* loader already converted pink key to alpha=0 */
-      cam->buffer[py * cam->w + px_] = c;
-    }
-  }
-}
 
 /* scale-blit an arbitrary sf_pkd_clr_t buffer (src w*h) into main cam at dest rect */
 static void blit_buf_scaled(sf_pkd_clr_t *src, int sw, int sh, int dx, int dy, int dw, int dh) {
@@ -3350,60 +3521,6 @@ static void gizmo_end_drag(void) {
 }
 
 /* draw icons over the spawn buttons (called after sf_render_ui) */
-static bool _spawn_btn_visible(int i) {
-  sf_ui_lmn_t *el = g_spawn_btn_el[i];
-  if (!el || !el->is_visible) return false;
-  for (sf_ui_lmn_t *p = el->parent_panel; p; p = p->parent_panel) {
-    if (!p->is_visible || p->panel.collapsed) return false;
-  }
-  return true;
-}
-
-static void draw_spawn_icons(void) {
-  if (!g_spawn_btn_has_pos) return;
-  const int BTN = 34;
-  for (int i = 0; i < 9; i++) {
-    if (!g_spawn_icon_tex[i]) continue;
-    if (!_spawn_btn_visible(i)) continue;
-    int x = g_spawn_btn_pos[i].x + 1;
-    int y = g_spawn_btn_pos[i].y + 1;
-    blit_tex_keyed(g_spawn_icon_tex[i], x, y, BTN - 2, BTN - 2);
-  }
-}
-
-static bool _ui_el_visible(sf_ui_lmn_t *el) {
-  if (!el || !el->is_visible) return false;
-  for (sf_ui_lmn_t *p = el->parent_panel; p; p = p->parent_panel) {
-    if (!p->is_visible || p->panel.collapsed) return false;
-  }
-  return true;
-}
-
-static void draw_ui_icons(void) {
-  for (int i = 0; i < g_icon_reg_n; i++) {
-    int id = g_icon_reg_id[i];
-    sf_ui_lmn_t *el = g_icon_reg_el[i];
-    if (!el || id < 0 || id >= ICN_COUNT || !g_icon_tex[id]) continue;
-    if (!_ui_el_visible(el)) continue;
-    int bw = el->v1.x - el->v0.x;
-    int bh = el->v1.y - el->v0.y;
-    int sz = bh - 2; if (sz > 18) sz = 18; if (sz < 10) sz = 10;
-    int ix, iy;
-    const char *lbl = el->button.text ? el->button.text : "";
-    int txt_w = (int)strlen(lbl) * 8;
-    if (txt_w == 0) {
-      /* icon-only: center */
-      ix = el->v0.x + (bw - sz) / 2;
-    } else {
-      /* wide button: text is centered; the "   " (3-space) prefix in the label
-         reserves a 24px slot at the left; icon sits there */
-      int txt_x = el->v0.x + (bw - txt_w) / 2;
-      ix = txt_x + 3;
-    }
-    iy = el->v0.y + (bh - sz) / 2;
-    blit_tex_keyed(g_icon_tex[id], ix, iy, sz, sz);
-  }
-}
 
 /* adds texture picker + scale for the selected entity at y. returns y past last row. */
 static int build_texture_section(int y) {
@@ -3411,8 +3528,8 @@ static int build_texture_section(int y) {
   const char *cur_name = (g_sel_kind == SEL_ENTI && g_sel && g_sel->tex && g_sel->tex->name)
                          ? g_sel->tex->name : "(none)";
   sf_ui_add_label(&sf_ctx, cur_name, (sf_ivec2_t){20, yy}, 0xFFAAAAAA); yy += 14;
-  sf_ui_add_button(&sf_ctx, "Browse", (sf_ivec2_t){20, yy}, (sf_ivec2_t){112, yy + 20},
-                   cb_browse_tex, NULL);
+  icon_btn(ICN_OPEN, "   Browse", (sf_ivec2_t){20, yy}, (sf_ivec2_t){112, yy + 20},
+           cb_browse_tex, NULL);
   icon_btn(ICN_CLEAR, "   Clear", (sf_ivec2_t){116, yy}, (sf_ivec2_t){210, yy + 20},
            cb_clear_tex, NULL);
   yy += 26;
@@ -3554,8 +3671,8 @@ static void build_inspector(int y_start) {
           const char *mname = (m->model_idx >= 0 && m->model_idx < g_model_count)
                               ? g_model_items[m->model_idx] : "(none)";
           sf_ui_add_label(&sf_ctx, mname, (sf_ivec2_t){20, y}, 0xFFAAAAAA); y += 14;
-          sf_ui_add_button(&sf_ctx, "Browse", (sf_ivec2_t){20, y}, (sf_ivec2_t){210, y + 20},
-                           cb_browse_model, NULL);
+          icon_btn(ICN_OPEN, "   Browse", (sf_ivec2_t){20, y}, (sf_ivec2_t){210, y + 20},
+                   cb_browse_model, NULL);
           y += 26;
           break;
         }
@@ -3594,8 +3711,8 @@ static void build_inspector(int y_start) {
     sf_ui_add_label(&sf_ctx, "sprite", (sf_ivec2_t){20, y}, SF_CLR_WHITE); y += 14;
     sf_ui_add_label(&sf_ctx, (g_sel_emitr->sprite && g_sel_emitr->sprite->name) ? g_sel_emitr->sprite->name : "(none)",
                  (sf_ivec2_t){20, y}, 0xFFAAAAAA); y += 14;
-    sf_ui_add_button(&sf_ctx, "Browse", (sf_ivec2_t){20, y}, (sf_ivec2_t){210, y + 20},
-                     cb_browse_sprite, NULL);
+    icon_btn(ICN_OPEN, "   Browse", (sf_ivec2_t){20, y}, (sf_ivec2_t){210, y + 20},
+             cb_browse_sprite, NULL);
     y += 26;
   } else if (g_sel_kind == SEL_CAM && g_sel_cam) {
     sf_ui_add_label(&sf_ctx, "fov / near / far", (sf_ivec2_t){20, y}, SF_CLR_WHITE); y += 14;
@@ -3643,9 +3760,8 @@ static void build_sff_tab(void) {
     sf_ui_add_label(&sf_ctx, "No .sff files found", (sf_ivec2_t){20, fy + 28}, 0);
   /* Manual path input */
   sf_ui_add_text_input(&sf_ctx, (sf_ivec2_t){20, fy + 46}, (sf_ivec2_t){210, fy + 62}, g_save_path, sizeof(g_save_path), NULL, NULL);
-  icon_btn(ICN_SAVE,  "   Save",    (sf_ivec2_t){20,  fy + 66}, (sf_ivec2_t){80,  fy + 84}, cb_save_sff,          NULL);
-  icon_btn(ICN_OPEN,  "   Load",    (sf_ivec2_t){82,  fy + 66}, (sf_ivec2_t){142, fy + 84}, cb_load_sff,          NULL);
-  sf_ui_add_button(   &sf_ctx, "Install", (sf_ivec2_t){144, fy + 66}, (sf_ivec2_t){210, fy + 84}, cb_install_sff, NULL);
+  icon_btn(ICN_SAVE,  "   Save",    (sf_ivec2_t){20,  fy + 66}, (sf_ivec2_t){112, fy + 84}, cb_save_install_sff,  NULL);
+  icon_btn(ICN_OPEN,  "   Load",    (sf_ivec2_t){114, fy + 66}, (sf_ivec2_t){210, fy + 84}, cb_load_sff,          NULL);
 
   /* Inspector fills remaining left column above File panel */
   build_inspector(TOP);
@@ -3660,9 +3776,7 @@ static void build_sfui_tab(void);
 
 static void rebuild_ui(void) {
   sf_ui_clear(&sf_ctx);
-  g_spawn_btn_has_pos = false;
   for (int i = 0; i < 9; i++) g_spawn_btn_el[i] = NULL;
-  g_icon_reg_n = 0;
   rebuild_parent_list();
   build_tab_bar();
   if      (g_tab == TAB_SFF)    build_sff_tab();
@@ -4086,7 +4200,7 @@ int main(int argc, char *argv[]) {
       if (event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_LEFT) {
         if (!mouse_over_ui(event.button.x, event.button.y) && (!sf_ctx.ui || sf_ctx.ui->focused == NULL)) {
           if (g_tab == TAB_SFUI) design_on_mouse_down(event.button.x, event.button.y);
-          else if (g_tab == TAB_SFCRFT && event.button.x > 220) {
+          else if (g_tab == TAB_SFGEN && event.button.x > 220) {
             g_crft_drag = true; g_crft_lmx = event.button.x; g_crft_lmy = event.button.y;
           } else {
             if (!gizmo_begin_drag(event.button.x, event.button.y))
@@ -4097,7 +4211,7 @@ int main(int argc, char *argv[]) {
       if (event.type == SDL_MOUSEMOTION) {
         g_mouse_x = event.motion.x; g_mouse_y = event.motion.y;
         if (g_tab == TAB_SFUI) design_on_mouse_move(event.motion.x, event.motion.y);
-        else if (g_tab == TAB_SFCRFT && g_crft_drag) {
+        else if (g_tab == TAB_SFGEN && g_crft_drag) {
           float dx = (float)(event.motion.x - g_crft_lmx) * 0.007f;
           float dy = (float)(event.motion.y - g_crft_lmy) * 0.007f;
           g_crft_yaw -= dx; g_crft_pitch += dy;
@@ -4109,12 +4223,12 @@ int main(int argc, char *argv[]) {
       }
       if (event.type == SDL_MOUSEBUTTONUP && event.button.button == SDL_BUTTON_LEFT) {
         if (g_tab == TAB_SFUI) design_on_mouse_up();
-        else if (g_tab == TAB_SFCRFT) g_crft_drag = false;
+        else if (g_tab == TAB_SFGEN) g_crft_drag = false;
         else gizmo_end_drag();
       }
       if (event.type == SDL_MOUSEWHEEL) {
         if (g_tab == TAB_SFUI) design_on_wheel(event.wheel.y);
-        else if (g_tab == TAB_SFCRFT) {
+        else if (g_tab == TAB_SFGEN) {
           g_crft_dist -= event.wheel.y * 0.5f;
           if (g_crft_dist < 1.f) g_crft_dist = 1.f;
           if (g_crft_dist > 60.f) g_crft_dist = 60.f;
@@ -4132,7 +4246,7 @@ int main(int argc, char *argv[]) {
     sf_ui_update(&sf_ctx, sf_ctx.ui);
     if (g_tab == TAB_SFF) update_camera();
 
-    if (g_tab == TAB_SFCRFT && g_crft_ready) {
+    if (g_tab == TAB_SFGEN && g_crft_ready) {
       crft_update_camera();
       /* Regenerate on param change */
       static float s_last_ct[14];
@@ -4195,7 +4309,7 @@ int main(int argc, char *argv[]) {
       update_gizmo_geometry();
       if (g_gz_drag == GZ_AX_NONE) g_gz_hover = gizmo_hit(g_mouse_x, g_mouse_y);
       draw_gizmo();
-    } else if (g_tab == TAB_SFCRFT && g_crft_ready) {
+    } else if (g_tab == TAB_SFGEN && g_crft_ready) {
       /* Hide inactive types during render */
       if (g_ct_enti) g_ct_enti->obj.f_cnt = (g_crft_type==CRFT_TREE) ? g_ct_obj->f_cnt : 0;
       if (g_cr_enti) g_cr_enti->obj.f_cnt = (g_crft_type==CRFT_ROCK) ? g_cr_obj->f_cnt : 0;
@@ -4241,21 +4355,6 @@ int main(int argc, char *argv[]) {
       }
     }
     sf_ui_render(&sf_ctx, &sf_ctx.main_camera, sf_ctx.ui);
-    draw_spawn_icons();
-    draw_ui_icons();
-    draw_browser_thumbs();
-    if (g_tab == TAB_SFCRFT) {
-      /* Blit per-row icons over the panel */
-      sf_tex_t **icons = (g_crft_type == CRFT_TREE) ? g_crft_tree_icons :
-                         (g_crft_type == CRFT_ROCK) ? g_crft_rock_icons : g_crft_bldg_icons;
-      int n_icons = (g_crft_type == CRFT_TREE) ? 14 : (g_crft_type == CRFT_ROCK) ? 11 : 14;
-      for (int i = 0; i < n_icons; i++) {
-        sf_rect(&sf_ctx, &sf_ctx.main_camera, (sf_pkd_clr_t)0xFF404040,
-                (sf_ivec2_t){14, 74 + i * 16},
-                (sf_ivec2_t){14 + CRFT_ICON_SZ, 74 + i * 16 + CRFT_ICON_SZ});
-        blit_tex_keyed(icons[i], 14, 74 + i * 16, CRFT_ICON_SZ, CRFT_ICON_SZ);
-      }
-    }
     sf_ui_render_popups(&sf_ctx, &sf_ctx.main_camera, sf_ctx.ui);
     draw_cam_pip_overlay();
 

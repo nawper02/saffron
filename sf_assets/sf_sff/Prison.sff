@@ -1,0 +1,24 @@
+# Saffron Building Model
+
+mesh cbldg "Prison.obj"
+mesh Prison_roof "Prison_roof.obj"
+
+texture Plaster_20-128x128 "Plaster_20-128x128.bmp"
+
+texture Metal_05-128x128 "Metal_05-128x128.bmp"
+
+entity cbldg_enti {
+    mesh=cbldg
+    pos=(0.000,0.000,0.000)
+    rot=(0.000,0.000,0.000)
+    scale=(1.000,1.000,1.000)
+    texture=Plaster_20-128x128
+}
+entity Prison_roof {
+    mesh=Prison_roof
+    pos=(0.000,0.000,0.000)
+    rot=(0.000,0.000,0.000)
+    scale=(1.000,1.000,1.000)
+    texture=Metal_05-128x128
+    frame=cbldg_enti
+}

@@ -339,7 +339,8 @@ typedef enum {
   SF_UI_TEXT_INPUT,
   SF_UI_DRAG_FLOAT,
   SF_UI_DROPDOWN,
-  SF_UI_PANEL
+  SF_UI_PANEL,
+  SF_UI_IMAGE
 } sf_ui_type_t;
 
 typedef struct {
@@ -417,6 +418,10 @@ struct sf_ui_lmn_t_ {
       bool                          collapsed;
       int                           content_h;
     } panel;
+    struct {
+      sf_tex_t                     *tex;
+      bool                          keyed; /* true = treat magenta as transparent */
+    } image;
   };
 };
 
@@ -626,6 +631,7 @@ sf_ui_lmn_t*   sf_ui_add_text_input (sf_ctx_t *ctx, sf_ivec2_t v0, sf_ivec2_t v1
 sf_ui_lmn_t*   sf_ui_add_drag_float (sf_ctx_t *ctx, sf_ivec2_t v0, sf_ivec2_t v1, float *target, float step, sf_ui_cb cb, void *ud);
 sf_ui_lmn_t*   sf_ui_add_dropdown   (sf_ctx_t *ctx, sf_ivec2_t v0, sf_ivec2_t v1, const char **items, int n, int *selected, sf_ui_cb cb, void *ud);
 sf_ui_lmn_t*   sf_ui_add_panel      (sf_ctx_t *ctx, const char *title, sf_ivec2_t v0, sf_ivec2_t v1);
+sf_ui_lmn_t*   sf_ui_add_image     (sf_ctx_t *ctx, sf_tex_t *tex, sf_ivec2_t v0, sf_ivec2_t v1, bool keyed);
 bool           sf_save_sfui         (sf_ctx_t *ctx, sf_ui_t *ui, const char *filepath);
 sf_ui_t*       sf_load_sfui         (sf_ctx_t *ctx, const char *filepath);
 sf_ui_lmn_t*   _sf_ui_find_prnt_pnl (sf_ctx_t *ctx, sf_ivec2_t v0, sf_ivec2_t v1);
@@ -3610,6 +3616,27 @@ sf_ui_lmn_t* sf_ui_add_checkbox(sf_ctx_t *ctx, const char *text, sf_ivec2_t v0, 
   return el;
 }
 
+void _sf_draw_image(sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_lmn_t *el) {
+  /* Scale-blit el->image.tex into el's rect; skip alpha=0 pixels when keyed. */
+  (void)ctx;
+  sf_tex_t *tex = el->image.tex;
+  if (!tex || !tex->px) return;
+  int dw = el->v1.x - el->v0.x, dh = el->v1.y - el->v0.y;
+  if (dw <= 0 || dh <= 0) return;
+  bool keyed = el->image.keyed;
+  for (int y = 0; y < dh; y++) {
+    int py = el->v0.y + y; if (py < 0 || py >= cam->h) continue;
+    int sy = (y * tex->h) / dh;
+    for (int x = 0; x < dw; x++) {
+      int px_ = el->v0.x + x; if (px_ < 0 || px_ >= cam->w) continue;
+      int sx = (x * tex->w) / dw;
+      sf_pkd_clr_t c = tex->px[sy * tex->w + sx];
+      if (keyed && (c >> 24) == 0) continue;
+      cam->buffer[py * cam->w + px_] = c;
+    }
+  }
+}
+
 void sf_ui_render(sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_t *ui) {
   /* Draw all visible UI elements; dropdown popups are drawn last to appear on top. */
   if (!ui) return;
@@ -3625,6 +3652,7 @@ void sf_ui_render(sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_t *ui) {
       case SF_UI_DRAG_FLOAT:  _sf_draw_drag_float(ctx, cam, el);  break;
       case SF_UI_DROPDOWN:    _sf_draw_dropdown(ctx, cam, el);    break;
       case SF_UI_PANEL:       _sf_draw_panel(ctx, cam, el);       break;
+      case SF_UI_IMAGE:       _sf_draw_image(ctx, cam, el);       break;
     }
   }
   for (int i = 0; i < ui->count; ++i) {
@@ -3836,6 +3864,22 @@ sf_ui_lmn_t* sf_ui_add_panel(sf_ctx_t *ctx, const char *title, sf_ivec2_t v0, sf
   el->panel.title     = title;
   el->panel.collapsed = false;
   el->panel.content_h = v1.y - v0.y - 16;
+  return el;
+}
+
+sf_ui_lmn_t* sf_ui_add_image(sf_ctx_t *ctx, sf_tex_t *tex, sf_ivec2_t v0, sf_ivec2_t v1, bool keyed) {
+  /* Add an image element; rendered as a scaled blit that hides when its parent panel collapses. */
+  if (!ctx->ui || ctx->ui->count >= SF_MAX_UI_ELEMENTS) return NULL;
+  sf_ui_lmn_t *parent = _sf_ui_find_prnt_pnl(ctx, v0, v1);
+  sf_ui_lmn_t *el = &ctx->ui->elements[ctx->ui->count++];
+  memset(el, 0, sizeof(sf_ui_lmn_t));
+  el->parent_panel = parent;
+  el->type       = SF_UI_IMAGE;
+  el->v0         = v0;
+  el->v1         = v1;
+  el->is_visible = true;
+  el->image.tex   = tex;
+  el->image.keyed = keyed;
   return el;
 }
 
