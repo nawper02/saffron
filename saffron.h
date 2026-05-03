@@ -2309,6 +2309,20 @@ bool sf_save_sff(sf_ctx_t *ctx, const char *filepath) {
   }
   if (ctx->tex_count) fprintf(f, "\n");
 
+  for (int i = 0; i < ctx->sprite_count; i++) {
+    sf_sprite_t *s = &ctx->sprites[i];
+    if (!s->name || s->frame_count == 0) continue;
+    fprintf(f, "sprite %s {\n", s->name);
+    fprintf(f, "    duration = %.2f\n", s->frame_duration);
+    fprintf(f, "    scale    = %.3f\n", s->base_scale);
+    fprintf(f, "    frames   = [");
+    for (int j = 0; j < s->frame_count; j++) {
+      if (j > 0) fprintf(f, ", ");
+      fprintf(f, "%s", (s->frames[j] && s->frames[j]->name) ? s->frames[j]->name : "");
+    }
+    fprintf(f, "]\n}\n\n");
+  }
+
   if (ctx->active_skybox && ctx->active_skybox->name) {
     fprintf(f, "skybox %s \"%s.bmp\"\n\n", ctx->active_skybox->name, ctx->active_skybox->name);
   }
@@ -2352,6 +2366,10 @@ bool sf_save_sff(sf_ctx_t *ctx, const char *filepath) {
     fprintf(f, "    scale   = %.4f\n", b->scale);
     fprintf(f, "    opacity = %.4f\n", b->opacity);
     fprintf(f, "    angle   = %.4f\n", b->angle);
+    if (b->normal.x != 0.f || b->normal.y != 0.f || b->normal.z != 0.f)
+      fprintf(f, "    normal  = (%.4f, %.4f, %.4f)\n", b->normal.x, b->normal.y, b->normal.z);
+    if (b->frame && b->frame->name)
+      fprintf(f, "    frame   = %s\n", b->frame->name);
     fprintf(f, "}\n\n");
   }
 
