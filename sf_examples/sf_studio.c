@@ -1465,13 +1465,12 @@ static void cb_picker_close(sf_ctx_t *ctx, void *ud) {
 }
 static void cb_picker_scroll_up(sf_ctx_t *ctx, void *ud) {
   (void)ctx; (void)ud;
-  g_picker_scroll -= g_picker_rows_vis;
-  if (g_picker_scroll < 0) g_picker_scroll = 0;
+  if (g_picker_scroll > 0) g_picker_scroll--;
   g_ui_dirty = true;
 }
 static void cb_picker_scroll_dn(sf_ctx_t *ctx, void *ud) {
   (void)ctx; (void)ud;
-  g_picker_scroll += g_picker_rows_vis;
+  g_picker_scroll++;
   g_ui_dirty = true;
 }
 
@@ -1690,11 +1689,11 @@ static sf_fvec3_t crft_v3rot(sf_fvec3_t v, sf_fvec3_t k, float theta) {
    SFCRFT — tree RNG
    ============================================================ */
 static void crft_rseed(uint32_t s) { g_crft_rng = s ? s : 1; }
-static float crft_rf(void) {
+static float crft_rnd(void) {
     g_crft_rng ^= g_crft_rng<<13; g_crft_rng ^= g_crft_rng>>17; g_crft_rng ^= g_crft_rng<<5;
     return (float)(g_crft_rng & 0xFFFF) / 65535.f;
 }
-static float crft_rf2(void) { return crft_rf()*2.f - 1.f; }
+static float crft_rf2(void) { return crft_rnd()*2.f - 1.f; }
 
 /* ============================================================
    SFCRFT — add cylinder segment (tree mesh)
@@ -1746,10 +1745,10 @@ static void crft_grow(sf_obj_t *obj, sf_fvec3_t pos, sf_fvec3_t dir,
         int n = (int)(ct_ld + .5f);
         for (int i=0; i<n && g_crft_ctx.sprite_3d_count < SF_MAX_SPRITE_3DS; i++) {
             float sp = len * 0.9f;
-            sf_fvec3_t lp = {end.x+crft_rf2()*sp, end.y+crft_rf()*sp*0.8f, end.z+crft_rf2()*sp};
-            float ls = fminf(ct_ls*(0.7f+crft_rf()*0.3f), 2.0f);
+            sf_fvec3_t lp = {end.x+crft_rf2()*sp, end.y+crft_rnd()*sp*0.8f, end.z+crft_rf2()*sp};
+            float ls = fminf(ct_ls*(0.7f+crft_rnd()*0.3f), 2.0f);
             float lo = fminf(ct_lo, 1.0f);
-            float la = crft_rf()*2.f*SF_PI;
+            float la = crft_rnd()*2.f*SF_PI;
             char bname[32]; snprintf(bname, sizeof(bname), "lf_%d", g_crft_ctx.sprite_3d_count);
             sf_sprite_3d_t *bl = sf_add_sprite_3d(&g_crft_ctx, g_crft_leaf, bname, lp, ls, lo, la);
             if (bl) {
@@ -1769,7 +1768,7 @@ static void crft_grow(sf_obj_t *obj, sf_fvec3_t pos, sf_fvec3_t dir,
     float pl=crft_v3len(perp);
     if (pl<0.01f) perp=(sf_fvec3_t){1,0,0}; else perp=crft_v3s(perp,1.f/pl);
     int   nb      = (int)(ct_branch + .5f);
-    float base_tw = crft_rf()*2.f*SF_PI;
+    float base_tw = crft_rnd()*2.f*SF_PI;
     float ang     = SF_DEG2RAD(ct_angle) + crft_rf2()*SF_DEG2RAD(7.f);
     float gf = ct_grav*(float)(maxd-depth+1)/(float)(maxd+1);
     if (gf> 1.f) gf= 1.f; if (gf<-1.f) gf=-1.f;
@@ -1791,7 +1790,7 @@ static void crft_grow(sf_obj_t *obj, sf_fvec3_t pos, sf_fvec3_t dir,
                 cd.y+(crft_rf2()*right.y+crft_rf2()*fw2.y)*wf,
                 cd.z+(crft_rf2()*right.z+crft_rf2()*fw2.z)*wf});
         }
-        float cl = len*ct_len*(0.88f+crft_rf()*0.24f);
+        float cl = len*ct_len*(0.88f+crft_rnd()*0.24f);
         crft_grow(obj, end, cd, er, cl, vt1, depth-1, maxd);
     }
 }
@@ -2929,6 +2928,56 @@ static void cb_bkpre2(sf_ctx_t*c,void*u){(void)c;(void)u;crft_apply_bldg_preset(
 static void cb_bkpre3(sf_ctx_t*c,void*u){(void)c;(void)u;crft_apply_bldg_preset(&k_bldg_presets[3]);}
 static void cb_bkpre4(sf_ctx_t*c,void*u){(void)c;(void)u;crft_apply_bldg_preset(&k_bldg_presets[4]);}
 
+static float rndrf(float lo, float hi) { return lo + (float)(rand()&0x7fff)/32767.f*(hi-lo); }
+static void cb_crft_rand_tree(sf_ctx_t *c, void *u) {
+    (void)c;(void)u;
+    ct_seed   = (float)(rand()%1000+1);
+    ct_depth  = (float)(2 + rand()%4);
+    ct_branch = (float)(2 + rand()%4);
+    ct_angle  = rndrf(15.f,55.f);
+    ct_len    = rndrf(0.50f,0.90f);
+    ct_taper  = rndrf(0.50f,0.85f);
+    ct_grav   = rndrf(-0.10f,0.30f);
+    ct_wiggle = rndrf(0.00f,0.25f);
+    ct_twist  = rndrf(110.f,160.f);
+    ct_tr     = rndrf(0.10f,0.40f);
+    ct_tl     = rndrf(1.5f,4.5f);
+    ct_ls     = rndrf(0.6f,1.5f);
+    ct_ld     = rndrf(2.f,7.f);
+    ct_lo     = rndrf(0.6f,1.0f);
+}
+static void cb_crft_rand_rock(sf_ctx_t *c, void *u) {
+    (void)c;(void)u;
+    cr_seed    = (float)(rand()%1000+1);
+    cr_subdiv  = (float)(2 + rand()%3);
+    cr_rough   = rndrf(0.05f,0.55f);
+    cr_freq    = rndrf(1.0f,4.0f);
+    cr_octaves = (float)(2 + rand()%4);
+    cr_persist = rndrf(0.30f,0.70f);
+    cr_flat    = rndrf(-0.20f,0.60f);
+    cr_elongx  = rndrf(0.6f,1.8f);
+    cr_elongz  = rndrf(0.6f,1.8f);
+    cr_pointy  = rndrf(-0.50f,1.50f);
+    cr_bump    = rndrf(0.0f,0.80f);
+}
+static void cb_crft_rand_bldg(sf_ctx_t *c, void *u) {
+    (void)c;(void)u;
+    bk_seed       = (float)(rand()%1000+1);
+    bk_floors     = (float)(2 + rand()%8);
+    bk_floor_h    = rndrf(2.0f,4.0f);
+    bk_width      = rndrf(2.5f,7.0f);
+    bk_depth      = rndrf(2.5f,7.0f);
+    bk_taper      = rndrf(0.0f,0.30f);
+    bk_jitter     = rndrf(0.0f,0.15f);
+    bk_ledge      = rndrf(0.0f,0.25f);
+    bk_win_cols   = (float)(1 + rand()%5);
+    bk_win_size   = rndrf(0.3f,0.7f);
+    bk_win_inset  = rndrf(0.1f,0.5f);
+    bk_roof_type  = (float)(rand()%5);
+    bk_roof_h     = rndrf(0.2f,1.5f);
+    bk_roof_scale = rndrf(0.8f,1.5f);
+}
+
 /* ============================================================
    SFCRFT — init context (called once from main)
    ============================================================ */
@@ -3068,9 +3117,13 @@ static void build_sfcrft_tab(void) {
         &tgt, step, NULL, NULL); \
 } while(0)
 
+    char *sff_path = (g_crft_type==CRFT_TREE) ? g_crft_tree_sff :
+                     (g_crft_type==CRFT_ROCK) ? g_crft_rock_sff : g_crft_bldg_sff;
+
     if (g_crft_type == CRFT_TREE) {
         /* Presets — top */
         sf_ui_add_label(&sf_ctx,"Presets",(sf_ivec2_t){LX,CRFT_RY(0)+2},0);
+        sf_ui_add_button(&sf_ctx,"Rnd",(sf_ivec2_t){IX1-36,CRFT_RY(0)},(sf_ivec2_t){IX1,CRFT_RY(0)+14},cb_crft_rand_tree,NULL);
         { int pw=(IX1-LX-4)/3;
           static void(*cbs[3])(sf_ctx_t*,void*)={cb_ctpre0,cb_ctpre1,cb_ctpre2};
           for (int i=0;i<N_TREE_PRESETS;i++){
@@ -3079,54 +3132,46 @@ static void build_sfcrft_tab(void) {
                 (sf_ivec2_t){bx0,CRFT_RY(1)},(sf_ivec2_t){bx0+pw,CRFT_RY(1)+14},cbs[i],NULL);
           } }
 
-        /* Sliders */
-        CRFT_DF( 2, "Seed",     ct_seed,   1.f);
-        CRFT_DF( 3, "Depth",    ct_depth,  0.5f);
-        CRFT_DF( 4, "Branches", ct_branch, 1.f);
-        CRFT_DF( 5, "Angle",    ct_angle,  1.f);
-        CRFT_DF( 6, "Length",   ct_len,    0.01f);
-        CRFT_DF( 7, "Taper",    ct_taper,  0.01f);
-        CRFT_DF( 8, "Gravity",  ct_grav,   0.01f);
-        CRFT_DF( 9, "Wiggle",   ct_wiggle, 0.01f);
-        CRFT_DF(10, "Twist",    ct_twist,  1.f);
-        CRFT_DF(11, "Trunk R",  ct_tr,     0.01f);
-        CRFT_DF(12, "Trunk L",  ct_tl,     0.1f);
-        CRFT_DF(13, "Leaf Scl", ct_ls,     0.05f);
-        CRFT_DF(14, "Leaf Cnt", ct_ld,     1.f);
-        CRFT_DF(15, "Leaf Opa", ct_lo,     0.01f);
+        /* Sliders (row 3+, gap at row 2) */
+        CRFT_DF( 3, "Seed",     ct_seed,   1.f);
+        CRFT_DF( 4, "Depth",    ct_depth,  0.5f);
+        CRFT_DF( 5, "Branches", ct_branch, 1.f);
+        CRFT_DF( 6, "Angle",    ct_angle,  1.f);
+        CRFT_DF( 7, "Length",   ct_len,    0.01f);
+        CRFT_DF( 8, "Taper",    ct_taper,  0.01f);
+        CRFT_DF( 9, "Gravity",  ct_grav,   0.01f);
+        CRFT_DF(10, "Wiggle",   ct_wiggle, 0.01f);
+        CRFT_DF(11, "Twist",    ct_twist,  1.f);
+        CRFT_DF(12, "Trunk R",  ct_tr,     0.01f);
+        CRFT_DF(13, "Trunk L",  ct_tl,     0.1f);
+        CRFT_DF(14, "Leaf Scl", ct_ls,     0.05f);
+        CRFT_DF(15, "Leaf Cnt", ct_ld,     1.f);
+        CRFT_DF(16, "Leaf Opa", ct_lo,     0.01f);
 
         for (int i = 0; i < 14; i++)
             if (g_crft_tree_icons[i])
                 sf_ui_add_image(&sf_ctx, g_crft_tree_icons[i],
-                    (sf_ivec2_t){LX, CRFT_RY(i+2)},
-                    (sf_ivec2_t){LX+CRFT_ICON_SZ, CRFT_RY(i+2)+CRFT_ICON_SZ}, true);
+                    (sf_ivec2_t){LX, CRFT_RY(i+3)},
+                    (sf_ivec2_t){LX+CRFT_ICON_SZ, CRFT_RY(i+3)+CRFT_ICON_SZ}, true);
 
         /* Bark texture */
-        sf_ui_add_label(&sf_ctx,"Bark Tex",(sf_ivec2_t){LX,CRFT_RY(16)+2},0);
+        sf_ui_add_label(&sf_ctx,"Bark Tex",(sf_ivec2_t){LX,CRFT_RY(17)+2},0);
         { const char *bn = (g_ct_enti&&g_ct_enti->tex&&g_ct_enti->tex->name)?g_ct_enti->tex->name:"(none)";
-          sf_ui_add_label(&sf_ctx, bn, (sf_ivec2_t){LX,CRFT_RY(17)+2}, 0xFFAAAAAA); }
-        icon_btn(ICN_OPEN,"  Browse",(sf_ivec2_t){LX,CRFT_RY(18)},(sf_ivec2_t){IX1,CRFT_RY(18)+12},
+          sf_ui_add_label(&sf_ctx, bn, (sf_ivec2_t){LX,CRFT_RY(18)+2}, 0xFFAAAAAA); }
+        icon_btn(ICN_OPEN,"  Browse",(sf_ivec2_t){LX,CRFT_RY(19)},(sf_ivec2_t){IX1,CRFT_RY(19)+12},
             cb_browse_crft_bark, NULL);
 
         /* Leaf sprite */
-        sf_ui_add_label(&sf_ctx,"Leaf Spr",(sf_ivec2_t){LX,CRFT_RY(19)+2},0);
+        sf_ui_add_label(&sf_ctx,"Leaf Spr",(sf_ivec2_t){LX,CRFT_RY(20)+2},0);
         { const char *sn = (g_crft_leaf&&g_crft_leaf->name)?g_crft_leaf->name:"(none)";
-          sf_ui_add_label(&sf_ctx, sn, (sf_ivec2_t){LX,CRFT_RY(20)+2}, 0xFFAAAAAA); }
-        icon_btn(ICN_OPEN,"  Browse",(sf_ivec2_t){LX,CRFT_RY(21)},(sf_ivec2_t){IX1,CRFT_RY(21)+12},
+          sf_ui_add_label(&sf_ctx, sn, (sf_ivec2_t){LX,CRFT_RY(21)+2}, 0xFFAAAAAA); }
+        icon_btn(ICN_OPEN,"  Browse",(sf_ivec2_t){LX,CRFT_RY(22)},(sf_ivec2_t){IX1,CRFT_RY(22)+12},
             cb_browse_crft_leaf, NULL);
-
-        /* SFF path */
-        sf_ui_add_label(&sf_ctx,"SFF path",(sf_ivec2_t){LX,CRFT_RY(22)+2},0);
-        sf_ui_add_text_input(&sf_ctx,(sf_ivec2_t){LX,CRFT_RY(23)},(sf_ivec2_t){IX1,CRFT_RY(23)+12},
-            g_crft_tree_sff,(int)sizeof(g_crft_tree_sff),NULL,NULL);
-
-        /* Save — bottom */
-        sf_ui_add_label(&sf_ctx,"~ ~ ~",(sf_ivec2_t){LX,CRFT_RY(24)+2},0xFF88AAFF);
-        icon_btn(ICN_SAVE,"  Save",(sf_ivec2_t){LX,CRFT_RY(25)},(sf_ivec2_t){IX1,CRFT_RY(25)+14},cb_crft_save_install,NULL);
 
     } else if (g_crft_type == CRFT_ROCK) {
         /* Presets — top */
         sf_ui_add_label(&sf_ctx,"Presets",(sf_ivec2_t){LX,CRFT_RY(0)+2},0);
+        sf_ui_add_button(&sf_ctx,"Rnd",(sf_ivec2_t){IX1-36,CRFT_RY(0)},(sf_ivec2_t){IX1,CRFT_RY(0)+14},cb_crft_rand_rock,NULL);
         { int pw=(IX1-LX-4)/3;
           static void(*cbs[5])(sf_ctx_t*,void*)={cb_crpre0,cb_crpre1,cb_crpre2,cb_crpre3,cb_crpre4};
           for (int i=0;i<N_ROCK_PRESETS;i++){
@@ -3136,44 +3181,36 @@ static void build_sfcrft_tab(void) {
                 (sf_ivec2_t){bx0,CRFT_RY(row)},(sf_ivec2_t){bx0+pw,CRFT_RY(row)+14},cbs[i],NULL);
           } }
 
-        /* Sliders */
-        CRFT_DF( 3, "Seed",      cr_seed,    1.f);
-        CRFT_DF( 4, "Subdiv",    cr_subdiv,  1.f);
-        CRFT_DF( 5, "Roughness", cr_rough,   0.01f);
-        CRFT_DF( 6, "Frequency", cr_freq,    0.05f);
-        CRFT_DF( 7, "Octaves",   cr_octaves, 1.f);
-        CRFT_DF( 8, "Persist",   cr_persist, 0.01f);
-        CRFT_DF( 9, "Flatness",  cr_flat,    0.01f);
-        CRFT_DF(10, "Elong X",   cr_elongx,  0.02f);
-        CRFT_DF(11, "Elong Z",   cr_elongz,  0.02f);
-        CRFT_DF(12, "Pointy",    cr_pointy,  0.05f);
-        CRFT_DF(13, "Bump",      cr_bump,    0.02f);
+        /* Sliders (row 4+, gap at row 3) */
+        CRFT_DF( 4, "Seed",      cr_seed,    1.f);
+        CRFT_DF( 5, "Subdiv",    cr_subdiv,  1.f);
+        CRFT_DF( 6, "Roughness", cr_rough,   0.01f);
+        CRFT_DF( 7, "Frequency", cr_freq,    0.05f);
+        CRFT_DF( 8, "Octaves",   cr_octaves, 1.f);
+        CRFT_DF( 9, "Persist",   cr_persist, 0.01f);
+        CRFT_DF(10, "Flatness",  cr_flat,    0.01f);
+        CRFT_DF(11, "Elong X",   cr_elongx,  0.02f);
+        CRFT_DF(12, "Elong Z",   cr_elongz,  0.02f);
+        CRFT_DF(13, "Pointy",    cr_pointy,  0.05f);
+        CRFT_DF(14, "Bump",      cr_bump,    0.02f);
 
         for (int i = 0; i < 11; i++)
             if (g_crft_rock_icons[i])
                 sf_ui_add_image(&sf_ctx, g_crft_rock_icons[i],
-                    (sf_ivec2_t){LX, CRFT_RY(i+3)},
-                    (sf_ivec2_t){LX+CRFT_ICON_SZ, CRFT_RY(i+3)+CRFT_ICON_SZ}, true);
+                    (sf_ivec2_t){LX, CRFT_RY(i+4)},
+                    (sf_ivec2_t){LX+CRFT_ICON_SZ, CRFT_RY(i+4)+CRFT_ICON_SZ}, true);
 
         /* Stone texture */
-        sf_ui_add_label(&sf_ctx,"Stone Tex",(sf_ivec2_t){LX,CRFT_RY(14)+2},0);
+        sf_ui_add_label(&sf_ctx,"Stone Tex",(sf_ivec2_t){LX,CRFT_RY(15)+2},0);
         { const char *stn = (g_cr_enti&&g_cr_enti->tex&&g_cr_enti->tex->name)?g_cr_enti->tex->name:"(none)";
-          sf_ui_add_label(&sf_ctx, stn, (sf_ivec2_t){LX,CRFT_RY(15)+2}, 0xFFAAAAAA); }
-        icon_btn(ICN_OPEN,"  Browse",(sf_ivec2_t){LX,CRFT_RY(16)},(sf_ivec2_t){IX1,CRFT_RY(16)+12},
+          sf_ui_add_label(&sf_ctx, stn, (sf_ivec2_t){LX,CRFT_RY(16)+2}, 0xFFAAAAAA); }
+        icon_btn(ICN_OPEN,"  Browse",(sf_ivec2_t){LX,CRFT_RY(17)},(sf_ivec2_t){IX1,CRFT_RY(17)+12},
             cb_browse_crft_stone, NULL);
-
-        /* SFF path */
-        sf_ui_add_label(&sf_ctx,"SFF path",(sf_ivec2_t){LX,CRFT_RY(17)+2},0);
-        sf_ui_add_text_input(&sf_ctx,(sf_ivec2_t){LX,CRFT_RY(18)},(sf_ivec2_t){IX1,CRFT_RY(18)+12},
-            g_crft_rock_sff,(int)sizeof(g_crft_rock_sff),NULL,NULL);
-
-        /* Save — bottom */
-        sf_ui_add_label(&sf_ctx,"~ ~ ~",(sf_ivec2_t){LX,CRFT_RY(19)+2},0xFF88AAFF);
-        icon_btn(ICN_SAVE,"  Save",(sf_ivec2_t){LX,CRFT_RY(20)},(sf_ivec2_t){IX1,CRFT_RY(20)+14},cb_crft_save_install,NULL);
 
     } else { /* CRFT_BLDG */
         /* Presets — top */
         sf_ui_add_label(&sf_ctx,"Presets",(sf_ivec2_t){LX,CRFT_RY(0)+2},0);
+        sf_ui_add_button(&sf_ctx,"Rnd",(sf_ivec2_t){IX1-36,CRFT_RY(0)},(sf_ivec2_t){IX1,CRFT_RY(0)+14},cb_crft_rand_bldg,NULL);
         { int pw=(IX1-LX-4)/3;
           static void(*cbs[5])(sf_ctx_t*,void*)={cb_bkpre0,cb_bkpre1,cb_bkpre2,cb_bkpre3,cb_bkpre4};
           for (int i=0;i<N_BLDG_PRESETS;i++){
@@ -3183,60 +3220,62 @@ static void build_sfcrft_tab(void) {
                 (sf_ivec2_t){bx0,CRFT_RY(row)},(sf_ivec2_t){bx0+pw,CRFT_RY(row)+14},cbs[i],NULL);
           } }
 
-        /* Sliders */
-        CRFT_DF( 3, "Seed",      bk_seed,      1.f);
-        CRFT_DF( 4, "Floors",    bk_floors,    1.f);
-        CRFT_DF( 5, "Floor H",   bk_floor_h,   0.1f);
-        CRFT_DF( 6, "Width",     bk_width,     0.1f);
-        CRFT_DF( 7, "Depth",     bk_depth,     0.1f);
-        CRFT_DF( 8, "Taper",     bk_taper,     0.02f);
-        CRFT_DF( 9, "Jitter",    bk_jitter,    0.02f);
-        CRFT_DF(10, "Ledge",     bk_ledge,     0.02f);
-        CRFT_DF(11, "Win Cols",  bk_win_cols,  1.f);
-        CRFT_DF(12, "Win Size",  bk_win_size,  0.02f);
-        CRFT_DF(13, "Win Inset", bk_win_inset, 0.02f);
-        CRFT_DF(14, "Roof Type", bk_roof_type, 1.f);
-        CRFT_DF(15, "Roof H",    bk_roof_h,    0.05f);
-        CRFT_DF(16, "Roof Scl",  bk_roof_scale,0.05f);
-        CRFT_DF(17, "Asym",      bk_asym,      0.05f);
+        /* Sliders (row 4+, gap at row 3) */
+        CRFT_DF( 4, "Seed",      bk_seed,      1.f);
+        CRFT_DF( 5, "Floors",    bk_floors,    1.f);
+        CRFT_DF( 6, "Floor H",   bk_floor_h,   0.1f);
+        CRFT_DF( 7, "Width",     bk_width,     0.1f);
+        CRFT_DF( 8, "Depth",     bk_depth,     0.1f);
+        CRFT_DF( 9, "Taper",     bk_taper,     0.02f);
+        CRFT_DF(10, "Jitter",    bk_jitter,    0.02f);
+        CRFT_DF(11, "Ledge",     bk_ledge,     0.02f);
+        CRFT_DF(12, "Win Cols",  bk_win_cols,  1.f);
+        CRFT_DF(13, "Win Size",  bk_win_size,  0.02f);
+        CRFT_DF(14, "Win Inset", bk_win_inset, 0.02f);
+        CRFT_DF(15, "Roof Type", bk_roof_type, 1.f);
+        CRFT_DF(16, "Roof H",    bk_roof_h,    0.05f);
+        CRFT_DF(17, "Roof Scl",  bk_roof_scale,0.05f);
+        CRFT_DF(18, "Asym",      bk_asym,      0.05f);
 
         for (int i = 0; i < 14; i++)
             if (g_crft_bldg_icons[i])
                 sf_ui_add_image(&sf_ctx, g_crft_bldg_icons[i],
-                    (sf_ivec2_t){LX, CRFT_RY(i+3)},
-                    (sf_ivec2_t){LX+CRFT_ICON_SZ, CRFT_RY(i+3)+CRFT_ICON_SZ}, true);
+                    (sf_ivec2_t){LX, CRFT_RY(i+4)},
+                    (sf_ivec2_t){LX+CRFT_ICON_SZ, CRFT_RY(i+4)+CRFT_ICON_SZ}, true);
 
         /* Wall and Roof textures */
-        sf_ui_add_label(&sf_ctx,"Wall Tex",(sf_ivec2_t){LX,CRFT_RY(18)+2},0);
+        sf_ui_add_label(&sf_ctx,"Wall Tex",(sf_ivec2_t){LX,CRFT_RY(19)+2},0);
         { const char *wn2 = (g_ck_enti&&g_ck_enti->tex&&g_ck_enti->tex->name)?g_ck_enti->tex->name:"(none)";
-          sf_ui_add_label(&sf_ctx, wn2, (sf_ivec2_t){LX,CRFT_RY(19)+2}, 0xFFAAAAAA); }
-        icon_btn(ICN_OPEN,"  Browse",(sf_ivec2_t){LX,CRFT_RY(20)},(sf_ivec2_t){IX1,CRFT_RY(20)+12},
+          sf_ui_add_label(&sf_ctx, wn2, (sf_ivec2_t){LX,CRFT_RY(20)+2}, 0xFFAAAAAA); }
+        icon_btn(ICN_OPEN,"  Browse",(sf_ivec2_t){LX,CRFT_RY(21)},(sf_ivec2_t){IX1,CRFT_RY(21)+12},
             cb_browse_crft_bwall, NULL);
-        sf_ui_add_label(&sf_ctx,"Roof Tex",(sf_ivec2_t){LX,CRFT_RY(21)+2},0);
+        sf_ui_add_label(&sf_ctx,"Roof Tex",(sf_ivec2_t){LX,CRFT_RY(22)+2},0);
         { const char *rn2 = (g_ck_enti_roof&&g_ck_enti_roof->tex&&g_ck_enti_roof->tex->name)?g_ck_enti_roof->tex->name:"(none)";
-          sf_ui_add_label(&sf_ctx, rn2, (sf_ivec2_t){LX,CRFT_RY(22)+2}, 0xFFAAAAAA); }
-        icon_btn(ICN_OPEN,"  Browse",(sf_ivec2_t){LX,CRFT_RY(23)},(sf_ivec2_t){IX1,CRFT_RY(23)+12},
+          sf_ui_add_label(&sf_ctx, rn2, (sf_ivec2_t){LX,CRFT_RY(23)+2}, 0xFFAAAAAA); }
+        icon_btn(ICN_OPEN,"  Browse",(sf_ivec2_t){LX,CRFT_RY(24)},(sf_ivec2_t){IX1,CRFT_RY(24)+12},
             cb_browse_crft_broof, NULL);
-        sf_ui_add_label(&sf_ctx,"Win Tex",(sf_ivec2_t){LX,CRFT_RY(24)+2},0);
+        sf_ui_add_label(&sf_ctx,"Win Tex",(sf_ivec2_t){LX,CRFT_RY(25)+2},0);
         { const char *wn3 = (g_ck_enti_win&&g_ck_enti_win->tex&&g_ck_enti_win->tex->name)?g_ck_enti_win->tex->name:"(none)";
-          sf_ui_add_label(&sf_ctx, wn3, (sf_ivec2_t){LX,CRFT_RY(25)+2}, 0xFFAAAAAA); }
-        icon_btn(ICN_OPEN,"  Browse",(sf_ivec2_t){LX,CRFT_RY(26)},(sf_ivec2_t){IX1,CRFT_RY(26)+12},
+          sf_ui_add_label(&sf_ctx, wn3, (sf_ivec2_t){LX,CRFT_RY(26)+2}, 0xFFAAAAAA); }
+        icon_btn(ICN_OPEN,"  Browse",(sf_ivec2_t){LX,CRFT_RY(27)},(sf_ivec2_t){IX1,CRFT_RY(27)+12},
             cb_browse_crft_bwin, NULL);
-        sf_ui_add_label(&sf_ctx,"Ledge Tex",(sf_ivec2_t){LX,CRFT_RY(27)+2},0);
+        sf_ui_add_label(&sf_ctx,"Ledge Tex",(sf_ivec2_t){LX,CRFT_RY(28)+2},0);
         { const char *ln2 = (g_ck_enti_ledge&&g_ck_enti_ledge->tex&&g_ck_enti_ledge->tex->name)?g_ck_enti_ledge->tex->name:"(none)";
-          sf_ui_add_label(&sf_ctx, ln2, (sf_ivec2_t){LX,CRFT_RY(28)+2}, 0xFFAAAAAA); }
-        icon_btn(ICN_OPEN,"  Browse",(sf_ivec2_t){LX,CRFT_RY(29)},(sf_ivec2_t){IX1,CRFT_RY(29)+12},
+          sf_ui_add_label(&sf_ctx, ln2, (sf_ivec2_t){LX,CRFT_RY(29)+2}, 0xFFAAAAAA); }
+        icon_btn(ICN_OPEN,"  Browse",(sf_ivec2_t){LX,CRFT_RY(30)},(sf_ivec2_t){IX1,CRFT_RY(30)+12},
             cb_browse_crft_bledge, NULL);
-
-        /* SFF path */
-        sf_ui_add_label(&sf_ctx,"SFF path",(sf_ivec2_t){LX,CRFT_RY(30)+2},0);
-        sf_ui_add_text_input(&sf_ctx,(sf_ivec2_t){LX,CRFT_RY(31)},(sf_ivec2_t){IX1,CRFT_RY(31)+12},
-            g_crft_bldg_sff,(int)sizeof(g_crft_bldg_sff),NULL,NULL);
-
-        /* Save — bottom */
-        sf_ui_add_label(&sf_ctx,"~ ~ ~",(sf_ivec2_t){LX,CRFT_RY(32)+2},0xFF88AAFF);
-        icon_btn(ICN_SAVE,"  Save",(sf_ivec2_t){LX,CRFT_RY(33)},(sf_ivec2_t){IX1,CRFT_RY(33)+14},cb_crft_save_install,NULL);
     }
+
+    /* Save section — pinned to panel bottom, shared by all types */
+    { int py1 = g_h - 10;
+      { sf_ui_lmn_t *_s = sf_ui_add_button(&sf_ctx, "",
+            (sf_ivec2_t){LX, py1-66}, (sf_ivec2_t){IX1, py1-62}, NULL, NULL);
+        if (_s) { _s->style.color_base = _s->style.color_hover = _s->style.color_active = 0xFF88AAFF; _s->style.draw_outline = false; } }
+      sf_ui_add_label(&sf_ctx, "SFF path", (sf_ivec2_t){LX, py1-56}, 0);
+      sf_ui_add_text_input(&sf_ctx, (sf_ivec2_t){LX, py1-44}, (sf_ivec2_t){IX1, py1-32},
+          sff_path, SF_MAX_TEXT_INPUT_LEN, NULL, NULL);
+      icon_btn(ICN_SAVE, "  Save", (sf_ivec2_t){LX, py1-26}, (sf_ivec2_t){IX1, py1-12},
+          cb_crft_save_install, NULL); }
 
 #undef CRFT_DF
 #undef CRFT_RY
@@ -3364,11 +3403,12 @@ static void build_browser_panel(void) {
   const char *title = (g_picker_open == PICK_MODEL) ? "Browse Models" :
                       (g_picker_open == PICK_SPRITE) ? "Browse Sprites" : "Browse Textures";
   sf_ui_add_panel(&sf_ctx, title, (sf_ivec2_t){bx0, by0}, (sf_ivec2_t){bx1, by1});
-  sf_ui_add_button(&sf_ctx, "X", (sf_ivec2_t){bx0, by0+1}, (sf_ivec2_t){bx0+16, by0+15},
-                   cb_picker_close, NULL);
-  /* Refresh: top edge 1px above panel so it is NOT a panel child (survives collapse).
-     g_ui_dirty is set in the callback so the panel re-expands on the next frame. */
-  sf_ui_add_button(&sf_ctx, "R", (sf_ivec2_t){bx1-20, by0-1}, (sf_ivec2_t){bx1-2, by0+13},
+  /* Close button: detach from panel so it fires even when panel is collapsed */
+  { sf_ui_lmn_t *xbtn = sf_ui_add_button(&sf_ctx, "X",
+        (sf_ivec2_t){bx0, by0+1}, (sf_ivec2_t){bx0+16, by0+15},
+        cb_picker_close, NULL);
+    if (xbtn) xbtn->parent_panel = NULL; }
+  sf_ui_add_button(&sf_ctx, "R", (sf_ivec2_t){bx1-20, by0+1}, (sf_ivec2_t){bx1-2, by0+15},
                    cb_picker_refresh, NULL);
   int content_y0 = by0 + 24;
   int content_y1 = by1 - 26;
@@ -3377,9 +3417,11 @@ static void build_browser_panel(void) {
   g_picker_rows_vis = rows_vis;
   int n = picker_item_count();
   int total_rows = (n + BROWSER_COLS - 1) / BROWSER_COLS;
-  int max_scroll = total_rows - rows_vis; if (max_scroll < 0) max_scroll = 0;
+  int total_pages = (total_rows + rows_vis - 1) / rows_vis;
+  if (total_pages < 1) total_pages = 1;
+  int max_scroll = total_pages - 1;
   if (g_picker_scroll > max_scroll) g_picker_scroll = max_scroll;
-  int first = g_picker_scroll * BROWSER_COLS;
+  int first = g_picker_scroll * rows_vis * BROWSER_COLS;
   for (int row = 0; row < rows_vis; row++) {
     for (int col = 0; col < BROWSER_COLS; col++) {
       int idx = first + row * BROWSER_COLS + col;
@@ -3434,10 +3476,7 @@ static void build_browser_panel(void) {
     }
   }
   static char s_bpageinfo[32];
-  { int total_pages = (total_rows + rows_vis - 1) / rows_vis;
-    if (total_pages < 1) total_pages = 1;
-    int cur_page = rows_vis > 0 ? g_picker_scroll / rows_vis + 1 : 1;
-    snprintf(s_bpageinfo, sizeof(s_bpageinfo), "%d/%d (%d)", cur_page, total_pages, n); }
+  snprintf(s_bpageinfo, sizeof(s_bpageinfo), "%d/%d (%d)", g_picker_scroll + 1, total_pages, n);
   int sy = by1 - 24;
   sf_ui_add_button(&sf_ctx, "<", (sf_ivec2_t){bx0+6,  sy}, (sf_ivec2_t){bx0+30, sy+18}, cb_picker_scroll_up, NULL);
   sf_ui_add_label (&sf_ctx, s_bpageinfo, (sf_ivec2_t){bx0+34, sy+4}, 0xFFAAAAAA);
