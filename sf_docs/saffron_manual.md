@@ -97,6 +97,7 @@
 | `_sf_sff_prse_light` | Scene |
 | `_sf_sff_prse_sprit` | Scene |
 | `_sf_sff_prse_emitr` | Scene |
+| `_sf_sff_prse_sprt_3d` | Scene |
 | `sf_get_root` | Frames |
 | `sf_add_frame` | Frames |
 | `sf_update_frames` | Frames |
@@ -126,7 +127,6 @@
 | `sf_draw_sprite_3d` | Drawing |
 | `sf_add_sprite_3d` | Drawing |
 | `sf_clear_sprite_3ds` | Drawing |
-| `_sf_sff_prse_sprite_3d` | Drawing |
 | `sf_ui_create` | UI |
 | `sf_ui_update` | UI |
 | `sf_ui_render` | UI |
@@ -228,7 +228,7 @@
 | `SF_MAX_UI_ELEMENTS` | `512` |
 | `SF_MAX_TEXT_INPUT_LEN` | `128` |
 | `SF_MAX_DROPDOWN_ITEMS` | `64` |
-| `SF_DROPDOWN_MAX_VISIBLE` | `8   /* max rows shown in open dropdown before scrolling */` |
+| `SF_DROPDOWN_MAX_VISIBLE` | `8` |
 | `SF_MAX_FRAMES` | `512` |
 | `SF_MAX_SPRITES` | `20` |
 | `SF_MAX_EMITRS` | `10` |
@@ -328,9 +328,9 @@
 
 **`sf_light_t`** — fields: `type`, `color`, `intensity`, `frame`, `name`, `id`
 
-**`sf_sprite_t`** — fields: `id`, `name`, `SF_MAX_SPRITE_FRAMES`, `frame_count`, `frame_duration`, `base_scale`, `opacity`, `opacity`
+**`sf_sprite_t`** — fields: `id`, `name`, `SF_MAX_SPRITE_FRAMES`, `frame_count`, `frame_duration`, `base_scale`, `opacity`
 
-**`sf_sprite_3d_t`** — fields: `name`, `sprite`, `pos`, `scale`, `opacity`, `angle`, `rotation`, `normal`, `billboard`, `frame`, `frame`, `pos`
+**`sf_sprite_3d_t`** — fields: `name`, `sprite`, `pos`, `scale`, `opacity`, `angle`, `normal`, `frame`
 
 **`sf_skybox_t`** — fields: `id`, `name`, `tex`
 
@@ -851,6 +851,12 @@ void _sf_sff_prse_sprit (sf_ctx_t *ctx, FILE *f, const char *name, int *sprite_c
 void _sf_sff_prse_emitr (sf_ctx_t *ctx, FILE *f, const char *name, int *emitr_count);
 ```
 
+### `_sf_sff_prse_sprt_3d`
+
+```c
+void _sf_sff_prse_sprt_3d (sf_ctx_t *ctx, FILE *f, const char *name, int *sprite_3d_count);
+```
+
 
 ## Frames
 
@@ -1046,7 +1052,7 @@ void sf_draw_sprite_3d (sf_ctx_t *ctx, sf_cam_t *cam, sf_sprite_3d_t *bill, floa
 ### `sf_add_sprite_3d`
 
 ```c
-sf_sprite_3d_t* sf_add_sprite_3d (sf_ctx_t *ctx, sf_sprite_t *spr, const char *name, sf_fvec3_t pos, float scale, float opacity, float angle);
+sf_sprite_3d_t* sf_add_sprite_3d(sf_ctx_t *ctx, sf_sprite_t *spr, const char *name, sf_fvec3_t pos, float scale, float opacity, float angle);
 ```
 
 ### `sf_clear_sprite_3ds`
@@ -1055,12 +1061,6 @@ Remove all billboard instances from the scene.
 
 ```c
 void sf_clear_sprite_3ds (sf_ctx_t *ctx);
-```
-
-### `_sf_sff_prse_sprite_3d`
-
-```c
-void _sf_sff_prse_sprite_3d (sf_ctx_t *ctx, FILE *f, const char *name, int *sprite_3d_count);
 ```
 
 

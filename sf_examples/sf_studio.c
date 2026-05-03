@@ -65,7 +65,7 @@ static float cr_elongx=1.f, cr_elongz=1.f, cr_pointy=0.f, cr_bump=.5f;
 static float bk_seed=1.f,    bk_floors=4.f,    bk_floor_h=2.5f,   bk_width=4.f;
 static float bk_depth=3.f,   bk_taper=0.1f,    bk_jitter=0.f,     bk_ledge=0.1f;
 static float bk_win_cols=3.f, bk_win_size=0.5f, bk_win_inset=0.3f, bk_roof_type=1.f;
-static float bk_roof_h=0.5f, bk_roof_scale=1.0f;
+static float bk_roof_h=0.5f, bk_roof_scale=1.0f, bk_asym=0.f;
 
 /* Row icons */
 #define CRFT_ICON_SZ 13
@@ -101,6 +101,10 @@ static sf_obj_t  *g_cr_obj  = NULL;
 static sf_enti_t *g_cr_enti = NULL;
 static sf_obj_t  *g_ck_obj  = NULL;
 static sf_enti_t *g_ck_enti = NULL;
+static sf_obj_t  *g_ck_obj_roof  = NULL;
+static sf_enti_t *g_ck_enti_roof = NULL;
+static int        g_ck_tsel  = 0;   /* building wall texture index */
+static int        g_ck_rtsel = 0;   /* building roof texture index */
 
 /* SFF save paths */
 static char g_crft_tree_sff[SF_MAX_TEXT_INPUT_LEN] = "tree_out.sff";
@@ -249,12 +253,15 @@ static int          g_tex_page_sel  = 0;
 
 /* ---- Asset browser (picker) ---- */
 typedef enum { PICK_NONE=0, PICK_TEX, PICK_MODEL, PICK_SPRITE } picker_kind_t;
-typedef enum { PICK_APPLY_ENTI_TEX=0, PICK_APPLY_EMITR_SPRITE, PICK_APPLY_MODEL } picker_apply_t;
-static picker_kind_t  g_picker_open   = PICK_NONE;
-static picker_apply_t g_picker_apply  = PICK_APPLY_ENTI_TEX;
-static int            g_picker_scroll = 0;
+typedef enum { PICK_APPLY_ENTI_TEX=0, PICK_APPLY_EMITR_SPRITE, PICK_APPLY_MODEL,
+               PICK_APPLY_CRFT_BARK, PICK_APPLY_CRFT_LEAF,
+               PICK_APPLY_CRFT_STONE, PICK_APPLY_CRFT_BWALL, PICK_APPLY_CRFT_BROOF } picker_apply_t;
+static picker_kind_t  g_picker_open      = PICK_NONE;
+static picker_apply_t g_picker_apply     = PICK_APPLY_ENTI_TEX;
+static int            g_picker_scroll    = 0;
+static int            g_picker_rows_vis  = 1;  /* updated each frame by build_browser_panel */
 static sf_tex_t      *g_picker_thumbs[STUDIO_MAX_TEXS];
-static int            g_picker_thumbs_n = 0;
+static int            g_picker_thumbs_n  = 0;
 #define BROWSER_X0       228
 #define BROWSER_X1       450
 #define BROWSER_COLS     3
@@ -311,17 +318,21 @@ static void sel_clear(void) {
   g_sel = NULL; g_sel_light = NULL; g_sel_cam = NULL; g_sel_emitr = NULL; g_sel_frame = NULL;
 }
 
+static bool _scan_dir_once(const char *path, char visited[][512], int *nv, int cap);
+
 static void scan_models(void) {
   g_model_count = 0;
-  const char *obj_paths[2] = { SF_ASSET_PATH "/sf_objs", "./sf_assets/sf_objs" };
-  for (int p = 0; p < 2 && g_model_count < STUDIO_MAX_MODELS; p++) {
+  char vis[6][512]; int nv = 0;
+  const char *obj_paths[] = { SF_ASSET_PATH "/sf_objs", SF_SRC_ASSET_PATH "/sf_objs",
+                               "./sf_assets/sf_objs", NULL };
+  for (int p = 0; obj_paths[p] && g_model_count < STUDIO_MAX_MODELS; p++) {
+    if (!_scan_dir_once(obj_paths[p], vis, &nv, 6)) continue;
     DIR *d = opendir(obj_paths[p]);
     if (!d) continue;
     struct dirent *e;
     while ((e = readdir(d)) != NULL && g_model_count < STUDIO_MAX_MODELS) {
       const char *dot = strrchr(e->d_name, '.');
       if (!dot || strcmp(dot, ".obj") != 0) continue;
-      /* dedupe */
       bool dup = false;
       for (int i = 0; i < g_model_count; i++) if (strcmp(g_model_files[i], e->d_name) == 0) { dup = true; break; }
       if (dup) continue;
@@ -332,8 +343,10 @@ static void scan_models(void) {
     closedir(d);
   }
   /* also add .sff files from sf_sff directories */
-  const char *sff_paths[3] = { SF_ASSET_PATH "/sf_sff", SF_SRC_ASSET_PATH "/sf_sff", "./sf_assets/sf_sff" };
-  for (int p = 0; p < 3 && g_model_count < STUDIO_MAX_MODELS; p++) {
+  const char *sff_paths[] = { SF_ASSET_PATH "/sf_sff", SF_SRC_ASSET_PATH "/sf_sff",
+                               "./sf_assets/sf_sff", NULL };
+  for (int p = 0; sff_paths[p] && g_model_count < STUDIO_MAX_MODELS; p++) {
+    if (!_scan_dir_once(sff_paths[p], vis, &nv, 6)) continue;
     DIR *d = opendir(sff_paths[p]);
     if (!d) continue;
     struct dirent *e;
@@ -384,10 +397,22 @@ static void scan_textures_dir(const char *root) {
   }
 }
 
+/* Resolve path via realpath(); return false if path was already visited */
+static bool _scan_dir_once(const char *path, char visited[][512], int *nv, int cap) {
+  char rp[512];
+  if (!realpath(path, rp)) return false; /* path doesn't exist */
+  for (int i = 0; i < *nv; i++) if (strcmp(visited[i], rp)==0) return false;
+  if (*nv < cap) { snprintf(visited[(*nv)++], 512, "%s", rp); }
+  return true;
+}
+
 static void scan_textures(void) {
   g_tex_count = 0;
-  scan_textures_dir(SF_ASSET_PATH "/sf_textures");
-  scan_textures_dir("./sf_assets/sf_textures");
+  char visited[4][512]; int nv = 0;
+  const char *dirs[] = { SF_ASSET_PATH "/sf_textures", SF_SRC_ASSET_PATH "/sf_textures",
+                         "./sf_assets/sf_textures", NULL };
+  for (int i = 0; dirs[i]; i++)
+    if (_scan_dir_once(dirs[i], visited, &nv, 4)) scan_textures_dir(dirs[i]);
 }
 
 static void scan_sffs(void) {
@@ -1106,12 +1131,119 @@ static const char *picker_item_label(int i) {
   return (i >= 0 && i < g_tex_count)   ? g_tex_items[i]   : "";
 }
 
+/* Thumbnail cam + buffers for model preview rendering */
+#define THUMB_CAM_SZ BROWSER_THUMB_SZ
+static sf_pkd_clr_t s_thumb_buf[THUMB_CAM_SZ * THUMB_CAM_SZ];
+static float        s_thumb_zbuf[THUMB_CAM_SZ * THUMB_CAM_SZ];
+static sf_cam_t     s_thumb_cam;
+static bool         s_thumb_cam_init = false;
+
+static void picker_render_model_thumb(int i) {
+  if (!s_thumb_cam_init) {
+    memset(&s_thumb_cam, 0, sizeof(s_thumb_cam));
+    s_thumb_cam.w           = THUMB_CAM_SZ;
+    s_thumb_cam.h           = THUMB_CAM_SZ;
+    s_thumb_cam.buffer_size = THUMB_CAM_SZ * THUMB_CAM_SZ;
+    s_thumb_cam.buffer      = s_thumb_buf;
+    s_thumb_cam.z_buffer    = s_thumb_zbuf;
+    s_thumb_cam.fov         = 45.0f;
+    s_thumb_cam.near_plane  = 0.01f;
+    s_thumb_cam.far_plane   = 1000.0f;
+    s_thumb_cam_init = true;
+  }
+
+  const char *fname = g_model_files[i];
+  const char *dot = strrchr(fname, '.');
+  if (!dot || strcmp(dot, ".obj") != 0) return; /* skip non-obj (e.g. .sff) */
+
+  char r_path[512];
+  if (!_sf_resolve_asset(fname, r_path, sizeof(r_path))) return;
+
+  /* Load obj if not already in ctx */
+  char nm[64];
+  int stem = (int)(dot - fname); if (stem > 60) stem = 60;
+  snprintf(nm, sizeof(nm), "%.*s", stem, fname);
+  sf_obj_t *obj = sf_get_obj_(&sf_ctx, nm, false);
+  if (!obj) obj = sf_load_obj(&sf_ctx, r_path, nm);
+  if (!obj) return;
+
+  /* Set up a temporary entity on the stack */
+  sf_enti_t tmp_enti; memset(&tmp_enti, 0, sizeof(tmp_enti));
+  sf_frame_t tmp_frame; memset(&tmp_frame, 0, sizeof(tmp_frame));
+  tmp_frame.global_M = sf_make_idn_fmat4();
+  tmp_enti.frame = &tmp_frame;
+  tmp_enti.obj = *obj;
+
+  /* Aim camera at the bounding sphere from upper-right-front */
+  sf_fvec3_t ctr = obj->bs_center;
+  float r = (obj->bs_radius > 0.001f) ? obj->bs_radius : 1.0f;
+  float dist = r * 3.0f;
+  sf_fvec3_t eye = { ctr.x + dist*0.55f, ctr.y + dist*0.5f, ctr.z + dist*0.85f };
+  s_thumb_cam.V          = sf_make_view_fmat4(eye, ctr, (sf_fvec3_t){0,1,0});
+  s_thumb_cam.P          = sf_make_psp_fmat4(45.0f, 1.0f, r*0.05f, dist*5.0f);
+  s_thumb_cam.near_plane = r*0.05f;
+  s_thumb_cam.far_plane  = dist*5.0f;
+  s_thumb_cam.is_proj_dirty = false;
+
+  /* Clear buffer */
+  sf_pkd_clr_t bg = 0xFF303030;
+  for (int k = 0; k < THUMB_CAM_SZ*THUMB_CAM_SZ; k++) {
+    s_thumb_buf[k]  = bg;
+    s_thumb_zbuf[k] = 1e30f;
+  }
+
+  /* Inject a temporary key light pointing down-right-forward */
+  sf_frame_t tmp_lf; memset(&tmp_lf, 0, sizeof(tmp_lf));
+  tmp_lf.global_M = sf_make_idn_fmat4();
+  /* -Z column = light direction in world: {-0.577, -0.577, -0.577} */
+  tmp_lf.global_M.m[2][0] = 0.577f;
+  tmp_lf.global_M.m[2][1] = 0.577f;
+  tmp_lf.global_M.m[2][2] = 0.577f;
+  int saved_lc = sf_ctx.light_count;
+  if (sf_ctx.light_count < SF_MAX_LIGHTS) {
+    sf_light_t *tl = &sf_ctx.lights[sf_ctx.light_count++];
+    memset(tl, 0, sizeof(sf_light_t));
+    tl->frame     = &tmp_lf;
+    tl->type      = SF_LIGHT_DIR;
+    tl->color     = (sf_fvec3_t){1.0f, 0.98f, 0.94f};
+    tl->intensity = 0.9f;
+  }
+
+  sf_render_enti(&sf_ctx, &s_thumb_cam, &tmp_enti);
+
+  sf_ctx.light_count = saved_lc; /* remove temp light */
+
+  /* Copy buffer into a new sf_tex_t */
+  sf_tex_t *t    = (sf_tex_t*)malloc(sizeof(sf_tex_t));
+  sf_pkd_clr_t *px = (sf_pkd_clr_t*)malloc(THUMB_CAM_SZ * THUMB_CAM_SZ * sizeof(sf_pkd_clr_t));
+  if (!t || !px) { free(t); free(px); return; }
+  memcpy(px, s_thumb_buf, THUMB_CAM_SZ * THUMB_CAM_SZ * sizeof(sf_pkd_clr_t));
+  memset(t, 0, sizeof(sf_tex_t));
+  t->px     = px;
+  t->w      = THUMB_CAM_SZ;
+  t->h      = THUMB_CAM_SZ;
+  t->w_mask = THUMB_CAM_SZ - 1;
+  t->h_mask = THUMB_CAM_SZ - 1;
+  g_picker_thumbs[i] = t;
+}
+
 static void picker_load_thumbs(void) {
-  /* pre-load / look-up thumbnails for the current item list */
+  /* Free any previously malloc'd model thumbnails */
+  for (int i = 0; i < g_picker_thumbs_n; i++) {
+    if (g_picker_open == PICK_MODEL && g_picker_thumbs[i] && g_picker_thumbs[i]->px) {
+      free((void*)g_picker_thumbs[i]->px);
+      free(g_picker_thumbs[i]);
+    }
+    g_picker_thumbs[i] = NULL;
+  }
+
   g_picker_thumbs_n = picker_item_count();
   for (int i = 0; i < g_picker_thumbs_n; i++) {
     g_picker_thumbs[i] = NULL;
-    if (g_picker_open == PICK_MODEL) continue; /* no thumbnail for meshes */
+    if (g_picker_open == PICK_MODEL) {
+      picker_render_model_thumb(i);
+      continue;
+    }
     const char *fname = g_tex_files[i];
     char nm[64]; const char *dot = strrchr(fname, '.');
     int stem = dot ? (int)(dot - fname) : (int)strlen(fname);
@@ -1135,12 +1267,13 @@ static void cb_picker_close(sf_ctx_t *ctx, void *ud) {
 }
 static void cb_picker_scroll_up(sf_ctx_t *ctx, void *ud) {
   (void)ctx; (void)ud;
-  if (g_picker_scroll > 0) g_picker_scroll--;
+  g_picker_scroll -= g_picker_rows_vis;
+  if (g_picker_scroll < 0) g_picker_scroll = 0;
   g_ui_dirty = true;
 }
 static void cb_picker_scroll_dn(sf_ctx_t *ctx, void *ud) {
   (void)ctx; (void)ud;
-  g_picker_scroll++;
+  g_picker_scroll += g_picker_rows_vis;
   g_ui_dirty = true;
 }
 
@@ -1174,25 +1307,86 @@ static void cb_picker_pick(sf_ctx_t *ctx, void *ud) {
   } else if (g_picker_apply == PICK_APPLY_MODEL) {
     prim_meta_t *m = sel_meta();
     if (m) { m->model_idx = idx; cb_regen_sel(ctx, NULL); }
+  } else if (g_picker_apply == PICK_APPLY_CRFT_BARK) {
+    if (idx < 0 || idx >= g_tex_count) goto done;
+    const char *fname = g_tex_files[idx];
+    char nm[64]; const char *dot2 = strrchr(fname, '.'); int stem2 = dot2?(int)(dot2-fname):(int)strlen(fname); if(stem2>60)stem2=60;
+    snprintf(nm, sizeof(nm), "%.*s", stem2, fname);
+    sf_tex_t *t = sf_get_texture_(&g_crft_ctx, nm, false);
+    if (!t) t = sf_load_texture_bmp(&g_crft_ctx, fname, nm);
+    if (t && g_ct_enti) { g_ct_enti->tex = t; g_ct_enti->tex_scale = (sf_fvec2_t){1.f,1.f}; }
+  } else if (g_picker_apply == PICK_APPLY_CRFT_LEAF) {
+    if (idx < 0 || idx >= g_tex_count) goto done;
+    const char *fname = g_tex_files[idx];
+    char nm[64]; const char *dot3 = strrchr(fname, '.'); int stem3 = dot3?(int)(dot3-fname):(int)strlen(fname); if(stem3>60)stem3=60;
+    snprintf(nm, sizeof(nm), "%.*s", stem3, fname);
+    sf_tex_t *t = sf_get_texture_(&g_crft_ctx, nm, false);
+    if (!t) t = sf_load_texture_bmp(&g_crft_ctx, fname, nm);
+    if (t) {
+      char sprname[80]; snprintf(sprname, sizeof(sprname), "spr_%s", nm);
+      sf_sprite_t *spr = sf_get_sprite_(&g_crft_ctx, sprname, false);
+      if (!spr) spr = sf_load_sprite(&g_crft_ctx, sprname, 1.0f, 0.7f, 1, nm);
+      if (spr) g_crft_leaf = spr;
+    }
+  } else if (g_picker_apply == PICK_APPLY_CRFT_STONE ||
+             g_picker_apply == PICK_APPLY_CRFT_BWALL ||
+             g_picker_apply == PICK_APPLY_CRFT_BROOF) {
+    if (idx < 0 || idx >= g_tex_count) goto done;
+    const char *fname = g_tex_files[idx];
+    char nm[64]; const char *dotc = strrchr(fname, '.'); int stc = dotc?(int)(dotc-fname):(int)strlen(fname); if(stc>60)stc=60;
+    snprintf(nm, sizeof(nm), "%.*s", stc, fname);
+    sf_tex_t *t = sf_get_texture_(&g_crft_ctx, nm, false);
+    if (!t) t = sf_load_texture_bmp(&g_crft_ctx, fname, nm);
+    if (t) {
+      if (g_picker_apply == PICK_APPLY_CRFT_STONE && g_cr_enti)
+        { g_cr_enti->tex = t; g_cr_enti->tex_scale = (sf_fvec2_t){1.f,1.f}; }
+      else if (g_picker_apply == PICK_APPLY_CRFT_BWALL && g_ck_enti)
+        { g_ck_enti->tex = t; g_ck_enti->tex_scale = (sf_fvec2_t){1.f,1.f}; }
+      else if (g_picker_apply == PICK_APPLY_CRFT_BROOF && g_ck_enti_roof)
+        { g_ck_enti_roof->tex = t; g_ck_enti_roof->tex_scale = (sf_fvec2_t){1.f,1.f}; }
+    }
   }
   done:
   g_picker_open = PICK_NONE; g_ui_dirty = true;
 }
 
-static void cb_browse_tex(sf_ctx_t *ctx, void *ud) {
+static void picker_open_and_scan(picker_kind_t kind, picker_apply_t apply) {
+  if (kind == PICK_MODEL) scan_models(); else scan_textures();
+  g_picker_open  = kind;
+  g_picker_apply = apply;
+  g_picker_scroll = 0;
+  picker_load_thumbs();
+  g_ui_dirty = true;
+}
+static void cb_picker_refresh(sf_ctx_t *ctx, void *ud) {
   (void)ctx; (void)ud;
-  g_picker_open = PICK_TEX; g_picker_apply = PICK_APPLY_ENTI_TEX;
-  g_picker_scroll = 0; picker_load_thumbs(); g_ui_dirty = true;
+  if (g_picker_open == PICK_MODEL) scan_models(); else scan_textures();
+  picker_load_thumbs();
+  g_ui_dirty = true;
+}
+static void cb_browse_tex(sf_ctx_t *ctx, void *ud) {
+  (void)ctx; (void)ud; picker_open_and_scan(PICK_TEX, PICK_APPLY_ENTI_TEX);
 }
 static void cb_browse_model(sf_ctx_t *ctx, void *ud) {
-  (void)ctx; (void)ud;
-  g_picker_open = PICK_MODEL; g_picker_apply = PICK_APPLY_MODEL;
-  g_picker_scroll = 0; picker_load_thumbs(); g_ui_dirty = true;
+  (void)ctx; (void)ud; picker_open_and_scan(PICK_MODEL, PICK_APPLY_MODEL);
 }
 static void cb_browse_sprite(sf_ctx_t *ctx, void *ud) {
-  (void)ctx; (void)ud;
-  g_picker_open = PICK_SPRITE; g_picker_apply = PICK_APPLY_EMITR_SPRITE;
-  g_picker_scroll = 0; picker_load_thumbs(); g_ui_dirty = true;
+  (void)ctx; (void)ud; picker_open_and_scan(PICK_SPRITE, PICK_APPLY_EMITR_SPRITE);
+}
+static void cb_browse_crft_bark(sf_ctx_t *ctx, void *ud) {
+  (void)ctx; (void)ud; picker_open_and_scan(PICK_TEX, PICK_APPLY_CRFT_BARK);
+}
+static void cb_browse_crft_leaf(sf_ctx_t *ctx, void *ud) {
+  (void)ctx; (void)ud; picker_open_and_scan(PICK_TEX, PICK_APPLY_CRFT_LEAF);
+}
+static void cb_browse_crft_stone(sf_ctx_t *ctx, void *ud) {
+  (void)ctx; (void)ud; picker_open_and_scan(PICK_TEX, PICK_APPLY_CRFT_STONE);
+}
+static void cb_browse_crft_bwall(sf_ctx_t *ctx, void *ud) {
+  (void)ctx; (void)ud; picker_open_and_scan(PICK_TEX, PICK_APPLY_CRFT_BWALL);
+}
+static void cb_browse_crft_broof(sf_ctx_t *ctx, void *ud) {
+  (void)ctx; (void)ud; picker_open_and_scan(PICK_TEX, PICK_APPLY_CRFT_BROOF);
 }
 
 static void rebuild_parent_list(void) {
@@ -1638,7 +1832,7 @@ static void bk_emit_roof(sf_obj_t *o, float cx, float cz, float y_base, float w,
         bk_emit_quad(o, br, bl, rl, rr, tile);
         /* Left hip (triangle) */
         sf_fvec3_t lmid = {cx-hw, y_base+rh*0.5f, cz};
-        bk_emit_tri(o, fl, rl, bl, tile);
+        bk_emit_tri(o, fl, bl, rl, tile);
         /* Right hip (triangle) */
         bk_emit_tri(o, fr, br, rr, tile);
         (void)lmid;
@@ -1665,9 +1859,9 @@ static void bk_emit_roof(sf_obj_t *o, float cx, float cz, float y_base, float w,
             for (int s = 0; s < segs; s++) {
                 int ns = (s+1) % segs;
                 if (r < rings) {
-                    bk_emit_quad(o, prev_ring[s], prev_ring[ns], cur_ring_v[ns], cur_ring_v[s], tile);
+                    bk_emit_quad(o, cur_ring_v[s], cur_ring_v[ns], prev_ring[ns], prev_ring[s], tile);
                 } else {
-                    bk_emit_tri(o, prev_ring[s], prev_ring[ns], cur_ring_v[s], tile);
+                    bk_emit_tri(o, prev_ring[ns], prev_ring[s], cur_ring_v[s], tile);
                 }
             }
             for (int s = 0; s < segs; s++) prev_ring[s] = cur_ring_v[s];
@@ -1691,10 +1885,10 @@ static void bk_emit_roof(sf_obj_t *o, float cx, float cz, float y_base, float w,
             bk_emit_quad(o, bbr2, bbl2, tbl, tbr, tile);
             bk_emit_quad(o, bbl2, bfl2, tfl, tbl, tile);
             /* Step top ring */
-            bk_emit_quad(o, tfl, tfr, bfr2, bfl2, tile);
-            bk_emit_quad(o, tfr, tbr, bbr2, bfr2, tile);
-            bk_emit_quad(o, tbr, tbl, bbl2, bbr2, tile);
-            bk_emit_quad(o, tbl, tfl, bfl2, bbl2, tile);
+            bk_emit_quad(o, bfl2, bfr2, tfr, tfl, tile);
+            bk_emit_quad(o, bfr2, bbr2, tbr, tfr, tile);
+            bk_emit_quad(o, bbr2, bbl2, tbl, tbr, tile);
+            bk_emit_quad(o, bbl2, bfl2, tfl, tbl, tile);
             sw=nw; sd=nd; sy+=nh;
         }
         /* Flat top */
@@ -1718,7 +1912,7 @@ static void bk_emit_roof(sf_obj_t *o, float cx, float cz, float y_base, float w,
         /* Fill base */
         for (int s = 0; s < segs; s++) {
             int ns = (s+1) % segs;
-            bk_emit_tri(o, base_ring[s], base_ring[ns], apex, tile);
+            bk_emit_tri(o, base_ring[ns], base_ring[s], apex, tile);
         }
         break;
     }
@@ -1729,6 +1923,7 @@ static void bk_emit_roof(sf_obj_t *o, float cx, float cz, float y_base, float w,
 static void crft_generate_building(void) {
     if (!g_ck_obj || !g_ck_enti) return;
     g_ck_obj->v_cnt=0; g_ck_obj->vt_cnt=0; g_ck_obj->f_cnt=0; g_ck_obj->src_path=NULL;
+    if (g_ck_obj_roof) { g_ck_obj_roof->v_cnt=0; g_ck_obj_roof->vt_cnt=0; g_ck_obj_roof->f_cnt=0; g_ck_obj_roof->src_path=NULL; }
 
     uint32_t seed = (uint32_t)(bk_seed * 13337.f) + 1u;
     #define BK_RAND() (seed = seed * 1664525u + 1013904223u, (float)(seed >> 8) / 16777216.f)
@@ -1808,7 +2003,7 @@ static void crft_generate_building(void) {
                 bk_emit_quad(g_ck_obj, BK_WP(u0,v1), BK_WP(u1,v1), BK_WP(u1,v2), BK_WP(u0,v2), tile);
                 bk_emit_quad(g_ck_obj, BK_WP(u2,v1), BK_WP(u3,v1), BK_WP(u3,v2), BK_WP(u2,v2), tile);
                 /* Sill, lintel, reveals, back */
-                bk_emit_quad(g_ck_obj, BK_WP(u1,v1),   BK_WP(u2,v1),   BK_WPI(u2,v1), BK_WPI(u1,v1), tile);
+                bk_emit_quad(g_ck_obj, BK_WPI(u1,v1), BK_WPI(u2,v1), BK_WP(u2,v1),  BK_WP(u1,v1),  tile);
                 bk_emit_quad(g_ck_obj, BK_WPI(u1,v2),  BK_WPI(u2,v2),  BK_WP(u2,v2),  BK_WP(u1,v2),  tile);
                 bk_emit_quad(g_ck_obj, BK_WPI(u1,v2),  BK_WPI(u1,v1),  BK_WP(u1,v1),  BK_WP(u1,v2),  tile);
                 bk_emit_quad(g_ck_obj, BK_WP(u2,v2),   BK_WP(u2,v1),   BK_WPI(u2,v1), BK_WPI(u2,v2), tile);
@@ -1850,8 +2045,135 @@ static void crft_generate_building(void) {
         cz += (BK_RAND() * 2.f - 1.f) * bk_jitter;
     }
 
+    /* --- ASYMMETRIC PROTRUSIONS --- */
+    if (bk_asym > 0.01f) {
+        int n_prot = (int)(bk_asym * 3.f + 0.5f);
+        if (n_prot > 3) n_prot = 3;
+        float base_hw = bk_width * 0.5f, base_hd = bk_depth * 0.5f;
+        int floors_main = (int)(bk_floors + 0.5f);
+        if (floors_main < 1) floors_main = 1;
+        for (int pi = 0; pi < n_prot; pi++) {
+            int wall_idx = (int)(BK_RAND() * 4.f) % 4;
+            float p_t    = BK_RAND() * 0.5f + 0.25f;   /* 0.25..0.75 along wall */
+            float p_hr   = BK_RAND() * 0.25f + 0.15f;  /* 0.15..0.40 of wall as half-width */
+            float p_depth = (BK_RAND() * 0.45f + 0.2f) * fminf(bk_width, bk_depth) * 0.5f;
+            int p_fl = 1 + (int)(BK_RAND() * (float)(floors_main - 1) + 0.5f);
+            if (p_fl > floors_main) p_fl = floors_main;
+
+            float wall_len;
+            sf_fvec3_t wrv, wnrm, wbase;
+            switch (wall_idx % 4) {
+                case 0: wrv=(sf_fvec3_t){1,0,0}; wnrm=(sf_fvec3_t){0,0,1};
+                        wbase=(sf_fvec3_t){-base_hw,0,base_hd}; wall_len=bk_width; break;
+                case 1: wrv=(sf_fvec3_t){0,0,-1}; wnrm=(sf_fvec3_t){1,0,0};
+                        wbase=(sf_fvec3_t){base_hw,0,base_hd}; wall_len=bk_depth; break;
+                case 2: wrv=(sf_fvec3_t){-1,0,0}; wnrm=(sf_fvec3_t){0,0,-1};
+                        wbase=(sf_fvec3_t){base_hw,0,-base_hd}; wall_len=bk_width; break;
+                default: wrv=(sf_fvec3_t){0,0,1}; wnrm=(sf_fvec3_t){-1,0,0};
+                        wbase=(sf_fvec3_t){-base_hw,0,-base_hd}; wall_len=bk_depth; break;
+            }
+            float p_hw_abs = p_hr * wall_len;
+            float p_coff   = p_t * wall_len;
+            /* Clamp within wall */
+            if (p_coff - p_hw_abs < 0.1f) p_coff = p_hw_abs + 0.1f;
+            if (p_coff + p_hw_abs > wall_len - 0.1f) p_coff = wall_len - p_hw_abs - 0.1f;
+            float oc = p_coff - p_hw_abs, oc2 = p_coff + p_hw_abs;
+
+            /* 4 footprint corners (CCW from above); face 2 (c2→c3) is the inner back — skip */
+            float c0x = wbase.x+wrv.x*oc +wnrm.x*p_depth, c0z = wbase.z+wrv.z*oc +wnrm.z*p_depth;
+            float c1x = wbase.x+wrv.x*oc2+wnrm.x*p_depth, c1z = wbase.z+wrv.z*oc2+wnrm.z*p_depth;
+            float c2x = wbase.x+wrv.x*oc2,                 c2z = wbase.z+wrv.z*oc2;
+            float c3x = wbase.x+wrv.x*oc,                  c3z = wbase.z+wrv.z*oc;
+            float px_c[4] = {c0x, c1x, c2x, c3x};
+            float pz_c[4] = {c0z, c1z, c2z, c3z};
+
+            for (int pfl = 0; pfl < p_fl; pfl++) {
+                float py = (float)pfl * bk_floor_h;
+                for (int ww = 0; ww < 4; ww++) {
+                    if (ww == 2) continue;  /* skip inner face */
+                    int nww = (ww+1)%4;
+                    sf_fvec3_t pwbl = {px_c[ww],  py, pz_c[ww]};
+                    sf_fvec3_t pwbr = {px_c[nww], py, pz_c[nww]};
+                    sf_fvec3_t prv = {pwbr.x-pwbl.x, 0.f, pwbr.z-pwbl.z};
+                    float wlen = sqrtf(prv.x*prv.x + prv.z*prv.z);
+                    if (wlen < 0.01f) continue;
+                    prv.x /= wlen; prv.z /= wlen;
+                    sf_fvec3_t pnrm = {-prv.z, 0.f, prv.x};
+                    sf_fvec3_t pinv = {-pnrm.x*eff_inset, 0.f, -pnrm.z*eff_inset};
+                    float pfh = bk_floor_h;
+                    int p_ncols = (wlen > bk_floor_h * 0.6f) ? 1 : 0;
+                    if (p_ncols < 1) p_ncols = 1;
+                    float margin_p = (1.f - bk_win_size) * 0.5f;
+                    if (margin_p < 0.05f) margin_p = 0.05f;
+                    if (margin_p > 0.45f) margin_p = 0.45f;
+                    for (int col = 0; col < p_ncols; col++) {
+                        float u0 = (float)col / p_ncols * wlen;
+                        float u3 = (float)(col+1) / p_ncols * wlen;
+                        float cww = u3 - u0;
+                        float u1 = u0 + cww * margin_p, u2 = u3 - cww * margin_p;
+                        float v1 = pfh * 0.20f, v2 = pfh * 0.80f, v3 = pfh;
+                        #define PWP(u,v)  ((sf_fvec3_t){pwbl.x+prv.x*(u), pwbl.y+(v), pwbl.z+prv.z*(u)})
+                        #define PWPI(u,v) ((sf_fvec3_t){pwbl.x+prv.x*(u)+pinv.x, pwbl.y+(v), pwbl.z+prv.z*(u)+pinv.z})
+                        bk_emit_quad(g_ck_obj, PWP(u0,0),  PWP(u3,0),  PWP(u3,v1), PWP(u0,v1), tile);
+                        bk_emit_quad(g_ck_obj, PWP(u0,v2), PWP(u3,v2), PWP(u3,v3), PWP(u0,v3), tile);
+                        bk_emit_quad(g_ck_obj, PWP(u0,v1), PWP(u1,v1), PWP(u1,v2), PWP(u0,v2), tile);
+                        bk_emit_quad(g_ck_obj, PWP(u2,v1), PWP(u3,v1), PWP(u3,v2), PWP(u2,v2), tile);
+                        bk_emit_quad(g_ck_obj, PWPI(u1,v1), PWPI(u2,v1), PWP(u2,v1),  PWP(u1,v1),  tile);
+                        bk_emit_quad(g_ck_obj, PWPI(u1,v2), PWPI(u2,v2), PWP(u2,v2),  PWP(u1,v2),  tile);
+                        bk_emit_quad(g_ck_obj, PWPI(u1,v2), PWPI(u1,v1), PWP(u1,v1),  PWP(u1,v2),  tile);
+                        bk_emit_quad(g_ck_obj, PWP(u2,v2),  PWP(u2,v1),  PWPI(u2,v1), PWPI(u2,v2), tile);
+                        bk_emit_quad(g_ck_obj, PWPI(u1,v1), PWPI(u2,v1), PWPI(u2,v2), PWPI(u1,v2), tile);
+                        #undef PWP
+                        #undef PWPI
+                    }
+                }
+                /* Ledge at each protrusion floor top (except last) */
+                if (bk_ledge > 0.01f && pfl < p_fl - 1) {
+                    float lh = bk_ledge * 0.6f, lo = bk_ledge * 0.3f;
+                    float ytop = py + bk_floor_h;
+                    for (int ww = 0; ww < 4; ww++) {
+                        if (ww == 2) continue;
+                        int nww = (ww+1)%4;
+                        sf_fvec3_t a0 = {px_c[ww],  ytop-lh, pz_c[ww]};
+                        sf_fvec3_t a1 = {px_c[nww], ytop-lh, pz_c[nww]};
+                        sf_fvec3_t prv2 = {px_c[nww]-px_c[ww], 0.f, pz_c[nww]-px_c[ww]};
+                        /* reuse wall normal from face direction */
+                        sf_fvec3_t b0 = {a0.x, ytop, a0.z}, b1 = {a1.x, ytop, a1.z};
+                        sf_fvec3_t pnrm2 = {a1.z != a0.z ? -(a1.z-a0.z) : 0.f, 0.f, a1.x != a0.x ? (a1.x-a0.x) : 0.f};
+                        float pnl = sqrtf(pnrm2.x*pnrm2.x+pnrm2.z*pnrm2.z);
+                        if (pnl > 0.001f) { pnrm2.x/=pnl; pnrm2.z/=pnl; }
+                        sf_fvec3_t ao0={a0.x+pnrm2.x*lo, a0.y, a0.z+pnrm2.z*lo};
+                        sf_fvec3_t ao1={a1.x+pnrm2.x*lo, a1.y, a1.z+pnrm2.z*lo};
+                        sf_fvec3_t bo0={ao0.x, b0.y, ao0.z}, bo1={ao1.x, b1.y, ao1.z};
+                        bk_emit_quad(g_ck_obj, ao0, ao1, bo1, bo0, tile);
+                        bk_emit_quad(g_ck_obj, bo0, bo1, b1,  b0,  tile);
+                        (void)prv2;
+                    }
+                }
+            }
+            /* Protrusion roof */
+            float prx = wbase.x + wrv.x*p_coff + wnrm.x*p_depth*0.5f;
+            float prz = wbase.z + wrv.z*p_coff + wnrm.z*p_depth*0.5f;
+            float pry = (float)p_fl * bk_floor_h;
+            if (g_ck_obj_roof)
+                bk_emit_roof(g_ck_obj_roof, prx, prz, pry, p_hw_abs*2.f, p_depth, tile);
+        }
+    }
+
     #undef BK_RAND
-    bk_emit_roof(g_ck_obj, cx, cz, cur_y, cur_w, cur_d, tile);
+    if (g_ck_obj_roof) {
+        bk_emit_roof(g_ck_obj_roof, cx, cz, cur_y, cur_w, cur_d, tile);
+        sf_obj_recompute_bs(g_ck_obj_roof);
+        if (g_ck_enti_roof) {
+            g_ck_enti_roof->obj.v_cnt  = g_ck_obj_roof->v_cnt;
+            g_ck_enti_roof->obj.vt_cnt = g_ck_obj_roof->vt_cnt;
+            g_ck_enti_roof->obj.f_cnt  = g_ck_obj_roof->f_cnt;
+            g_ck_enti_roof->obj.bs_center = g_ck_obj_roof->bs_center;
+            g_ck_enti_roof->obj.bs_radius = g_ck_obj_roof->bs_radius;
+        }
+    } else {
+        bk_emit_roof(g_ck_obj, cx, cz, cur_y, cur_w, cur_d, tile);
+    }
 
     sf_obj_recompute_bs(g_ck_obj);
     g_ck_enti->obj.v_cnt  = g_ck_obj->v_cnt;
@@ -1924,6 +2246,16 @@ static void crft_apply_stone(void) {
     if (!g_cr_enti) return;
     sf_tex_t *t=crft_ensure_stone(g_cr_tsel);
     if (t){g_cr_enti->tex=t; g_cr_enti->tex_scale=(sf_fvec2_t){1.f,1.f};}
+}
+static void crft_apply_bldg_tex(void) {
+    if (g_ck_enti && g_cr_tnc > 0) {
+        sf_tex_t *t = crft_ensure_stone(g_ck_tsel);
+        if (t) { g_ck_enti->tex = t; g_ck_enti->tex_scale = (sf_fvec2_t){1.f,1.f}; }
+    }
+    if (g_ck_enti_roof && g_cr_tnc > 0) {
+        sf_tex_t *t = crft_ensure_stone(g_ck_rtsel);
+        if (t) { g_ck_enti_roof->tex = t; g_ck_enti_roof->tex_scale = (sf_fvec2_t){1.f,1.f}; }
+    }
 }
 
 static void crft_load_sprites(void) {
@@ -2075,17 +2407,36 @@ static void crft_save_building(void) {
     char *sl2=strrchr(dir,'/'); if(sl2)*sl2='\0'; else{dir[0]='.';dir[1]='\0';}
     char obj_path[512]; snprintf(obj_path,sizeof(obj_path),"%s/%s.obj",dir,base);
     sf_obj_save_obj(&g_crft_ctx,g_ck_obj,obj_path);
+    if (g_ck_obj_roof) {
+        char roof_path[512]; snprintf(roof_path,sizeof(roof_path),"%s/%s_roof.obj",dir,base);
+        sf_obj_save_obj(&g_crft_ctx,g_ck_obj_roof,roof_path);
+    }
     FILE *f=fopen(g_crft_bldg_sff,"w");
     if (!f) return;
-    fprintf(f,"# Saffron Building Model\n\nmesh %s \"%s.obj\"\n\n",g_ck_obj->name,base);
+    fprintf(f,"# Saffron Building Model\n\nmesh %s \"%s.obj\"\n",g_ck_obj->name,base);
+    if (g_ck_obj_roof)
+        fprintf(f,"mesh %s_roof \"%s_roof.obj\"\n",base,base);
+    fprintf(f,"\n");
     if (g_ck_enti&&g_ck_enti->tex&&g_ck_enti->tex->name)
         fprintf(f,"texture %s \"%s.bmp\"\n\n",g_ck_enti->tex->name,g_ck_enti->tex->name);
+    if (g_ck_enti_roof&&g_ck_enti_roof->tex&&g_ck_enti_roof->tex->name&&
+        (!g_ck_enti||!g_ck_enti->tex||strcmp(g_ck_enti_roof->tex->name,g_ck_enti->tex->name)!=0))
+        fprintf(f,"texture %s \"%s.bmp\"\n\n",g_ck_enti_roof->tex->name,g_ck_enti_roof->tex->name);
     if (g_ck_enti&&g_ck_enti->name){
         sf_fvec3_t p=g_ck_enti->frame->pos,r=g_ck_enti->frame->rot,s=g_ck_enti->frame->scale;
         fprintf(f,"entity %s {\n    mesh=%s\n    pos=(%.3f,%.3f,%.3f)\n    rot=(%.3f,%.3f,%.3f)\n    scale=(%.3f,%.3f,%.3f)\n",
                 g_ck_enti->name,g_ck_obj->name,p.x,p.y,p.z,r.x,r.y,r.z,s.x,s.y,s.z);
         if (g_ck_enti->tex&&g_ck_enti->tex->name)
             fprintf(f,"    texture=%s\n",g_ck_enti->tex->name);
+        fprintf(f,"}\n");
+    }
+    if (g_ck_enti_roof&&g_ck_enti_roof->name&&g_ck_obj_roof){
+        sf_fvec3_t p=g_ck_enti_roof->frame->pos,r=g_ck_enti_roof->frame->rot,s=g_ck_enti_roof->frame->scale;
+        char roof_mesh_name[256]; snprintf(roof_mesh_name,sizeof(roof_mesh_name),"%s_roof",base);
+        fprintf(f,"entity %s_roof {\n    mesh=%s\n    pos=(%.3f,%.3f,%.3f)\n    rot=(%.3f,%.3f,%.3f)\n    scale=(%.3f,%.3f,%.3f)\n",
+                base,roof_mesh_name,p.x,p.y,p.z,r.x,r.y,r.z,s.x,s.y,s.z);
+        if (g_ck_enti_roof->tex&&g_ck_enti_roof->tex->name)
+            fprintf(f,"    texture=%s\n",g_ck_enti_roof->tex->name);
         fprintf(f,"}\n");
     }
     fclose(f);
@@ -2104,11 +2455,24 @@ static void crft_install_building(void) {
     snprintf(obj_dst,sizeof(obj_dst),SF_SRC_ASSET_PATH"/sf_objs/%s.obj",base);
     snprintf(sff_dst,sizeof(sff_dst),SF_SRC_ASSET_PATH"/sf_sff/%s.sff",base);
     crft_copy_file(obj_src,obj_dst); crft_copy_file(sff_src,sff_dst);
-    /* Copy stone texture */
+    if (g_ck_obj_roof) {
+        char roof_src[512], roof_dst[512];
+        snprintf(roof_src,sizeof(roof_src),"%s/%s_roof.obj",dir,base);
+        snprintf(roof_dst,sizeof(roof_dst),SF_SRC_ASSET_PATH"/sf_objs/%s_roof.obj",base);
+        crft_copy_file(roof_src,roof_dst);
+    }
+    /* Copy wall texture */
     if (g_ck_enti&&g_ck_enti->tex&&g_ck_enti->tex->name) {
         char tex_src[512],tex_dst[512];
         snprintf(tex_src,sizeof(tex_src),"%s/%s.bmp",dir,g_ck_enti->tex->name);
         snprintf(tex_dst,sizeof(tex_dst),SF_SRC_ASSET_PATH"/sf_textures/%s.bmp",g_ck_enti->tex->name);
+        crft_copy_file(tex_src,tex_dst);
+    }
+    /* Copy roof texture */
+    if (g_ck_enti_roof&&g_ck_enti_roof->tex&&g_ck_enti_roof->tex->name) {
+        char tex_src[512],tex_dst[512];
+        snprintf(tex_src,sizeof(tex_src),"%s/%s.bmp",dir,g_ck_enti_roof->tex->name);
+        snprintf(tex_dst,sizeof(tex_dst),SF_SRC_ASSET_PATH"/sf_textures/%s.bmp",g_ck_enti_roof->tex->name);
         crft_copy_file(tex_src,tex_dst);
     }
 }
@@ -2286,6 +2650,13 @@ static void crft_init(void) {
     g_ck_obj  = sf_obj_create_empty(&g_crft_ctx, "cbldg", CRFT_MAX_V, CRFT_MAX_UV, CRFT_MAX_F);
     g_ck_enti = sf_add_enti(&g_crft_ctx, g_ck_obj, "cbldg_enti");
     if (g_ck_enti) sf_enti_set_pos(&g_crft_ctx, g_ck_enti, 0.f, 0.f, 0.f);
+    g_ck_obj_roof  = sf_obj_create_empty(&g_crft_ctx, "cbldg_roof", CRFT_MAX_V/4, CRFT_MAX_UV/4, CRFT_MAX_F/4);
+    g_ck_enti_roof = sf_add_enti(&g_crft_ctx, g_ck_obj_roof, "cbldg_roof_enti");
+    if (g_ck_enti_roof) {
+        sf_enti_set_pos(&g_crft_ctx, g_ck_enti_roof, 0.f, 0.f, 0.f);
+        if (g_ck_enti && g_ck_enti->frame && g_ck_enti_roof->frame)
+            sf_frame_set_parent(g_ck_enti_roof->frame, g_ck_enti->frame);
+    }
 
     /* Initial generation */
     crft_apply_tree_preset(&k_tree_presets[0]);
@@ -2296,14 +2667,13 @@ static void crft_init(void) {
     crft_apply_stone();
     crft_apply_bldg_preset(&k_bldg_presets[0]);
     crft_generate_building();
-    if (g_ck_enti && g_cr_tnc > 0) {
-        sf_tex_t *t = crft_ensure_stone(g_cr_tsel);
-        if (t) { g_ck_enti->tex = t; g_ck_enti->tex_scale = (sf_fvec2_t){1.f, 1.f}; }
-    }
+    crft_apply_bldg_tex();
 
     crft_update_camera();
     g_crft_ready = true;
 }
+
+static void build_browser_panel(void); /* forward decl */
 
 /* ============================================================
    SFCRFT — build tab UI
@@ -2358,32 +2728,34 @@ static void build_sfcrft_tab(void) {
 
         /* Bark texture */
         sf_ui_add_label(&sf_ctx,"Bark Tex",(sf_ivec2_t){LX,CRFT_RY(14)+2},0);
-        if (g_ct_tnc>0)
-            sf_ui_add_dropdown(&sf_ctx,(sf_ivec2_t){LX,CRFT_RY(15)},(sf_ivec2_t){IX1,CRFT_RY(15)+12},
-                g_ct_titem,g_ct_tnc,&g_ct_tsel,NULL,NULL);
+        { const char *bn = (g_ct_enti&&g_ct_enti->tex&&g_ct_enti->tex->name)?g_ct_enti->tex->name:"(none)";
+          sf_ui_add_label(&sf_ctx, bn, (sf_ivec2_t){LX,CRFT_RY(15)+2}, 0xFFAAAAAA); }
+        sf_ui_add_button(&sf_ctx,"Browse",(sf_ivec2_t){LX,CRFT_RY(16)},(sf_ivec2_t){IX1,CRFT_RY(16)+12},
+            cb_browse_crft_bark, NULL);
 
         /* Leaf sprite */
-        sf_ui_add_label(&sf_ctx,"Leaf Spr",(sf_ivec2_t){LX,CRFT_RY(16)+2},0);
-        if (g_ct_snc>0)
-            sf_ui_add_dropdown(&sf_ctx,(sf_ivec2_t){LX,CRFT_RY(17)},(sf_ivec2_t){IX1,CRFT_RY(17)+12},
-                g_ct_sitem,g_ct_snc,&g_ct_ssel,NULL,NULL);
+        sf_ui_add_label(&sf_ctx,"Leaf Spr",(sf_ivec2_t){LX,CRFT_RY(17)+2},0);
+        { const char *sn = (g_crft_leaf&&g_crft_leaf->name)?g_crft_leaf->name:"(none)";
+          sf_ui_add_label(&sf_ctx, sn, (sf_ivec2_t){LX,CRFT_RY(18)+2}, 0xFFAAAAAA); }
+        sf_ui_add_button(&sf_ctx,"Browse",(sf_ivec2_t){LX,CRFT_RY(19)},(sf_ivec2_t){IX1,CRFT_RY(19)+12},
+            cb_browse_crft_leaf, NULL);
 
         /* Save/Install */
         { int bw=(IX1-LX-2)/2;
-          sf_ui_add_button(&sf_ctx,"Save",(sf_ivec2_t){LX,CRFT_RY(18)},(sf_ivec2_t){LX+bw,CRFT_RY(18)+14},cb_crft_save,NULL);
-          sf_ui_add_button(&sf_ctx,"Install",(sf_ivec2_t){LX+bw+2,CRFT_RY(18)},(sf_ivec2_t){IX1,CRFT_RY(18)+14},cb_crft_install,NULL); }
+          sf_ui_add_button(&sf_ctx,"Save",(sf_ivec2_t){LX,CRFT_RY(20)},(sf_ivec2_t){LX+bw,CRFT_RY(20)+14},cb_crft_save,NULL);
+          sf_ui_add_button(&sf_ctx,"Install",(sf_ivec2_t){LX+bw+2,CRFT_RY(20)},(sf_ivec2_t){IX1,CRFT_RY(20)+14},cb_crft_install,NULL); }
 
-        sf_ui_add_label(&sf_ctx,"SFF path",(sf_ivec2_t){LX,CRFT_RY(19)+2},0);
-        sf_ui_add_text_input(&sf_ctx,(sf_ivec2_t){LX,CRFT_RY(20)},(sf_ivec2_t){IX1,CRFT_RY(20)+12},
+        sf_ui_add_label(&sf_ctx,"SFF path",(sf_ivec2_t){LX,CRFT_RY(21)+2},0);
+        sf_ui_add_text_input(&sf_ctx,(sf_ivec2_t){LX,CRFT_RY(22)},(sf_ivec2_t){IX1,CRFT_RY(22)+12},
             g_crft_tree_sff,(int)sizeof(g_crft_tree_sff),NULL,NULL);
 
-        sf_ui_add_label(&sf_ctx,"Presets",(sf_ivec2_t){LX,CRFT_RY(21)+2},0);
+        sf_ui_add_label(&sf_ctx,"Presets",(sf_ivec2_t){LX,CRFT_RY(23)+2},0);
         { int pw=(IX1-LX-4)/3;
           static void(*cbs[3])(sf_ctx_t*,void*)={cb_ctpre0,cb_ctpre1,cb_ctpre2};
           for (int i=0;i<N_TREE_PRESETS;i++){
             int bx0=LX+i*(pw+2);
             sf_ui_add_button(&sf_ctx,k_tree_presets[i].name,
-                (sf_ivec2_t){bx0,CRFT_RY(22)},(sf_ivec2_t){bx0+pw,CRFT_RY(22)+14},cbs[i],NULL);
+                (sf_ivec2_t){bx0,CRFT_RY(24)},(sf_ivec2_t){bx0+pw,CRFT_RY(24)+14},cbs[i],NULL);
           } }
 
     } else if (g_crft_type == CRFT_ROCK) {
@@ -2401,24 +2773,25 @@ static void build_sfcrft_tab(void) {
 
         /* Stone texture */
         sf_ui_add_label(&sf_ctx,"Stone Tex",(sf_ivec2_t){LX,CRFT_RY(11)+2},0);
-        if (g_cr_tnc>0)
-            sf_ui_add_dropdown(&sf_ctx,(sf_ivec2_t){LX,CRFT_RY(12)},(sf_ivec2_t){IX1,CRFT_RY(12)+12},
-                g_cr_titem,g_cr_tnc,&g_cr_tsel,NULL,NULL);
+        { const char *stn = (g_cr_enti&&g_cr_enti->tex&&g_cr_enti->tex->name)?g_cr_enti->tex->name:"(none)";
+          sf_ui_add_label(&sf_ctx, stn, (sf_ivec2_t){LX,CRFT_RY(12)+2}, 0xFFAAAAAA); }
+        sf_ui_add_button(&sf_ctx,"Browse",(sf_ivec2_t){LX,CRFT_RY(13)},(sf_ivec2_t){IX1,CRFT_RY(13)+12},
+            cb_browse_crft_stone, NULL);
 
         /* Save/Install */
         { int bw=(IX1-LX-2)/2;
-          sf_ui_add_button(&sf_ctx,"Save",(sf_ivec2_t){LX,CRFT_RY(13)},(sf_ivec2_t){LX+bw,CRFT_RY(13)+14},cb_crft_save,NULL);
-          sf_ui_add_button(&sf_ctx,"Install",(sf_ivec2_t){LX+bw+2,CRFT_RY(13)},(sf_ivec2_t){IX1,CRFT_RY(13)+14},cb_crft_install,NULL); }
+          sf_ui_add_button(&sf_ctx,"Save",(sf_ivec2_t){LX,CRFT_RY(14)},(sf_ivec2_t){LX+bw,CRFT_RY(14)+14},cb_crft_save,NULL);
+          sf_ui_add_button(&sf_ctx,"Install",(sf_ivec2_t){LX+bw+2,CRFT_RY(14)},(sf_ivec2_t){IX1,CRFT_RY(14)+14},cb_crft_install,NULL); }
 
-        sf_ui_add_label(&sf_ctx,"SFF path",(sf_ivec2_t){LX,CRFT_RY(14)+2},0);
-        sf_ui_add_text_input(&sf_ctx,(sf_ivec2_t){LX,CRFT_RY(15)},(sf_ivec2_t){IX1,CRFT_RY(15)+12},
+        sf_ui_add_label(&sf_ctx,"SFF path",(sf_ivec2_t){LX,CRFT_RY(15)+2},0);
+        sf_ui_add_text_input(&sf_ctx,(sf_ivec2_t){LX,CRFT_RY(16)},(sf_ivec2_t){IX1,CRFT_RY(16)+12},
             g_crft_rock_sff,(int)sizeof(g_crft_rock_sff),NULL,NULL);
 
-        sf_ui_add_label(&sf_ctx,"Presets",(sf_ivec2_t){LX,CRFT_RY(16)+2},0);
+        sf_ui_add_label(&sf_ctx,"Presets",(sf_ivec2_t){LX,CRFT_RY(17)+2},0);
         { int pw=(IX1-LX-4)/3;
           static void(*cbs[5])(sf_ctx_t*,void*)={cb_crpre0,cb_crpre1,cb_crpre2,cb_crpre3,cb_crpre4};
           for (int i=0;i<N_ROCK_PRESETS;i++){
-            int row=17+i/3, col=i%3;
+            int row=18+i/3, col=i%3;
             int bx0=LX+col*(pw+2);
             sf_ui_add_button(&sf_ctx,k_rock_presets[i].name,
                 (sf_ivec2_t){bx0,CRFT_RY(row)},(sf_ivec2_t){bx0+pw,CRFT_RY(row)+14},cbs[i],NULL);
@@ -2438,27 +2811,34 @@ static void build_sfcrft_tab(void) {
         CRFT_DF(11, "Roof Type", bk_roof_type, 1.f);
         CRFT_DF(12, "Roof H",    bk_roof_h,    0.05f);
         CRFT_DF(13, "Roof Scl",  bk_roof_scale,0.05f);
+        CRFT_DF(14, "Asym",      bk_asym,      0.05f);
 
-        /* Stone texture */
-        sf_ui_add_label(&sf_ctx,"Stone Tex",(sf_ivec2_t){LX,CRFT_RY(14)+2},0);
-        if (g_cr_tnc>0)
-            sf_ui_add_dropdown(&sf_ctx,(sf_ivec2_t){LX,CRFT_RY(15)},(sf_ivec2_t){IX1,CRFT_RY(15)+12},
-                g_cr_titem,g_cr_tnc,&g_cr_tsel,NULL,NULL);
+        /* Wall and Roof textures */
+        sf_ui_add_label(&sf_ctx,"Wall Tex",(sf_ivec2_t){LX,CRFT_RY(15)+2},0);
+        { const char *wn2 = (g_ck_enti&&g_ck_enti->tex&&g_ck_enti->tex->name)?g_ck_enti->tex->name:"(none)";
+          sf_ui_add_label(&sf_ctx, wn2, (sf_ivec2_t){LX,CRFT_RY(16)+2}, 0xFFAAAAAA); }
+        sf_ui_add_button(&sf_ctx,"Browse",(sf_ivec2_t){LX,CRFT_RY(17)},(sf_ivec2_t){IX1,CRFT_RY(17)+12},
+            cb_browse_crft_bwall, NULL);
+        sf_ui_add_label(&sf_ctx,"Roof Tex",(sf_ivec2_t){LX,CRFT_RY(18)+2},0);
+        { const char *rn2 = (g_ck_enti_roof&&g_ck_enti_roof->tex&&g_ck_enti_roof->tex->name)?g_ck_enti_roof->tex->name:"(none)";
+          sf_ui_add_label(&sf_ctx, rn2, (sf_ivec2_t){LX,CRFT_RY(19)+2}, 0xFFAAAAAA); }
+        sf_ui_add_button(&sf_ctx,"Browse",(sf_ivec2_t){LX,CRFT_RY(20)},(sf_ivec2_t){IX1,CRFT_RY(20)+12},
+            cb_browse_crft_broof, NULL);
 
         /* Save/Install */
         { int bw=(IX1-LX-2)/2;
-          sf_ui_add_button(&sf_ctx,"Save",(sf_ivec2_t){LX,CRFT_RY(16)},(sf_ivec2_t){LX+bw,CRFT_RY(16)+14},cb_crft_save,NULL);
-          sf_ui_add_button(&sf_ctx,"Install",(sf_ivec2_t){LX+bw+2,CRFT_RY(16)},(sf_ivec2_t){IX1,CRFT_RY(16)+14},cb_crft_install,NULL); }
+          sf_ui_add_button(&sf_ctx,"Save",(sf_ivec2_t){LX,CRFT_RY(21)},(sf_ivec2_t){LX+bw,CRFT_RY(21)+14},cb_crft_save,NULL);
+          sf_ui_add_button(&sf_ctx,"Install",(sf_ivec2_t){LX+bw+2,CRFT_RY(21)},(sf_ivec2_t){IX1,CRFT_RY(21)+14},cb_crft_install,NULL); }
 
-        sf_ui_add_label(&sf_ctx,"SFF path",(sf_ivec2_t){LX,CRFT_RY(17)+2},0);
-        sf_ui_add_text_input(&sf_ctx,(sf_ivec2_t){LX,CRFT_RY(18)},(sf_ivec2_t){IX1,CRFT_RY(18)+12},
+        sf_ui_add_label(&sf_ctx,"SFF path",(sf_ivec2_t){LX,CRFT_RY(22)+2},0);
+        sf_ui_add_text_input(&sf_ctx,(sf_ivec2_t){LX,CRFT_RY(23)},(sf_ivec2_t){IX1,CRFT_RY(23)+12},
             g_crft_bldg_sff,(int)sizeof(g_crft_bldg_sff),NULL,NULL);
 
-        sf_ui_add_label(&sf_ctx,"Presets",(sf_ivec2_t){LX,CRFT_RY(19)+2},0);
+        sf_ui_add_label(&sf_ctx,"Presets",(sf_ivec2_t){LX,CRFT_RY(24)+2},0);
         { int pw=(IX1-LX-4)/3;
           static void(*cbs[5])(sf_ctx_t*,void*)={cb_bkpre0,cb_bkpre1,cb_bkpre2,cb_bkpre3,cb_bkpre4};
           for (int i=0;i<N_BLDG_PRESETS;i++){
-            int row=20+i/3, col=i%3;
+            int row=25+i/3, col=i%3;
             int bx0=LX+col*(pw+2);
             sf_ui_add_button(&sf_ctx,k_bldg_presets[i].name,
                 (sf_ivec2_t){bx0,CRFT_RY(row)},(sf_ivec2_t){bx0+pw,CRFT_RY(row)+14},cbs[i],NULL);
@@ -2467,6 +2847,7 @@ static void build_sfcrft_tab(void) {
 
 #undef CRFT_DF
 #undef CRFT_RY
+    build_browser_panel();
 }
 
 /* --- UI REBUILD --- */
@@ -2587,12 +2968,13 @@ static void build_browser_panel(void) {
   const char *title = (g_picker_open == PICK_MODEL) ? "Browse Models" :
                       (g_picker_open == PICK_SPRITE) ? "Browse Sprites" : "Browse Textures";
   sf_ui_add_panel(&sf_ctx, title, (sf_ivec2_t){bx0, by0}, (sf_ivec2_t){bx1, by1});
-  sf_ui_add_button(&sf_ctx, "X", (sf_ivec2_t){bx1-22, by0+4}, (sf_ivec2_t){bx1-4, by0+20},
+  sf_ui_add_button(&sf_ctx, "X", (sf_ivec2_t){bx0+2, by0+2}, (sf_ivec2_t){bx0+18, by0+16},
                    cb_picker_close, NULL);
   int content_y0 = by0 + 24;
   int content_y1 = by1 - 26;
   int rows_vis = (content_y1 - content_y0) / BROWSER_CELL_H;
   if (rows_vis < 1) rows_vis = 1;
+  g_picker_rows_vis = rows_vis;
   int n = picker_item_count();
   int total_rows = (n + BROWSER_COLS - 1) / BROWSER_COLS;
   int max_scroll = total_rows - rows_vis; if (max_scroll < 0) max_scroll = 0;
@@ -2622,6 +3004,7 @@ static void build_browser_panel(void) {
   int sy = by1 - 24;
   sf_ui_add_button(&sf_ctx, "<", (sf_ivec2_t){bx0+6,  sy}, (sf_ivec2_t){bx0+30, sy+18}, cb_picker_scroll_up, NULL);
   sf_ui_add_label (&sf_ctx, s_bpageinfo, (sf_ivec2_t){bx0+34, sy+4}, 0xFFAAAAAA);
+  sf_ui_add_button(&sf_ctx, "R", (sf_ivec2_t){bx0+90, sy}, (sf_ivec2_t){bx0+114,sy+18}, cb_picker_refresh, NULL);
   sf_ui_add_button(&sf_ctx, ">", (sf_ivec2_t){bx1-30, sy}, (sf_ivec2_t){bx1-6,  sy+18}, cb_picker_scroll_dn, NULL);
 }
 
@@ -2629,7 +3012,7 @@ static void build_browser_panel(void) {
    Asset browser — thumbnail blit (called after sf_ui_render)
    ============================================================ */
 static void draw_browser_thumbs(void) {
-  if (g_picker_open == PICK_NONE || g_tab != TAB_SFF) return;
+  if (g_picker_open == PICK_NONE || (g_tab != TAB_SFF && g_tab != TAB_SFCRFT)) return;
   int bx0 = BROWSER_X0;
   int content_y0 = 30 + 24;
   int content_y1 = g_h - 10 - 26;
@@ -2657,9 +3040,9 @@ static void draw_browser_thumbs(void) {
                 (sf_ivec2_t){tx, ty},
                 (sf_ivec2_t){tx + BROWSER_THUMB_SZ, ty + BROWSER_THUMB_SZ});
       }
-      /* label: strip extension, cap 10 chars */
-      char s[12]; int k = 0;
-      for (const char *p = lb; *p && *p != '.' && k < 11; p++) s[k++] = *p;
+      /* label: strip extension, cap 5 chars */
+      char s[8]; int k = 0;
+      for (const char *p = lb; *p && *p != '.' && k < 5; p++) s[k++] = *p;
       s[k] = '\0';
       sf_put_text(&sf_ctx, &sf_ctx.main_camera, s,
                   (sf_ivec2_t){tx, ty + BROWSER_THUMB_SZ + 2}, 0xFFCCCCCC, 1);
@@ -3754,8 +4137,8 @@ int main(int argc, char *argv[]) {
       /* Regenerate on param change */
       static float s_last_ct[14];
       static float s_last_cr[11];
-      static float s_last_bk[14];
-      static int s_last_ct_tsel=-1, s_last_cr_tsel=-1, s_last_ct_ssel=-1, s_last_bk_tsel=-1;
+      static float s_last_bk[15];
+      static int s_last_ct_tsel=-1, s_last_cr_tsel=-1, s_last_ct_ssel=-1, s_last_bk_tsel=-1, s_last_bk_rtsel=-1;
       bool tree_dirty = (ct_seed!=s_last_ct[0]||ct_depth!=s_last_ct[1]||ct_branch!=s_last_ct[2]||ct_angle!=s_last_ct[3]||
                          ct_len!=s_last_ct[4]||ct_taper!=s_last_ct[5]||ct_grav!=s_last_ct[6]||ct_wiggle!=s_last_ct[7]||
                          ct_twist!=s_last_ct[8]||ct_tr!=s_last_ct[9]||ct_tl!=s_last_ct[10]||
@@ -3768,7 +4151,7 @@ int main(int argc, char *argv[]) {
                          bk_jitter!=s_last_bk[6]||bk_ledge!=s_last_bk[7]||bk_win_cols!=s_last_bk[8]||
                          bk_win_size!=s_last_bk[9]||bk_win_inset!=s_last_bk[10]||
                          bk_roof_type!=s_last_bk[11]||bk_roof_h!=s_last_bk[12]||
-                         bk_roof_scale!=s_last_bk[13]);
+                         bk_roof_scale!=s_last_bk[13]||bk_asym!=s_last_bk[14]);
       if (tree_dirty) {
         crft_generate_tree();
         s_last_ct[0]=ct_seed; s_last_ct[1]=ct_depth; s_last_ct[2]=ct_branch; s_last_ct[3]=ct_angle;
@@ -3789,7 +4172,7 @@ int main(int argc, char *argv[]) {
         s_last_bk[3]=bk_width;   s_last_bk[4]=bk_depth;    s_last_bk[5]=bk_taper;
         s_last_bk[6]=bk_jitter;  s_last_bk[7]=bk_ledge;    s_last_bk[8]=bk_win_cols;
         s_last_bk[9]=bk_win_size;s_last_bk[10]=bk_win_inset;s_last_bk[11]=bk_roof_type;
-        s_last_bk[12]=bk_roof_h; s_last_bk[13]=bk_roof_scale;
+        s_last_bk[12]=bk_roof_h; s_last_bk[13]=bk_roof_scale; s_last_bk[14]=bk_asym;
       }
       if (g_ct_tsel != s_last_ct_tsel) { crft_apply_bark(); s_last_ct_tsel = g_ct_tsel; }
       if (g_ct_ssel != s_last_ct_ssel) {
@@ -3797,12 +4180,10 @@ int main(int argc, char *argv[]) {
         s_last_ct_ssel = g_ct_ssel;
       }
       if (g_cr_tsel != s_last_cr_tsel) { crft_apply_stone(); s_last_cr_tsel = g_cr_tsel; }
-      if (g_cr_tsel != s_last_bk_tsel && g_crft_type == CRFT_BLDG) {
-        if (g_ck_enti) {
-          sf_tex_t *t = crft_ensure_stone(g_cr_tsel);
-          if (t) { g_ck_enti->tex = t; g_ck_enti->tex_scale = (sf_fvec2_t){1.f,1.f}; }
-        }
-        s_last_bk_tsel = g_cr_tsel;
+      if (g_ck_tsel != s_last_bk_tsel || g_ck_rtsel != s_last_bk_rtsel) {
+        crft_apply_bldg_tex();
+        s_last_bk_tsel = g_ck_tsel;
+        s_last_bk_rtsel = g_ck_rtsel;
       }
     }
 
@@ -3819,6 +4200,7 @@ int main(int argc, char *argv[]) {
       if (g_ct_enti) g_ct_enti->obj.f_cnt = (g_crft_type==CRFT_TREE) ? g_ct_obj->f_cnt : 0;
       if (g_cr_enti) g_cr_enti->obj.f_cnt = (g_crft_type==CRFT_ROCK) ? g_cr_obj->f_cnt : 0;
       if (g_ck_enti) g_ck_enti->obj.f_cnt = (g_crft_type==CRFT_BLDG) ? g_ck_obj->f_cnt : 0;
+      if (g_ck_enti_roof) g_ck_enti_roof->obj.f_cnt = (g_crft_type==CRFT_BLDG) ? g_ck_obj_roof->f_cnt : 0;
       int saved_spr3d = g_crft_ctx.sprite_3d_count;
       if (g_crft_type != CRFT_TREE) g_crft_ctx.sprite_3d_count = 0;
       sf_render_ctx(&g_crft_ctx);
@@ -3869,9 +4251,9 @@ int main(int argc, char *argv[]) {
       int n_icons = (g_crft_type == CRFT_TREE) ? 14 : (g_crft_type == CRFT_ROCK) ? 11 : 14;
       for (int i = 0; i < n_icons; i++) {
         sf_rect(&sf_ctx, &sf_ctx.main_camera, (sf_pkd_clr_t)0xFF404040,
-                (sf_ivec2_t){14, 62 + i * 16},
-                (sf_ivec2_t){14 + CRFT_ICON_SZ, 62 + i * 16 + CRFT_ICON_SZ});
-        blit_tex_keyed(icons[i], 14, 62 + i * 16, CRFT_ICON_SZ, CRFT_ICON_SZ);
+                (sf_ivec2_t){14, 74 + i * 16},
+                (sf_ivec2_t){14 + CRFT_ICON_SZ, 74 + i * 16 + CRFT_ICON_SZ});
+        blit_tex_keyed(icons[i], 14, 74 + i * 16, CRFT_ICON_SZ, CRFT_ICON_SZ);
       }
     }
     sf_ui_render_popups(&sf_ctx, &sf_ctx.main_camera, sf_ctx.ui);

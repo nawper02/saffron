@@ -1,7 +1,14 @@
-TONIGHT
-  texture / model / sprite browser
-  icons didnt get moved down with panel
-  sff / obj not installing into assets 
+NOW
+  ~explorer close btn glitchy
+  ~sff files thumbs not showing
+  ~a lot of missing texture thumbs
+  ~clicking brows models->textures->models crashes program
+  ~lots of inside out tris
+  roof still doesnt move with building
+  saving building then immedietly opening browser to load it crashes program
+  leaves dont delete with tree
+  leftover frame after deleting thing
+  hiding sfcrft window doesnt hide icons
 
 TODO
   Clean up after claude
