@@ -46,6 +46,10 @@ extern "C" {
 #define SF_LOG_INDENT                 "            "
 #define SF_PI                         3.14159265359f
 #define SF_NANOS_PER_SEC              1000000000ULL
+#define SF_MAX_BONES                  64
+#define SF_MAX_SKIN_BONES             4
+#define SF_MAX_PUPPETS                32
+#define SF_MAX_PHYS_BODIES            256
 #define SF_ASSET_PATH                 "/usr/local/share/saffron/sf_assets"
 
 #define SF_LOG(ctx, level, fmt, ...)  sf_log_(ctx, level, __func__, fmt, ##__VA_ARGS__)
@@ -64,6 +68,8 @@ extern "C" {
 #define SF_CLR_BLUE                   ((sf_pkd_clr_t)0xFF0000FF)
 #define SF_CLR_BLACK                  ((sf_pkd_clr_t)0xFF000000)
 #define SF_CLR_WHITE                  ((sf_pkd_clr_t)0xFFFFFFFF)
+#define SF_CLR_YELLOW                 ((sf_pkd_clr_t)0xFFFFFF00)
+#define SF_CLR_CYAN                   ((sf_pkd_clr_t)0xFF00FFFF)
 
 /* SF_TYPES */
 typedef struct sf_ctx_t_ sf_ctx_t;
@@ -92,6 +98,7 @@ typedef struct { int      x, y, z;    } sf_svec3_t;
 typedef struct { float    x, y, z;    } sf_fvec3_t;
 typedef struct { int      x, y, z;    } sf_ivec3_t;
 typedef struct { float m[4][4];       } sf_fmat4_t;
+typedef struct { float    x, y, z, w; } sf_quat_t;
 typedef struct { sf_fvec3_t o, d;     } sf_ray_t;
 
 typedef enum {
@@ -178,6 +185,83 @@ typedef struct {
   const char                       *name;
   sf_frame_t                       *frame;
 } sf_enti_t;
+
+typedef struct {
+  char                              name[32];
+  int                               parent;
+  sf_fmat4_t                        inv_bind;
+} sf_bone_t;
+
+typedef struct {
+  uint8_t                           idx[SF_MAX_SKIN_BONES];
+  float                             w[SF_MAX_SKIN_BONES];
+} sf_skin_t;
+
+typedef struct { float t; sf_fvec3_t v; } sf_key_pos_t;
+typedef struct { float t; sf_quat_t  v; } sf_key_rot_t;
+typedef struct { float t; sf_fvec3_t v; } sf_key_scl_t;
+
+typedef struct {
+  int                               bone;
+  sf_key_pos_t                     *pos;
+  int                               pos_cnt;
+  sf_key_rot_t                     *rot;
+  int                               rot_cnt;
+  sf_key_scl_t                     *scl;
+  int                               scl_cnt;
+} sf_anim_chan_t;
+
+typedef struct {
+  char                              name[32];
+  float                             duration;
+  sf_anim_chan_t                    *channels;
+  int                               chan_cnt;
+} sf_anim_clip_t;
+
+typedef struct {
+  sf_fvec3_t                       *v;
+  sf_fvec2_t                       *vt;
+  sf_fvec3_t                       *vn;
+  sf_face_t                        *f;
+  sf_skin_t                        *skin;
+  int32_t                           v_cnt, vt_cnt, vn_cnt, f_cnt;
+  sf_bone_t                        *bones;
+  int                               bone_cnt;
+  sf_anim_clip_t                   *clips;
+  int                               clip_cnt;
+  const char                       *name;
+  int32_t                           id;
+  sf_fvec3_t                        bs_center;
+  float                             bs_radius;
+} sf_puppet_t;
+
+typedef struct {
+  sf_puppet_t                      *puppet;
+  sf_tex_t                         *tex;
+  sf_fvec2_t                        tex_scale;
+  sf_frame_t                       *frame;
+  const char                       *name;
+  int32_t                           id;
+  int                               cur_clip;
+  float                             anim_time;
+  bool                              is_playing;
+  bool                              is_looping;
+  sf_fvec3_t                       *skinned_v;
+  sf_fmat4_t                       *bone_mats;
+} sf_puppet_inst_t;
+
+typedef struct {
+  sf_fvec3_t                        min;
+  sf_fvec3_t                        max;
+} sf_aabb_t;
+
+typedef struct {
+  sf_fvec3_t                        vel;
+  sf_aabb_t                         box;
+  float                             gravity;
+  float                             friction;
+  bool                              grounded;
+} sf_phys_body_t;
 
 typedef enum {
   SF_LIGHT_DIR,
@@ -427,6 +511,11 @@ struct sf_ctx_t_ {
   sf_emitr_t                       *emitrs;
   int32_t                           emitr_count;
 
+  sf_puppet_t                      *puppets;
+  int32_t                           puppet_count;
+  sf_puppet_inst_t                 *puppet_insts;
+  int32_t                           puppet_inst_count;
+
   sf_light_t                       *lights;
   int32_t                           light_count;
 
@@ -525,6 +614,25 @@ void           _sf_sff_prse_enti    (sf_ctx_t *ctx, FILE *f, const char *name, i
 void           _sf_sff_prse_light   (sf_ctx_t *ctx, FILE *f, const char *name, int *light_count);
 void           _sf_sff_prse_sprit   (sf_ctx_t *ctx, FILE *f, const char *name, int *sprite_count);
 void           _sf_sff_prse_emitr   (sf_ctx_t *ctx, FILE *f, const char *name, int *emitr_count);
+
+/* SF_PUPPET_FUNCTIONS */
+sf_puppet_t*       sf_puppet_create (sf_ctx_t *ctx, const char *name, int max_v, int max_vt, int max_f, int bone_cnt);
+sf_puppet_t*       sf_puppet_load   (sf_ctx_t *ctx, const char *path);
+sf_puppet_inst_t*  sf_puppet_add_inst(sf_ctx_t *ctx, sf_puppet_t *p, const char *name);
+sf_puppet_inst_t*  sf_get_puppet_inst_(sf_ctx_t *ctx, const char *name, bool log);
+void               sf_puppet_update (sf_ctx_t *ctx, sf_puppet_inst_t *pi, float dt);
+void               sf_render_puppet (sf_ctx_t *ctx, sf_cam_t *cam, sf_puppet_inst_t *pi);
+void               sf_puppet_play   (sf_puppet_inst_t *pi, int clip_idx, bool loop);
+void               sf_puppet_stop   (sf_puppet_inst_t *pi);
+#define            sf_get_puppet_inst(ctx,name)  sf_get_puppet_inst_(ctx, name, true)
+
+/* SF_PHYSICS_FUNCTIONS */
+sf_aabb_t      sf_aabb_from_enti    (sf_enti_t *enti);
+sf_aabb_t      sf_aabb_from_pos_size(sf_fvec3_t pos, sf_fvec3_t half);
+bool           sf_aabb_overlap      (sf_aabb_t a, sf_aabb_t b);
+sf_fvec3_t     sf_aabb_resolve      (sf_aabb_t mover, sf_aabb_t blocker);
+void           sf_phys_step         (sf_phys_body_t *body, float dt);
+int            sf_phys_collide_aabbs(sf_phys_body_t *body, sf_aabb_t *walls, int wall_cnt);
 
 /* SF_FRAME_FUNCTIONS */
 sf_frame_t*    sf_get_root          (sf_ctx_t *ctx, sf_convention_t conv);
@@ -646,6 +754,18 @@ sf_fvec3_t     _sf_project_vertex   (sf_ctx_t *ctx, sf_cam_t *cam, sf_fvec3_t v,
 float          _sf_hash_2d          (int x, int z, uint32_t seed);
 float          _sf_smooth_noise     (float x, float z, uint32_t seed);
 
+/* SF_QUAT_FUNCTIONS */
+sf_quat_t      sf_quat_norm         (sf_quat_t q);
+sf_quat_t      sf_quat_mul          (sf_quat_t a, sf_quat_t b);
+sf_quat_t      sf_quat_slerp        (sf_quat_t a, sf_quat_t b, float t);
+sf_quat_t      sf_quat_nlerp        (sf_quat_t a, sf_quat_t b, float t);
+sf_quat_t      sf_quat_from_euler   (sf_fvec3_t e);
+sf_fmat4_t     sf_quat_to_mat4      (sf_quat_t q);
+sf_fvec3_t     _sf_sample_pos       (sf_anim_chan_t *ch, float t);
+sf_quat_t      _sf_sample_rot       (sf_anim_chan_t *ch, float t);
+sf_fvec3_t     _sf_sample_scl       (sf_anim_chan_t *ch, float t);
+sf_fmat4_t     _sf_trs_to_mat4      (sf_fvec3_t pos, sf_quat_t rot, sf_fvec3_t scl);
+
 /* SF_IMPLEMENTATION_HELPERS */
 bool           _sf_resolve_asset    (const char* filename, char* out_path, size_t max_len);
 const char*    _sf_basename         (const char *path);
@@ -696,6 +816,8 @@ void sf_init(sf_ctx_t *ctx, int w, int h) {
   ctx->frames                       = sf_arena_alloc(ctx, &ctx->arena, SF_MAX_FRAMES   * sizeof(sf_frame_t));
   ctx->sprites                      = sf_arena_alloc(ctx, &ctx->arena, SF_MAX_SPRITES  * sizeof(sf_sprite_t));
   ctx->emitrs                       = sf_arena_alloc(ctx, &ctx->arena, SF_MAX_EMITRS   * sizeof(sf_emitr_t));
+  ctx->puppets                      = sf_arena_alloc(ctx, &ctx->arena, SF_MAX_PUPPETS  * sizeof(sf_puppet_t));
+  ctx->puppet_insts                 = sf_arena_alloc(ctx, &ctx->arena, SF_MAX_PUPPETS  * sizeof(sf_puppet_inst_t));
   ctx->obj_count                    = 0;
   ctx->enti_count                   = 0;
   ctx->light_count                  = 0;
@@ -705,6 +827,8 @@ void sf_init(sf_ctx_t *ctx, int w, int h) {
   ctx->free_frames                  = NULL;
   ctx->sprite_count                 = 0;
   ctx->emitr_count                  = 0;
+  ctx->puppet_count                 = 0;
+  ctx->puppet_inst_count            = 0;
   ctx->_start_ticks                 = _sf_get_ticks();
   ctx->_last_ticks                  = ctx->_start_ticks;
   ctx->delta_time                   = 0.0f;
@@ -984,6 +1108,10 @@ void sf_render_cam(sf_ctx_t *ctx, sf_cam_t *cam) {
 
   for (int i = 0; i < ctx->enti_count; i++) {
     sf_render_enti(ctx, cam, &ctx->entities[i]);
+  }
+
+  for (int i = 0; i < ctx->puppet_inst_count; i++) {
+    sf_render_puppet(ctx, cam, &ctx->puppet_insts[i]);
   }
 
   sf_render_emitrs(ctx, cam);
@@ -4480,6 +4608,615 @@ float _sf_smooth_noise(float x, float z, uint32_t seed) {
   float ab = a + (b - a) * u;
   float cd = c + (d - c) * u;
   return ab + (cd - ab) * v;
+}
+
+/* SF_QUAT_FUNCTIONS */
+sf_quat_t sf_quat_norm(sf_quat_t q) {
+  /* Normalize a quaternion; returns identity if near-zero length. */
+  float len = sqrtf(q.x*q.x + q.y*q.y + q.z*q.z + q.w*q.w);
+  if (len < 1e-6f) return (sf_quat_t){0,0,0,1};
+  float inv = 1.0f / len;
+  return (sf_quat_t){ q.x*inv, q.y*inv, q.z*inv, q.w*inv };
+}
+
+sf_quat_t sf_quat_mul(sf_quat_t a, sf_quat_t b) {
+  /* Multiply two quaternions (Hamilton product). */
+  return (sf_quat_t){
+    a.w*b.x + a.x*b.w + a.y*b.z - a.z*b.y,
+    a.w*b.y - a.x*b.z + a.y*b.w + a.z*b.x,
+    a.w*b.z + a.x*b.y - a.y*b.x + a.z*b.w,
+    a.w*b.w - a.x*b.x - a.y*b.y - a.z*b.z
+  };
+}
+
+sf_quat_t sf_quat_nlerp(sf_quat_t a, sf_quat_t b, float t) {
+  /* Normalized linear interpolation between two quaternions. */
+  float dot = a.x*b.x + a.y*b.y + a.z*b.z + a.w*b.w;
+  float s = (dot < 0.0f) ? -1.0f : 1.0f;
+  sf_quat_t r = { a.x + (b.x*s - a.x)*t, a.y + (b.y*s - a.y)*t,
+                  a.z + (b.z*s - a.z)*t, a.w + (b.w*s - a.w)*t };
+  return sf_quat_norm(r);
+}
+
+sf_quat_t sf_quat_slerp(sf_quat_t a, sf_quat_t b, float t) {
+  /* Spherical linear interpolation between two quaternions. */
+  float dot = a.x*b.x + a.y*b.y + a.z*b.z + a.w*b.w;
+  if (dot < 0.0f) { dot = -dot; b.x=-b.x; b.y=-b.y; b.z=-b.z; b.w=-b.w; }
+  if (dot > 0.9995f) return sf_quat_nlerp(a, b, t);
+  float theta = acosf(dot);
+  float stheta = sinf(theta);
+  float wa = sinf((1.0f - t) * theta) / stheta;
+  float wb = sinf(t * theta) / stheta;
+  return sf_quat_norm((sf_quat_t){ a.x*wa+b.x*wb, a.y*wa+b.y*wb, a.z*wa+b.z*wb, a.w*wa+b.w*wb });
+}
+
+sf_quat_t sf_quat_from_euler(sf_fvec3_t e) {
+  /* Convert Euler angles (radians) to a quaternion. */
+  float cx = cosf(e.x*0.5f), sx = sinf(e.x*0.5f);
+  float cy = cosf(e.y*0.5f), sy = sinf(e.y*0.5f);
+  float cz = cosf(e.z*0.5f), sz = sinf(e.z*0.5f);
+  return sf_quat_norm((sf_quat_t){
+    sx*cy*cz - cx*sy*sz,
+    cx*sy*cz + sx*cy*sz,
+    cx*cy*sz - sx*sy*cz,
+    cx*cy*cz + sx*sy*sz
+  });
+}
+
+sf_fmat4_t sf_quat_to_mat4(sf_quat_t q) {
+  /* Convert a unit quaternion to a 4x4 rotation matrix. */
+  sf_fmat4_t m = sf_make_idn_fmat4();
+  float xx=q.x*q.x, yy=q.y*q.y, zz=q.z*q.z;
+  float xy=q.x*q.y, xz=q.x*q.z, yz=q.y*q.z;
+  float wx=q.w*q.x, wy=q.w*q.y, wz=q.w*q.z;
+  m.m[0][0]=1-2*(yy+zz); m.m[0][1]=2*(xy+wz);   m.m[0][2]=2*(xz-wy);
+  m.m[1][0]=2*(xy-wz);   m.m[1][1]=1-2*(xx+zz); m.m[1][2]=2*(yz+wx);
+  m.m[2][0]=2*(xz+wy);   m.m[2][1]=2*(yz-wx);   m.m[2][2]=1-2*(xx+yy);
+  return m;
+}
+
+sf_fvec3_t _sf_sample_pos(sf_anim_chan_t *ch, float t) {
+  /* Sample position keyframes at time t with linear interpolation. */
+  if (!ch->pos || ch->pos_cnt == 0) return (sf_fvec3_t){0,0,0};
+  if (ch->pos_cnt == 1 || t <= ch->pos[0].t) return ch->pos[0].v;
+  for (int i = 0; i < ch->pos_cnt - 1; i++) {
+    if (t < ch->pos[i+1].t) {
+      float f = (t - ch->pos[i].t) / (ch->pos[i+1].t - ch->pos[i].t);
+      return _sf_lerp_fvec3(ch->pos[i].v, ch->pos[i+1].v, f);
+    }
+  }
+  return ch->pos[ch->pos_cnt-1].v;
+}
+
+sf_quat_t _sf_sample_rot(sf_anim_chan_t *ch, float t) {
+  /* Sample rotation keyframes at time t with slerp interpolation. */
+  sf_quat_t identity = {0,0,0,1};
+  if (!ch->rot || ch->rot_cnt == 0) return identity;
+  if (ch->rot_cnt == 1 || t <= ch->rot[0].t) return ch->rot[0].v;
+  for (int i = 0; i < ch->rot_cnt - 1; i++) {
+    if (t < ch->rot[i+1].t) {
+      float f = (t - ch->rot[i].t) / (ch->rot[i+1].t - ch->rot[i].t);
+      return sf_quat_slerp(ch->rot[i].v, ch->rot[i+1].v, f);
+    }
+  }
+  return ch->rot[ch->rot_cnt-1].v;
+}
+
+sf_fvec3_t _sf_sample_scl(sf_anim_chan_t *ch, float t) {
+  /* Sample scale keyframes at time t with linear interpolation. */
+  if (!ch->scl || ch->scl_cnt == 0) return (sf_fvec3_t){1,1,1};
+  if (ch->scl_cnt == 1 || t <= ch->scl[0].t) return ch->scl[0].v;
+  for (int i = 0; i < ch->scl_cnt - 1; i++) {
+    if (t < ch->scl[i+1].t) {
+      float f = (t - ch->scl[i].t) / (ch->scl[i+1].t - ch->scl[i].t);
+      return _sf_lerp_fvec3(ch->scl[i].v, ch->scl[i+1].v, f);
+    }
+  }
+  return ch->scl[ch->scl_cnt-1].v;
+}
+
+sf_fmat4_t _sf_trs_to_mat4(sf_fvec3_t pos, sf_quat_t rot, sf_fvec3_t scl) {
+  /* Compose translation, rotation, and scale into a 4x4 matrix. */
+  sf_fmat4_t r = sf_quat_to_mat4(rot);
+  sf_fmat4_t s = sf_make_scale_fmat4(scl);
+  sf_fmat4_t t = sf_make_tsl_fmat4(pos.x, pos.y, pos.z);
+  return sf_fmat4_mul_fmat4(sf_fmat4_mul_fmat4(r, s), t);
+}
+
+/* SF_PUPPET_FUNCTIONS */
+sf_puppet_t* sf_puppet_create(sf_ctx_t *ctx, const char *name, int max_v, int max_vt, int max_f, int bone_cnt) {
+  /* Create an empty puppet with pre-allocated vertex, face, and bone arrays. */
+  if (ctx->puppet_count >= SF_MAX_PUPPETS) {
+    SF_LOG(ctx, SF_LOG_ERROR, SF_LOG_INDENT "puppet limit reached\n");
+    return NULL;
+  }
+  sf_puppet_t *p = &ctx->puppets[ctx->puppet_count++];
+  memset(p, 0, sizeof(sf_puppet_t));
+  p->id = ctx->puppet_count - 1;
+  size_t nlen = strlen(name) + 1;
+  char *nm = (char*)sf_arena_alloc(ctx, &ctx->arena, nlen);
+  if (nm) { memcpy(nm, name, nlen); p->name = nm; }
+  p->v  = (sf_fvec3_t*)sf_arena_alloc(ctx, &ctx->arena, max_v  * sizeof(sf_fvec3_t));
+  p->vt = (sf_fvec2_t*)sf_arena_alloc(ctx, &ctx->arena, max_vt * sizeof(sf_fvec2_t));
+  p->vn = (sf_fvec3_t*)sf_arena_alloc(ctx, &ctx->arena, max_v  * sizeof(sf_fvec3_t));
+  p->f  = (sf_face_t*) sf_arena_alloc(ctx, &ctx->arena, max_f  * sizeof(sf_face_t));
+  if (bone_cnt > 0) {
+    p->bones = (sf_bone_t*)sf_arena_alloc(ctx, &ctx->arena, bone_cnt * sizeof(sf_bone_t));
+    p->skin  = (sf_skin_t*)sf_arena_alloc(ctx, &ctx->arena, max_v    * sizeof(sf_skin_t));
+    memset(p->bones, 0, bone_cnt * sizeof(sf_bone_t));
+    memset(p->skin,  0, max_v    * sizeof(sf_skin_t));
+  }
+  p->bone_cnt = bone_cnt;
+  return p;
+}
+
+void sf_puppet_play(sf_puppet_inst_t *pi, int clip_idx, bool loop) {
+  /* Start playing an animation clip on a puppet instance. */
+  pi->cur_clip   = clip_idx;
+  pi->anim_time  = 0.0f;
+  pi->is_playing = true;
+  pi->is_looping = loop;
+}
+
+void sf_puppet_stop(sf_puppet_inst_t *pi) {
+  /* Stop animation playback on a puppet instance. */
+  pi->is_playing = false;
+}
+
+void sf_puppet_update(sf_ctx_t *ctx, sf_puppet_inst_t *pi, float dt) {
+  /* Advance animation time, evaluate bone transforms, and skin vertices. */
+  (void)ctx;
+  if (!pi || !pi->puppet || pi->puppet->bone_cnt == 0) return;
+  sf_puppet_t *p = pi->puppet;
+
+  if (pi->is_playing) {
+    pi->anim_time += dt;
+    if (pi->cur_clip >= 0 && pi->cur_clip < p->clip_cnt) {
+      float dur = p->clips[pi->cur_clip].duration;
+      if (dur > 0.0f) {
+        if (pi->is_looping) {
+          pi->anim_time = fmodf(pi->anim_time, dur);
+        } else if (pi->anim_time >= dur) {
+          pi->anim_time = dur;
+          pi->is_playing = false;
+        }
+      }
+    }
+  }
+
+  sf_anim_clip_t *clip = (pi->cur_clip >= 0 && pi->cur_clip < p->clip_cnt)
+                          ? &p->clips[pi->cur_clip] : NULL;
+
+  sf_fmat4_t *ag = pi->bone_mats;
+
+  for (int b = 0; b < p->bone_cnt; b++) {
+    /* Default to rest pose derived from inverse bind matrix */
+    sf_fvec3_t  tpos = {-p->bones[b].inv_bind.m[3][0],
+                        -p->bones[b].inv_bind.m[3][1],
+                        -p->bones[b].inv_bind.m[3][2]};
+    sf_quat_t   trot = {0,0,0,1};
+    sf_fvec3_t  tscl = {1,1,1};
+
+    if (clip) {
+      for (int c = 0; c < clip->chan_cnt; c++) {
+        if (clip->channels[c].bone == b) {
+          if (clip->channels[c].pos_cnt > 0)
+            tpos = _sf_sample_pos(&clip->channels[c], pi->anim_time);
+          trot = _sf_sample_rot(&clip->channels[c], pi->anim_time);
+          tscl = _sf_sample_scl(&clip->channels[c], pi->anim_time);
+          break;
+        }
+      }
+    }
+
+    sf_fmat4_t local = _sf_trs_to_mat4(tpos, trot, tscl);
+    ag[b] = (p->bones[b].parent < 0)
+            ? local
+            : sf_fmat4_mul_fmat4(local, ag[p->bones[b].parent]);
+  }
+
+  for (int b = 0; b < p->bone_cnt; b++) {
+    ag[b] = sf_fmat4_mul_fmat4(p->bones[b].inv_bind, ag[b]);
+  }
+
+  if (!pi->skinned_v) return;
+  for (int vi = 0; vi < p->v_cnt; vi++) {
+    sf_fvec3_t r = {0,0,0};
+    sf_skin_t *s = &p->skin[vi];
+    for (int k = 0; k < SF_MAX_SKIN_BONES; k++) {
+      if (s->w[k] == 0.0f) continue;
+      sf_fvec3_t tv = sf_fmat4_mul_vec3(ag[s->idx[k]], p->v[vi]);
+      r.x += s->w[k] * tv.x;
+      r.y += s->w[k] * tv.y;
+      r.z += s->w[k] * tv.z;
+    }
+    pi->skinned_v[vi] = r;
+  }
+}
+
+sf_puppet_inst_t* sf_puppet_add_inst(sf_ctx_t *ctx, sf_puppet_t *p, const char *name) {
+  /* Create a renderable instance of a puppet with its own skinned vertex buffer. */
+  if (ctx->puppet_inst_count >= SF_MAX_PUPPETS) {
+    SF_LOG(ctx, SF_LOG_ERROR, SF_LOG_INDENT "puppet inst limit reached\n");
+    return NULL;
+  }
+  sf_puppet_inst_t *pi = &ctx->puppet_insts[ctx->puppet_inst_count++];
+  memset(pi, 0, sizeof(sf_puppet_inst_t));
+  pi->puppet     = p;
+  pi->cur_clip   = -1;
+  pi->tex_scale  = (sf_fvec2_t){1.0f, 1.0f};
+  pi->id         = ctx->puppet_inst_count - 1;
+  size_t nlen = strlen(name) + 1;
+  pi->name = (const char*)sf_arena_alloc(ctx, &ctx->arena, nlen);
+  if (pi->name) memcpy((void*)pi->name, name, nlen);
+  pi->frame = sf_add_frame(ctx, NULL);
+  if (pi->frame) {
+    pi->frame->scale = (sf_fvec3_t){1,1,1};
+    size_t fnlen = strlen(name) + 1;
+    pi->frame->name = (const char*)sf_arena_alloc(ctx, &ctx->arena, fnlen);
+    if (pi->frame->name) memcpy((void*)pi->frame->name, name, fnlen);
+    pi->frame->is_dirty = true;
+  }
+  if (p->bone_cnt > 0) {
+    pi->bone_mats = (sf_fmat4_t*)sf_arena_alloc(ctx, &ctx->arena, p->bone_cnt * sizeof(sf_fmat4_t));
+    for (int b = 0; b < p->bone_cnt; b++) pi->bone_mats[b] = sf_make_idn_fmat4();
+  }
+  if (p->v_cnt > 0) {
+    pi->skinned_v = (sf_fvec3_t*)sf_arena_alloc(ctx, &ctx->arena, p->v_cnt * sizeof(sf_fvec3_t));
+    if (pi->skinned_v) memcpy(pi->skinned_v, p->v, p->v_cnt * sizeof(sf_fvec3_t));
+  }
+  sf_puppet_update(ctx, pi, 0.0f);
+  return pi;
+}
+
+sf_puppet_inst_t* sf_get_puppet_inst_(sf_ctx_t *ctx, const char *name, bool log) {
+  /* Look up a puppet instance by name; returns NULL if not found. */
+  for (int i = 0; i < ctx->puppet_inst_count; i++) {
+    if (ctx->puppet_insts[i].name && strcmp(ctx->puppet_insts[i].name, name) == 0)
+      return &ctx->puppet_insts[i];
+  }
+  if (log) SF_LOG(ctx, SF_LOG_WARN, SF_LOG_INDENT "puppet inst '%s' not found\n", name);
+  return NULL;
+}
+
+void sf_render_puppet(sf_ctx_t *ctx, sf_cam_t *cam, sf_puppet_inst_t *pi) {
+  /* Rasterize a puppet instance using its skinned vertices with lighting. */
+  if (!pi || !pi->puppet || !pi->frame || !pi->skinned_v) return;
+  sf_puppet_t *p = pi->puppet;
+
+  sf_fmat4_t M  = pi->frame->global_M;
+  sf_fmat4_t MV = sf_fmat4_mul_fmat4(M, cam->V);
+  sf_fmat4_t P  = cam->P;
+
+  float sx = sqrtf(M.m[0][0]*M.m[0][0]+M.m[0][1]*M.m[0][1]+M.m[0][2]*M.m[0][2]);
+  float sy = sqrtf(M.m[1][0]*M.m[1][0]+M.m[1][1]*M.m[1][1]+M.m[1][2]*M.m[1][2]);
+  float sz = sqrtf(M.m[2][0]*M.m[2][0]+M.m[2][1]*M.m[2][1]+M.m[2][2]*M.m[2][2]);
+  float ms = sx > sy ? (sx > sz ? sx : sz) : (sy > sz ? sy : sz);
+  sf_fvec3_t bc = sf_fmat4_mul_vec3(MV, p->bs_center);
+  float      br = p->bs_radius * ms;
+  float fov_r = cam->fov * 0.01745329f * 0.5f;
+  float aspect = (float)cam->w / (float)cam->h;
+  float cos_v  = cosf(fov_r), sin_v = sinf(fov_r);
+  float cos_h  = cosf(atanf(tanf(fov_r)*aspect)), sin_h = sinf(atanf(tanf(fov_r)*aspect));
+  if (bc.z - br > -cam->near_plane) return;
+  if (bc.z + br < -cam->far_plane)  return;
+  if ( bc.x*cos_h + bc.z*sin_h > br) return;
+  if (-bc.x*cos_h + bc.z*sin_h > br) return;
+  if ( bc.y*cos_v + bc.z*sin_v > br) return;
+  if (-bc.y*cos_v + bc.z*sin_v > br) return;
+
+  ctx->_perf_tri_count += p->f_cnt;
+
+  size_t mark = sf_arena_save(ctx, &ctx->arena);
+  float near = 0.1f;
+  sf_fvec3_t *vv = sf_arena_alloc(ctx, &ctx->arena, p->v_cnt * sizeof(sf_fvec3_t));
+  if (!vv) { sf_arena_restore(ctx, &ctx->arena, mark); return; }
+
+  for (int i = 0; i < p->v_cnt; i++) {
+    vv[i] = sf_fmat4_mul_vec3(MV, pi->skinned_v[i]);
+  }
+
+  struct { sf_fvec3_t pos_v, dir_v, color; float intensity; sf_light_type_t type; } lv[SF_MAX_LIGHTS];
+  int lv_cnt = 0;
+  for (int l = 0; l < ctx->light_count && l < SF_MAX_LIGHTS; l++) {
+    sf_light_t *light = &ctx->lights[l];
+    if (!light->frame) continue;
+    sf_fmat4_t lM = light->frame->global_M;
+    sf_fvec3_t lp_w = {lM.m[3][0], lM.m[3][1], lM.m[3][2]};
+    lv[lv_cnt].pos_v    = sf_fmat4_mul_vec3(cam->V, lp_w);
+    lv[lv_cnt].type     = light->type;
+    lv[lv_cnt].intensity = light->intensity;
+    lv[lv_cnt].color    = light->color;
+    if (light->type == SF_LIGHT_DIR) {
+      sf_fvec3_t dir_w = {-lM.m[2][0], -lM.m[2][1], -lM.m[2][2]};
+      sf_fvec3_t end_v = sf_fmat4_mul_vec3(cam->V, sf_fvec3_add(lp_w, dir_w));
+      lv[lv_cnt].dir_v = sf_fvec3_norm(sf_fvec3_sub(end_v, lv[lv_cnt].pos_v));
+    }
+    lv_cnt++;
+  }
+
+  for (int i = 0; i < p->f_cnt; i++) {
+    sf_face_t face = p->f[i];
+    sf_fvec3_t v_view[3] = { vv[face.idx[0].v], vv[face.idx[1].v], vv[face.idx[2].v] };
+    sf_fvec3_t a_v = sf_fvec3_sub(v_view[1], v_view[0]);
+    sf_fvec3_t b_v = sf_fvec3_sub(v_view[2], v_view[0]);
+    sf_fvec3_t n_v = sf_fvec3_cross(a_v, b_v);
+    if (sf_fvec3_dot(n_v, v_view[0]) >= 0) continue;
+
+    sf_fvec3_t n = sf_fvec3_norm(n_v);
+    sf_fvec3_t cen = {
+      (v_view[0].x+v_view[1].x+v_view[2].x)*0.333333f,
+      (v_view[0].y+v_view[1].y+v_view[2].y)*0.333333f,
+      (v_view[0].z+v_view[1].z+v_view[2].z)*0.333333f
+    };
+    sf_fvec3_t l_int = {0.1f, 0.1f, 0.1f};
+    for (int l = 0; l < lv_cnt; l++) {
+      sf_fvec3_t ldir; float atten = 1.0f;
+      if (lv[l].type == SF_LIGHT_DIR) {
+        ldir = lv[l].dir_v;
+      } else {
+        sf_fvec3_t diff = sf_fvec3_sub(lv[l].pos_v, cen);
+        float dsq = diff.x*diff.x+diff.y*diff.y+diff.z*diff.z;
+        float dist = sqrtf(dsq); float inv = (dist>0.0f)?1.0f/dist:0.0f;
+        ldir = (sf_fvec3_t){diff.x*inv, diff.y*inv, diff.z*inv};
+        atten = 1.0f/(1.0f+0.09f*dist+0.032f*dsq);
+      }
+      float df = sf_fvec3_dot(n, ldir);
+      if (df > 0.0f) {
+        l_int.x += lv[l].color.x*lv[l].intensity*df*atten;
+        l_int.y += lv[l].color.y*lv[l].intensity*df*atten;
+        l_int.z += lv[l].color.z*lv[l].intensity*df*atten;
+      }
+    }
+    l_int.x = l_int.x>1.0f?1.0f:l_int.x;
+    l_int.y = l_int.y>1.0f?1.0f:l_int.y;
+    l_int.z = l_int.z>1.0f?1.0f:l_int.z;
+
+    sf_fvec2_t uvs[3] = {0};
+    bool has_uvs = (p->vt_cnt > 0 && face.idx[0].vt != -1);
+    if (has_uvs) {
+      uvs[0] = p->vt[face.idx[0].vt]; uvs[1] = p->vt[face.idx[1].vt]; uvs[2] = p->vt[face.idx[2].vt];
+      for (int j = 0; j < 3; j++) { uvs[j].x *= pi->tex_scale.x; uvs[j].y *= pi->tex_scale.y; }
+    }
+    sf_fvec3_t uvz[3];
+    for (int j = 0; j < 3; j++) {
+      float z = -v_view[j].z; if (z < near) z = near;
+      float iz = 1.0f/z;
+      uvz[j] = (sf_fvec3_t){ uvs[j].x*iz, uvs[j].y*iz, iz };
+    }
+    sf_fvec3_t in[3], out[3], in_uvz[3], out_uvz[3];
+    int inc=0, outc=0;
+    for (int j = 0; j < 3; j++) {
+      if (v_view[j].z <= -near) { in_uvz[inc]=uvz[j]; in[inc++]=v_view[j]; }
+      else                      { out_uvz[outc]=uvz[j]; out[outc++]=v_view[j]; }
+    }
+    if (pi->tex && has_uvs) {
+      if (inc==3) {
+        sf_tri_tex(ctx,cam,pi->tex,_sf_project_vertex(ctx,cam,in[0],P),_sf_project_vertex(ctx,cam,in[1],P),_sf_project_vertex(ctx,cam,in[2],P),in_uvz[0],in_uvz[1],in_uvz[2],l_int);
+      } else if (inc==1) {
+        float t1=(-near-in[0].z)/(out[0].z-in[0].z), t2=(-near-in[0].z)/(out[1].z-in[0].z);
+        sf_fvec3_t v1={in[0].x+(out[0].x-in[0].x)*t1,in[0].y+(out[0].y-in[0].y)*t1,-near};
+        sf_fvec3_t v2={in[0].x+(out[1].x-in[0].x)*t2,in[0].y+(out[1].y-in[0].y)*t2,-near};
+        sf_fvec3_t uz1={in_uvz[0].x+(out_uvz[0].x-in_uvz[0].x)*t1,in_uvz[0].y+(out_uvz[0].y-in_uvz[0].y)*t1,in_uvz[0].z+(out_uvz[0].z-in_uvz[0].z)*t1};
+        sf_fvec3_t uz2={in_uvz[0].x+(out_uvz[1].x-in_uvz[0].x)*t2,in_uvz[0].y+(out_uvz[1].y-in_uvz[0].y)*t2,in_uvz[0].z+(out_uvz[1].z-in_uvz[0].z)*t2};
+        sf_tri_tex(ctx,cam,pi->tex,_sf_project_vertex(ctx,cam,in[0],P),_sf_project_vertex(ctx,cam,v1,P),_sf_project_vertex(ctx,cam,v2,P),in_uvz[0],uz1,uz2,l_int);
+      } else if (inc==2) {
+        float t1=(-near-in[0].z)/(out[0].z-in[0].z), t2=(-near-in[1].z)/(out[0].z-in[1].z);
+        sf_fvec3_t v1={in[0].x+(out[0].x-in[0].x)*t1,in[0].y+(out[0].y-in[0].y)*t1,-near};
+        sf_fvec3_t v2={in[1].x+(out[0].x-in[1].x)*t2,in[1].y+(out[0].y-in[1].y)*t2,-near};
+        sf_fvec3_t uz1={in_uvz[0].x+(out_uvz[0].x-in_uvz[0].x)*t1,in_uvz[0].y+(out_uvz[0].y-in_uvz[0].y)*t1,in_uvz[0].z+(out_uvz[0].z-in_uvz[0].z)*t1};
+        sf_fvec3_t uz2={in_uvz[1].x+(out_uvz[0].x-in_uvz[1].x)*t2,in_uvz[1].y+(out_uvz[0].y-in_uvz[1].y)*t2,in_uvz[1].z+(out_uvz[0].z-in_uvz[1].z)*t2};
+        sf_tri_tex(ctx,cam,pi->tex,_sf_project_vertex(ctx,cam,in[0],P),_sf_project_vertex(ctx,cam,in[1],P),_sf_project_vertex(ctx,cam,v1,P),in_uvz[0],in_uvz[1],uz1,l_int);
+        sf_tri_tex(ctx,cam,pi->tex,_sf_project_vertex(ctx,cam,in[1],P),_sf_project_vertex(ctx,cam,v1,P),_sf_project_vertex(ctx,cam,v2,P),in_uvz[1],uz1,uz2,l_int);
+      }
+    } else {
+      sf_pkd_clr_t sc = _sf_pack_color((sf_unpkd_clr_t){(uint8_t)(l_int.x*255),(uint8_t)(l_int.y*255),(uint8_t)(l_int.z*255),255});
+      if (inc==3) {
+        sf_tri(ctx,cam,sc,_sf_project_vertex(ctx,cam,v_view[0],P),_sf_project_vertex(ctx,cam,v_view[1],P),_sf_project_vertex(ctx,cam,v_view[2],P),true);
+      } else if (inc==1) {
+        sf_fvec3_t v1=_sf_intersect_near(in[0],out[0],-near), v2=_sf_intersect_near(in[0],out[1],-near);
+        sf_tri(ctx,cam,sc,_sf_project_vertex(ctx,cam,in[0],P),_sf_project_vertex(ctx,cam,v1,P),_sf_project_vertex(ctx,cam,v2,P),true);
+      } else if (inc==2) {
+        sf_fvec3_t v1=_sf_intersect_near(in[0],out[0],-near), v2=_sf_intersect_near(in[1],out[0],-near);
+        sf_tri(ctx,cam,sc,_sf_project_vertex(ctx,cam,in[0],P),_sf_project_vertex(ctx,cam,in[1],P),_sf_project_vertex(ctx,cam,v1,P),true);
+        sf_tri(ctx,cam,sc,_sf_project_vertex(ctx,cam,in[1],P),_sf_project_vertex(ctx,cam,v1,P),_sf_project_vertex(ctx,cam,v2,P),true);
+      }
+    }
+  }
+  sf_arena_restore(ctx, &ctx->arena, mark);
+}
+
+sf_puppet_t* sf_puppet_load(sf_ctx_t *ctx, const char *path) {
+  /* Load a puppet from an .sfp file containing mesh, skeleton, skin weights, and animation clips. */
+  FILE *f = fopen(path, "r");
+  if (!f) { SF_LOG(ctx, SF_LOG_ERROR, SF_LOG_INDENT "cannot open puppet: %s\n", path); return NULL; }
+
+  char tok[256];
+  int n = 0; int c;
+  while ((c = fgetc(f)) != EOF && c != ' ' && c != '\t' && c != '\r' && c != '\n' && n < 255) tok[n++] = (char)c;
+  tok[n] = '\0';
+  if (strcmp(tok, "sfp") != 0) { fclose(f); SF_LOG(ctx, SF_LOG_ERROR, SF_LOG_INDENT "bad sfp header\n"); return NULL; }
+  n = 0; while ((c = fgetc(f)) != EOF && c != ' ' && c != '\t' && c != '\r' && c != '\n' && n < 255) tok[n++] = (char)c;
+  tok[n] = '\0';
+
+  if (ctx->puppet_count >= SF_MAX_PUPPETS) {
+    fclose(f); SF_LOG(ctx, SF_LOG_ERROR, SF_LOG_INDENT "puppet limit reached\n"); return NULL;
+  }
+  sf_puppet_t *p = &ctx->puppets[ctx->puppet_count++];
+  memset(p, 0, sizeof(sf_puppet_t));
+  p->id = ctx->puppet_count - 1;
+
+  char dir[512]; snprintf(dir, sizeof(dir), "%s", path);
+  char *sl = strrchr(dir, '/'); if (!sl) sl = strrchr(dir, '\\');
+  if (sl) sl[1] = '\0'; else dir[0] = '\0';
+
+  while (1) {
+    n = 0;
+    while ((c = fgetc(f)) != EOF) {
+      if (c == '#') { while ((c = fgetc(f)) != EOF && c != '\n'); continue; }
+      if (c != ' ' && c != '\t' && c != '\r' && c != '\n') { tok[n++] = (char)c; break; }
+    }
+    if (c == EOF) break;
+    while ((c = fgetc(f)) != EOF && c != ' ' && c != '\t' && c != '\r' && c != '\n' && n < 255) tok[n++] = (char)c;
+    tok[n] = '\0';
+    if (n == 0) break;
+
+    if (strcmp(tok, "mesh") == 0) {
+      char mfile[256]; n = 0;
+      while ((c = fgetc(f)) != EOF && (c == ' ' || c == '\t'));
+      if (c != EOF) { mfile[n++] = (char)c; while ((c = fgetc(f)) != EOF && c != ' ' && c != '\t' && c != '\r' && c != '\n' && n < 255) mfile[n++] = (char)c; }
+      mfile[n] = '\0';
+      char mpath[512]; snprintf(mpath, sizeof(mpath), "%s%s", dir, mfile);
+      sf_obj_t *obj = sf_load_obj(ctx, mpath, NULL);
+      if (obj) {
+        p->v = obj->v; p->vt = obj->vt; p->vn = obj->vn; p->f = obj->f;
+        p->v_cnt = obj->v_cnt; p->vt_cnt = obj->vt_cnt;
+        p->vn_cnt = obj->vn_cnt; p->f_cnt = obj->f_cnt;
+        p->bs_center = obj->bs_center; p->bs_radius = obj->bs_radius;
+        ctx->obj_count--;
+      }
+    } else if (strcmp(tok, "name") == 0) {
+      char nbuf[64]; n = 0;
+      while ((c = fgetc(f)) != EOF && (c == ' ' || c == '\t'));
+      if (c == '"') { while ((c = fgetc(f)) != EOF && c != '"' && n < 63) nbuf[n++] = (char)c; }
+      else if (c != EOF) { nbuf[n++] = (char)c; while ((c = fgetc(f)) != EOF && c != ' ' && c != '\t' && c != '\r' && c != '\n' && n < 63) nbuf[n++] = (char)c; }
+      nbuf[n] = '\0';
+      size_t nn = strlen(nbuf)+1; char *nm = sf_arena_alloc(ctx, &ctx->arena, nn);
+      if (nm) { memcpy(nm, nbuf, nn); p->name = nm; }
+    } else if (strcmp(tok, "bones") == 0) {
+      char buf[32]; n = 0;
+      while ((c = fgetc(f)) != EOF && (c == ' ' || c == '\t'));
+      if (c != EOF) { buf[n++] = (char)c; while ((c = fgetc(f)) != EOF && c != ' ' && c != '\t' && c != '\r' && c != '\n' && n < 31) buf[n++] = (char)c; }
+      buf[n] = '\0';
+      int bc = atoi(buf);
+      p->bones = sf_arena_alloc(ctx, &ctx->arena, bc * sizeof(sf_bone_t));
+      if (!p->bones) break;
+      p->bone_cnt = bc;
+      for (int b = 0; b < bc; b++) {
+        n = 0; while ((c = fgetc(f)) != EOF && (c == ' ' || c == '\t' || c == '\r' || c == '\n'));
+        if (c != EOF) { buf[n++] = (char)c; while ((c = fgetc(f)) != EOF && c != ' ' && c != '\t' && c != '\r' && c != '\n' && n < 31) buf[n++] = (char)c; }
+        buf[n] = '\0';
+        n = 0; while ((c = fgetc(f)) != EOF && (c == ' ' || c == '\t'));
+        if (c == '"') { while ((c = fgetc(f)) != EOF && c != '"' && n < 31) p->bones[b].name[n++] = (char)c; }
+        p->bones[b].name[n] = '\0';
+        n = 0; while ((c = fgetc(f)) != EOF && (c == ' ' || c == '\t'));
+        if (c != EOF) { buf[n++] = (char)c; while ((c = fgetc(f)) != EOF && c != ' ' && c != '\t' && c != '\r' && c != '\n' && n < 31) buf[n++] = (char)c; }
+        buf[n] = '\0';
+        p->bones[b].parent = atoi(buf);
+        for (int r = 0; r < 4; r++)
+          for (int cc = 0; cc < 4; cc++) {
+            n = 0; while ((c = fgetc(f)) != EOF && (c == ' ' || c == '\t' || c == '\r' || c == '\n'));
+            if (c != EOF) { buf[n++] = (char)c; while ((c = fgetc(f)) != EOF && c != ' ' && c != '\t' && c != '\r' && c != '\n' && n < 31) buf[n++] = (char)c; }
+            buf[n] = '\0';
+            p->bones[b].inv_bind.m[r][cc] = (float)atof(buf);
+          }
+      }
+    }
+  }
+  fclose(f);
+
+  if (!p->name) {
+    const char *base = _sf_basename(path);
+    size_t nn = strlen(base)+1; char *nm = sf_arena_alloc(ctx, &ctx->arena, nn);
+    if (nm) { memcpy(nm, base, nn); p->name = nm; }
+  }
+
+  SF_LOG(ctx, SF_LOG_INFO,
+              SF_LOG_INDENT "puppet : %s\n"
+              SF_LOG_INDENT "verts  : %d\n"
+              SF_LOG_INDENT "faces  : %d\n"
+              SF_LOG_INDENT "bones  : %d\n"
+              SF_LOG_INDENT "clips  : %d\n",
+              p->name, p->v_cnt, p->f_cnt, p->bone_cnt, p->clip_cnt);
+  return p;
+}
+
+/* SF_PHYSICS_FUNCTIONS */
+sf_aabb_t sf_aabb_from_enti(sf_enti_t *enti) {
+  /* Compute an axis-aligned bounding box from an entity's transformed bounding sphere. */
+  sf_aabb_t box = {{0,0,0},{0,0,0}};
+  if (!enti || !enti->frame) return box;
+  sf_fvec3_t p = enti->frame->pos;
+  float r = enti->obj.bs_radius;
+  sf_fvec3_t s = enti->frame->scale;
+  float ms = s.x > s.y ? (s.x > s.z ? s.x : s.z) : (s.y > s.z ? s.y : s.z);
+  r *= ms;
+  box.min = (sf_fvec3_t){p.x - r, p.y - r, p.z - r};
+  box.max = (sf_fvec3_t){p.x + r, p.y + r, p.z + r};
+  return box;
+}
+
+sf_aabb_t sf_aabb_from_pos_size(sf_fvec3_t pos, sf_fvec3_t half) {
+  /* Create an AABB centered at pos with the given half-extents. */
+  sf_aabb_t box;
+  box.min = (sf_fvec3_t){pos.x - half.x, pos.y - half.y, pos.z - half.z};
+  box.max = (sf_fvec3_t){pos.x + half.x, pos.y + half.y, pos.z + half.z};
+  return box;
+}
+
+bool sf_aabb_overlap(sf_aabb_t a, sf_aabb_t b) {
+  /* Test whether two AABBs overlap on all three axes. */
+  if (a.max.x <= b.min.x || a.min.x >= b.max.x) return false;
+  if (a.max.y <= b.min.y || a.min.y >= b.max.y) return false;
+  if (a.max.z <= b.min.z || a.min.z >= b.max.z) return false;
+  return true;
+}
+
+sf_fvec3_t sf_aabb_resolve(sf_aabb_t mover, sf_aabb_t blocker) {
+  /* Compute the minimum translation vector to push mover out of blocker. */
+  sf_fvec3_t mtv = {0,0,0};
+  if (!sf_aabb_overlap(mover, blocker)) return mtv;
+  float dx1 = blocker.max.x - mover.min.x;
+  float dx2 = blocker.min.x - mover.max.x;
+  float dy1 = blocker.max.y - mover.min.y;
+  float dy2 = blocker.min.y - mover.max.y;
+  float dz1 = blocker.max.z - mover.min.z;
+  float dz2 = blocker.min.z - mover.max.z;
+  float dx = (fabsf(dx1) < fabsf(dx2)) ? dx1 : dx2;
+  float dy = (fabsf(dy1) < fabsf(dy2)) ? dy1 : dy2;
+  float dz = (fabsf(dz1) < fabsf(dz2)) ? dz1 : dz2;
+  float ax = fabsf(dx), ay = fabsf(dy), az = fabsf(dz);
+  if (ax <= ay && ax <= az) mtv.x = dx;
+  else if (ay <= ax && ay <= az) mtv.y = dy;
+  else mtv.z = dz;
+  return mtv;
+}
+
+void sf_phys_step(sf_phys_body_t *body, float dt) {
+  /* Integrate velocity and apply gravity for one timestep. */
+  if (!body) return;
+  body->vel.y += body->gravity * dt;
+  body->box.min.x += body->vel.x * dt;
+  body->box.max.x += body->vel.x * dt;
+  body->box.min.y += body->vel.y * dt;
+  body->box.max.y += body->vel.y * dt;
+  body->box.min.z += body->vel.z * dt;
+  body->box.max.z += body->vel.z * dt;
+  body->vel.x *= (1.0f - body->friction * dt);
+  body->vel.z *= (1.0f - body->friction * dt);
+}
+
+int sf_phys_collide_aabbs(sf_phys_body_t *body, sf_aabb_t *walls, int wall_cnt) {
+  /* Resolve collisions between a physics body and an array of static AABBs. */
+  if (!body || !walls) return 0;
+  int hits = 0;
+  body->grounded = false;
+  for (int i = 0; i < wall_cnt; i++) {
+    if (!sf_aabb_overlap(body->box, walls[i])) continue;
+    sf_fvec3_t mtv = sf_aabb_resolve(body->box, walls[i]);
+    body->box.min = sf_fvec3_add(body->box.min, mtv);
+    body->box.max = sf_fvec3_add(body->box.max, mtv);
+    if (mtv.y > 0.0f) {
+      body->grounded = true;
+      if (body->vel.y < 0.0f) body->vel.y = 0.0f;
+    } else if (mtv.y < 0.0f) {
+      if (body->vel.y > 0.0f) body->vel.y = 0.0f;
+    }
+    if (mtv.x != 0.0f) body->vel.x = 0.0f;
+    if (mtv.z != 0.0f) body->vel.z = 0.0f;
+    hits++;
+  }
+  return hits;
 }
 
 /* SF_IMPLEMENTATION_HELPERS */

@@ -11,6 +11,8 @@
 - [Memory / Arena](#memory--arena)
 - [Events & Input](#events--input)
 - [Scene](#scene)
+- [SF_PUPPET_FUNCTIONS](#sfpuppetfunctions)
+- [SF_PHYSICS_FUNCTIONS](#sfphysicsfunctions)
 - [Frames](#frames)
 - [Drawing](#drawing)
 - [UI](#ui)
@@ -18,6 +20,7 @@
 - [Picking / Raycasting](#picking--raycasting)
 - [Logging](#logging)
 - [Math](#math)
+- [SF_QUAT_FUNCTIONS](#sfquatfunctions)
 
 ---
 
@@ -90,6 +93,20 @@
 | `_sf_sff_prse_light` | Scene |
 | `_sf_sff_prse_sprit` | Scene |
 | `_sf_sff_prse_emitr` | Scene |
+| `sf_puppet_create` | SF_PUPPET_FUNCTIONS |
+| `sf_puppet_load` | SF_PUPPET_FUNCTIONS |
+| `sf_puppet_add_inst` | SF_PUPPET_FUNCTIONS |
+| `sf_get_puppet_inst_` | SF_PUPPET_FUNCTIONS |
+| `sf_puppet_update` | SF_PUPPET_FUNCTIONS |
+| `sf_render_puppet` | SF_PUPPET_FUNCTIONS |
+| `sf_puppet_play` | SF_PUPPET_FUNCTIONS |
+| `sf_puppet_stop` | SF_PUPPET_FUNCTIONS |
+| `sf_aabb_from_enti` | SF_PHYSICS_FUNCTIONS |
+| `sf_aabb_from_pos_size` | SF_PHYSICS_FUNCTIONS |
+| `sf_aabb_overlap` | SF_PHYSICS_FUNCTIONS |
+| `sf_aabb_resolve` | SF_PHYSICS_FUNCTIONS |
+| `sf_phys_step` | SF_PHYSICS_FUNCTIONS |
+| `sf_phys_collide_aabbs` | SF_PHYSICS_FUNCTIONS |
 | `sf_get_root` | Frames |
 | `sf_add_frame` | Frames |
 | `sf_update_frames` | Frames |
@@ -196,6 +213,16 @@
 | `_sf_project_vertex` | Math |
 | `_sf_hash_2d` | Math |
 | `_sf_smooth_noise` | Math |
+| `sf_quat_norm` | SF_QUAT_FUNCTIONS |
+| `sf_quat_mul` | SF_QUAT_FUNCTIONS |
+| `sf_quat_slerp` | SF_QUAT_FUNCTIONS |
+| `sf_quat_nlerp` | SF_QUAT_FUNCTIONS |
+| `sf_quat_from_euler` | SF_QUAT_FUNCTIONS |
+| `sf_quat_to_mat4` | SF_QUAT_FUNCTIONS |
+| `_sf_sample_pos` | SF_QUAT_FUNCTIONS |
+| `_sf_sample_rot` | SF_QUAT_FUNCTIONS |
+| `_sf_sample_scl` | SF_QUAT_FUNCTIONS |
+| `_sf_trs_to_mat4` | SF_QUAT_FUNCTIONS |
 
 ---
 
@@ -223,6 +250,10 @@
 | `SF_PERF_HIST_SIZE` | `64` |
 | `SF_PI` | `3.14159265359f` |
 | `SF_NANOS_PER_SEC` | `1000000000ULL` |
+| `SF_MAX_BONES` | `64` |
+| `SF_MAX_SKIN_BONES` | `4` |
+| `SF_MAX_PUPPETS` | `32` |
+| `SF_MAX_PHYS_BODIES` | `256` |
 | `SF_ASSET_PATH` | `"/usr/local/share/saffron/sf_assets"` |
 
 ### Built-in Colors
@@ -234,6 +265,8 @@
 | `SF_CLR_BLUE` | `((sf_pkd_clr_t)0xFF0000FF)` |
 | `SF_CLR_BLACK` | `((sf_pkd_clr_t)0xFF000000)` |
 | `SF_CLR_WHITE` | `((sf_pkd_clr_t)0xFFFFFFFF)` |
+| `SF_CLR_YELLOW` | `((sf_pkd_clr_t)0xFFFFFF00)` |
+| `SF_CLR_CYAN` | `((sf_pkd_clr_t)0xFF00FFFF)` |
 
 ### Macros
 
@@ -292,6 +325,8 @@
 
 **`sf_fmat4_t`** — fields: `m`
 
+**`sf_quat_t`** — fields: `x`, `y`, `z`, `w`
+
 **`sf_ray_t`** — fields: `o`, `d`
 
 **`sf_frame_t`** — fields: 
@@ -307,6 +342,28 @@
 **`sf_obj_t`** — fields: `v`, `vt`, `vn`, `f`, `v_cnt`, `vt_cnt`, `vn_cnt`, `f_cnt`, `id`, `name`, `bs_center`, `bs_radius`, `src_path`, `v_cap`, `vt_cap`, `f_cap`
 
 **`sf_enti_t`** — fields: `obj`, `id`, `tex`, `tex_scale`, `name`, `frame`
+
+**`sf_bone_t`** — fields: `name`, `parent`, `inv_bind`
+
+**`sf_skin_t`** — fields: `SF_MAX_SKIN_BONES`, `SF_MAX_SKIN_BONES`
+
+**`sf_key_pos_t`** — fields: `t`, `v`
+
+**`sf_key_rot_t`** — fields: `t`, `v`
+
+**`sf_key_scl_t`** — fields: `t`, `v`
+
+**`sf_anim_chan_t`** — fields: `bone`, `pos`, `pos_cnt`, `rot`, `rot_cnt`, `scl`, `scl_cnt`
+
+**`sf_anim_clip_t`** — fields: `name`, `duration`, `channels`, `chan_cnt`
+
+**`sf_puppet_t`** — fields: `v`, `vt`, `vn`, `f`, `skin`, `v_cnt`, `vt_cnt`, `vn_cnt`, `f_cnt`, `bones`, `bone_cnt`, `clips`, `clip_cnt`, `name`, `id`, `bs_center`, `bs_radius`
+
+**`sf_puppet_inst_t`** — fields: `puppet`, `tex`, `tex_scale`, `frame`, `name`, `id`, `cur_clip`, `anim_time`, `is_playing`, `is_looping`, `skinned_v`, `bone_mats`
+
+**`sf_aabb_t`** — fields: `min`, `max`
+
+**`sf_phys_body_t`** — fields: `vel`, `box`, `gravity`, `friction`, `grounded`
 
 **`sf_light_t`** — fields: `type`, `color`, `intensity`, `frame`, `name`, `id`
 
@@ -361,7 +418,7 @@ void sf_stop (sf_ctx_t *ctx);
 
 ### `sf_render_enti`
 
-Draw all active particles from every emitter as sprites into cam.
+Rasterize one entity into cam: frustum-cull, light, near-clip, then draw textured or flat triangles.
 
 ```c
 void sf_render_enti (sf_ctx_t *ctx, sf_cam_t *cam, sf_enti_t *enti);
@@ -414,7 +471,7 @@ sf_arena_t sf_arena_init (sf_ctx_t *ctx, size_t size);
 
 ### `sf_arena_alloc`
 
-Add a clickable button with a label and optional click callback.
+Look up a puppet instance by name; returns NULL if not found.
 
 ```c
 void* sf_arena_alloc (sf_ctx_t *ctx, sf_arena_t *arena, size_t size);
@@ -776,6 +833,106 @@ void _sf_sff_prse_sprit (sf_ctx_t *ctx, FILE *f, const char *name, int *sprite_c
 
 ```c
 void _sf_sff_prse_emitr (sf_ctx_t *ctx, FILE *f, const char *name, int *emitr_count);
+```
+
+
+## SF_PUPPET_FUNCTIONS
+
+### `sf_puppet_create`
+
+```c
+sf_puppet_t* sf_puppet_create (sf_ctx_t *ctx, const char *name, int max_v, int max_vt, int max_f, int bone_cnt);
+```
+
+### `sf_puppet_load`
+
+```c
+sf_puppet_t* sf_puppet_load (sf_ctx_t *ctx, const char *path);
+```
+
+### `sf_puppet_add_inst`
+
+```c
+sf_puppet_inst_t* sf_puppet_add_inst(sf_ctx_t *ctx, sf_puppet_t *p, const char *name);
+```
+
+### `sf_get_puppet_inst_`
+
+```c
+sf_puppet_inst_t* sf_get_puppet_inst_(sf_ctx_t *ctx, const char *name, bool log);
+```
+
+### `sf_puppet_update`
+
+Advance animation time, evaluate bone transforms, and skin vertices.
+
+```c
+void sf_puppet_update (sf_ctx_t *ctx, sf_puppet_inst_t *pi, float dt);
+```
+
+### `sf_render_puppet`
+
+Draw all active particles from every emitter as sprites into cam.
+
+```c
+void sf_render_puppet (sf_ctx_t *ctx, sf_cam_t *cam, sf_puppet_inst_t *pi);
+```
+
+### `sf_puppet_play`
+
+```c
+void sf_puppet_play (sf_puppet_inst_t *pi, int clip_idx, bool loop);
+```
+
+### `sf_puppet_stop`
+
+Stop animation playback on a puppet instance.
+
+```c
+void sf_puppet_stop (sf_puppet_inst_t *pi);
+```
+
+
+## SF_PHYSICS_FUNCTIONS
+
+### `sf_aabb_from_enti`
+
+```c
+sf_aabb_t sf_aabb_from_enti (sf_enti_t *enti);
+```
+
+### `sf_aabb_from_pos_size`
+
+Create an AABB centered at pos with the given half-extents.
+
+```c
+sf_aabb_t sf_aabb_from_pos_size(sf_fvec3_t pos, sf_fvec3_t half);
+```
+
+### `sf_aabb_overlap`
+
+Test whether two AABBs overlap on all three axes.
+
+```c
+bool sf_aabb_overlap (sf_aabb_t a, sf_aabb_t b);
+```
+
+### `sf_aabb_resolve`
+
+```c
+sf_fvec3_t sf_aabb_resolve (sf_aabb_t mover, sf_aabb_t blocker);
+```
+
+### `sf_phys_step`
+
+```c
+void sf_phys_step (sf_phys_body_t *body, float dt);
+```
+
+### `sf_phys_collide_aabbs`
+
+```c
+int sf_phys_collide_aabbs(sf_phys_body_t *body, sf_aabb_t *walls, int wall_cnt);
 ```
 
 
@@ -1427,7 +1584,7 @@ sf_fmat4_t sf_make_psp_fmat4 (float fov_deg, float aspect, float near, float far
 
 ### `sf_make_idn_fmat4`
 
-Build a 4×4 rotation matrix from Euler XYZ angles (radians), applied as Y→X→Z.
+Sample position keyframes at time t with linear interpolation.
 
 ```c
 sf_fmat4_t sf_make_idn_fmat4 (void);
@@ -1471,13 +1628,15 @@ float _sf_lerp_f (float a, float b, float t);
 
 ### `_sf_lerp_fvec3`
 
+Compose translation, rotation, and scale into a 4x4 matrix.
+
 ```c
 sf_fvec3_t _sf_lerp_fvec3 (sf_fvec3_t a, sf_fvec3_t b, float t);
 ```
 
 ### `_sf_intersect_near`
 
-Update frames and emitters, then render all cameras including the main camera.
+Load a puppet from an .sfp file containing mesh, skeleton, skin weights, and animation clips.
 
 ```c
 sf_fvec3_t _sf_intersect_near (sf_fvec3_t v0, sf_fvec3_t v1, float near);
@@ -1501,6 +1660,81 @@ Unproject a screen pixel into a world-space ray origin and direction.
 
 ```c
 float _sf_smooth_noise (float x, float z, uint32_t seed);
+```
+
+
+## SF_QUAT_FUNCTIONS
+
+### `sf_quat_norm`
+
+Spherical linear interpolation between two quaternions.
+
+```c
+sf_quat_t sf_quat_norm (sf_quat_t q);
+```
+
+### `sf_quat_mul`
+
+Multiply two quaternions (Hamilton product).
+
+```c
+sf_quat_t sf_quat_mul (sf_quat_t a, sf_quat_t b);
+```
+
+### `sf_quat_slerp`
+
+Sample scale keyframes at time t with linear interpolation.
+
+```c
+sf_quat_t sf_quat_slerp (sf_quat_t a, sf_quat_t b, float t);
+```
+
+### `sf_quat_nlerp`
+
+Normalized linear interpolation between two quaternions.
+
+```c
+sf_quat_t sf_quat_nlerp (sf_quat_t a, sf_quat_t b, float t);
+```
+
+### `sf_quat_from_euler`
+
+Convert Euler angles (radians) to a quaternion.
+
+```c
+sf_quat_t sf_quat_from_euler (sf_fvec3_t e);
+```
+
+### `sf_quat_to_mat4`
+
+Create an empty puppet with pre-allocated vertex, face, and bone arrays.
+
+```c
+sf_fmat4_t sf_quat_to_mat4 (sf_quat_t q);
+```
+
+### `_sf_sample_pos`
+
+```c
+sf_fvec3_t _sf_sample_pos (sf_anim_chan_t *ch, float t);
+```
+
+### `_sf_sample_rot`
+
+```c
+sf_quat_t _sf_sample_rot (sf_anim_chan_t *ch, float t);
+```
+
+### `_sf_sample_scl`
+
+```c
+sf_fvec3_t _sf_sample_scl (sf_anim_chan_t *ch, float t);
+```
+
+### `_sf_trs_to_mat4`
+
+```c
+sf_fmat4_t _sf_trs_to_mat4 (sf_fvec3_t pos, sf_quat_t rot, sf_fvec3_t scl);
 ```
 
 
