@@ -1227,6 +1227,66 @@ void sf_render_emitrs(sf_ctx_t *ctx, sf_cam_t *cam) {
   }
 }
 
+void sf_render_skybox(sf_ctx_t *ctx, sf_cam_t *cam) {
+  /* Fill the camera buffer with an equirectangular sky panorama using span interpolation.
+   * Exact UVs are computed every SF_SKYBOX_SPAN pixels and linearly interpolated between. */
+  if (!ctx->active_skybox || !ctx->active_skybox->tex) {
+    sf_fill(ctx, cam, SF_CLR_BLACK);
+    return;
+  }
+  sf_tex_t *tex = ctx->active_skybox->tex;
+  float rx = cam->V.m[0][0], ry = cam->V.m[1][0], rz = cam->V.m[2][0];
+  float ux = cam->V.m[0][1], uy = cam->V.m[1][1], uz = cam->V.m[2][1];
+  float fx = -cam->V.m[0][2], fy = -cam->V.m[1][2], fz = -cam->V.m[2][2];
+  float inv_px  = 1.0f / cam->P.m[0][0];
+  float inv_py  = 1.0f / cam->P.m[1][1];
+  float inv_w   = 1.0f / (float)cam->w;
+  float inv_h   = 1.0f / (float)cam->h;
+  float inv_2pi = 1.0f / (2.0f * SF_PI);
+  float inv_pi  = 1.0f / SF_PI;
+  float fw      = (float)tex->w;
+  float fh      = (float)tex->h;
+  float step_x  = rx * 2.0f * inv_px * inv_w;
+  float step_y  = ry * 2.0f * inv_px * inv_w;
+  float step_z  = rz * 2.0f * inv_px * inv_w;
+
+  for (int py = 0; py < cam->h; py++) {
+    float ndc_y = 1.0f - (2.0f * ((float)py + 0.5f)) * inv_h;
+    float vd_y  = ndc_y * inv_py;
+    float vd_x0 = (inv_w - 1.0f) * inv_px;
+    float wd_x  = vd_x0 * rx + vd_y * ux + fx;
+    float wd_y_ = vd_x0 * ry + vd_y * uy + fy;
+    float wd_z  = vd_x0 * rz + vd_y * uz + fz;
+    sf_pkd_clr_t *row = &cam->buffer[py * cam->w];
+    for (int px = 0; px < cam->w; px += SF_SKYBOX_SPAN) {
+      int span_len = cam->w - px;
+      if (span_len > SF_SKYBOX_SPAN) span_len = SF_SKYBOX_SPAN;
+      float xz0 = sqrtf(wd_x * wd_x + wd_z * wd_z);
+      float u0  = atan2f(wd_x, wd_z) * inv_2pi + 0.5f;
+      float v0  = atan2f(wd_y_, xz0)  * inv_pi  + 0.5f;
+      float ex  = wd_x  + step_x * (float)span_len;
+      float ey  = wd_y_ + step_y * (float)span_len;
+      float ez  = wd_z  + step_z * (float)span_len;
+      float xz1 = sqrtf(ex * ex + ez * ez);
+      float u1  = atan2f(ex, ez) * inv_2pi + 0.5f;
+      float v1  = atan2f(ey, xz1) * inv_pi  + 0.5f;
+      if (u1 - u0 >  0.5f) u1 -= 1.0f;
+      if (u0 - u1 >  0.5f) u1 += 1.0f;
+      float inv_span = 1.0f / (float)span_len;
+      float du = (u1 - u0) * inv_span;
+      float dv = (v1 - v0) * inv_span;
+      float u  = u0, v = v0;
+      for (int i = 0; i < span_len; i++) {
+        int tx = (int)(u * fw) & tex->w_mask;
+        int ty = (int)((1.0f - v) * fh) & tex->h_mask;
+        row[px + i] = tex->px[ty * tex->w + tx];
+        u += du; v += dv;
+      }
+      wd_x = ex; wd_y_ = ey; wd_z = ez;
+    }
+  }
+}
+
 void sf_render_fog(sf_ctx_t *ctx, sf_cam_t *cam) {
   /* Post-process depth fog: blend each geometry pixel toward fog_color based on
    * linearised view-space depth.  Sky/unwritten pixels (z > 2.0) are skipped. */
@@ -1298,66 +1358,6 @@ void sf_render_depth(sf_ctx_t *ctx, sf_cam_t *cam) {
     uint8_t g = (uint8_t)((kg[seg] + (kg[seg+1] - kg[seg]) * f) * 255.0f + 0.5f);
     uint8_t b = (uint8_t)((kb[seg] + (kb[seg+1] - kb[seg]) * f) * 255.0f + 0.5f);
     cam->buffer[i] = 0xFF000000u | ((uint32_t)r << 16) | ((uint32_t)g << 8) | b;
-  }
-}
-
-void sf_render_skybox(sf_ctx_t *ctx, sf_cam_t *cam) {
-  /* Fill the camera buffer with an equirectangular sky panorama using span interpolation.
-   * Exact UVs are computed every SF_SKYBOX_SPAN pixels and linearly interpolated between. */
-  if (!ctx->active_skybox || !ctx->active_skybox->tex) {
-    sf_fill(ctx, cam, SF_CLR_BLACK);
-    return;
-  }
-  sf_tex_t *tex = ctx->active_skybox->tex;
-  float rx = cam->V.m[0][0], ry = cam->V.m[1][0], rz = cam->V.m[2][0];
-  float ux = cam->V.m[0][1], uy = cam->V.m[1][1], uz = cam->V.m[2][1];
-  float fx = -cam->V.m[0][2], fy = -cam->V.m[1][2], fz = -cam->V.m[2][2];
-  float inv_px  = 1.0f / cam->P.m[0][0];
-  float inv_py  = 1.0f / cam->P.m[1][1];
-  float inv_w   = 1.0f / (float)cam->w;
-  float inv_h   = 1.0f / (float)cam->h;
-  float inv_2pi = 1.0f / (2.0f * SF_PI);
-  float inv_pi  = 1.0f / SF_PI;
-  float fw      = (float)tex->w;
-  float fh      = (float)tex->h;
-  float step_x  = rx * 2.0f * inv_px * inv_w;
-  float step_y  = ry * 2.0f * inv_px * inv_w;
-  float step_z  = rz * 2.0f * inv_px * inv_w;
-
-  for (int py = 0; py < cam->h; py++) {
-    float ndc_y = 1.0f - (2.0f * ((float)py + 0.5f)) * inv_h;
-    float vd_y  = ndc_y * inv_py;
-    float vd_x0 = (inv_w - 1.0f) * inv_px;
-    float wd_x  = vd_x0 * rx + vd_y * ux + fx;
-    float wd_y_ = vd_x0 * ry + vd_y * uy + fy;
-    float wd_z  = vd_x0 * rz + vd_y * uz + fz;
-    sf_pkd_clr_t *row = &cam->buffer[py * cam->w];
-    for (int px = 0; px < cam->w; px += SF_SKYBOX_SPAN) {
-      int span_len = cam->w - px;
-      if (span_len > SF_SKYBOX_SPAN) span_len = SF_SKYBOX_SPAN;
-      float xz0 = sqrtf(wd_x * wd_x + wd_z * wd_z);
-      float u0  = atan2f(wd_x, wd_z) * inv_2pi + 0.5f;
-      float v0  = atan2f(wd_y_, xz0)  * inv_pi  + 0.5f;
-      float ex  = wd_x  + step_x * (float)span_len;
-      float ey  = wd_y_ + step_y * (float)span_len;
-      float ez  = wd_z  + step_z * (float)span_len;
-      float xz1 = sqrtf(ex * ex + ez * ez);
-      float u1  = atan2f(ex, ez) * inv_2pi + 0.5f;
-      float v1  = atan2f(ey, xz1) * inv_pi  + 0.5f;
-      if (u1 - u0 >  0.5f) u1 -= 1.0f;
-      if (u0 - u1 >  0.5f) u1 += 1.0f;
-      float inv_span = 1.0f / (float)span_len;
-      float du = (u1 - u0) * inv_span;
-      float dv = (v1 - v0) * inv_span;
-      float u  = u0, v = v0;
-      for (int i = 0; i < span_len; i++) {
-        int tx = (int)(u * fw) & tex->w_mask;
-        int ty = (int)((1.0f - v) * fh) & tex->h_mask;
-        row[px + i] = tex->px[ty * tex->w + tx];
-        u += du; v += dv;
-      }
-      wd_x = ex; wd_y_ = ey; wd_z = ez;
-    }
   }
 }
 
@@ -1535,45 +1535,6 @@ void sf_input_cycle_state(sf_ctx_t *ctx) {
   ctx->input.wheel_dy = 0;
 }
 
-void sf_input_set_wheel(sf_ctx_t *ctx, int dy) {
-  /* Record a scroll-wheel delta and fire SF_EVT_MOUSE_WHEEL. */
-  ctx->input.wheel_dy += dy;
-  sf_event_t ev;
-  ev.type = SF_EVT_MOUSE_WHEEL;
-  ev.wheel.dy = dy;
-  sf_event_trigger(ctx, &ev);
-}
-
-void sf_input_set_text(sf_ctx_t *ctx, const char *txt) {
-  /* Feed a text-input string into the engine: fire SF_EVT_TEXT_INPUT and insert printable chars into the focused text-input element. */
-  sf_event_t ev;
-  ev.type = SF_EVT_TEXT_INPUT;
-  int i = 0;
-  while (i < 7 && txt[i]) { ev.text.text[i] = txt[i]; i++; }
-  ev.text.text[i] = '\0';
-  sf_event_trigger(ctx, &ev);
-
-  if (ctx->ui && ctx->ui->focused && ctx->ui->focused->type == SF_UI_TEXT_INPUT) {
-    sf_ui_lmn_t *el = ctx->ui->focused;
-    if (!el->text_input.buf || el->text_input.buflen <= 1) return;
-    int len = (int)strlen(el->text_input.buf);
-    int caret = el->text_input.caret;
-    if (caret < 0) caret = 0;
-    if (caret > len) caret = len;
-    for (int k = 0; txt[k]; k++) {
-      unsigned char c = (unsigned char)txt[k];
-      if (c < 0x20 || c == 0x7F) continue;
-      if (len + 1 >= el->text_input.buflen) break;
-      memmove(&el->text_input.buf[caret + 1], &el->text_input.buf[caret], len - caret + 1);
-      el->text_input.buf[caret] = (char)c;
-      caret++;
-      len++;
-    }
-    el->text_input.caret = caret;
-    if (el->text_input.callback) el->text_input.callback(ctx, el->text_input.userdata);
-  }
-}
-
 void sf_input_set_key(sf_ctx_t *ctx, sf_key_t key, bool is_down) {
   /* Update a key's pressed state and fire SF_EVT_KEY_DOWN or SF_EVT_KEY_UP if it changed. */
   if (key == SF_KEY_UNKNOWN || key >= SF_KEY_MAX) return;
@@ -1617,6 +1578,45 @@ void sf_input_set_mouse_b(sf_ctx_t *ctx, sf_mouse_btn_t btn, bool is_down) {
     ev.mouse_btn.x = ctx->input.mouse_x;
     ev.mouse_btn.y = ctx->input.mouse_y;
     sf_event_trigger(ctx, &ev);
+  }
+}
+
+void sf_input_set_wheel(sf_ctx_t *ctx, int dy) {
+  /* Record a scroll-wheel delta and fire SF_EVT_MOUSE_WHEEL. */
+  ctx->input.wheel_dy += dy;
+  sf_event_t ev;
+  ev.type = SF_EVT_MOUSE_WHEEL;
+  ev.wheel.dy = dy;
+  sf_event_trigger(ctx, &ev);
+}
+
+void sf_input_set_text(sf_ctx_t *ctx, const char *txt) {
+  /* Feed a text-input string into the engine: fire SF_EVT_TEXT_INPUT and insert printable chars into the focused text-input element. */
+  sf_event_t ev;
+  ev.type = SF_EVT_TEXT_INPUT;
+  int i = 0;
+  while (i < 7 && txt[i]) { ev.text.text[i] = txt[i]; i++; }
+  ev.text.text[i] = '\0';
+  sf_event_trigger(ctx, &ev);
+
+  if (ctx->ui && ctx->ui->focused && ctx->ui->focused->type == SF_UI_TEXT_INPUT) {
+    sf_ui_lmn_t *el = ctx->ui->focused;
+    if (!el->text_input.buf || el->text_input.buflen <= 1) return;
+    int len = (int)strlen(el->text_input.buf);
+    int caret = el->text_input.caret;
+    if (caret < 0) caret = 0;
+    if (caret > len) caret = len;
+    for (int k = 0; txt[k]; k++) {
+      unsigned char c = (unsigned char)txt[k];
+      if (c < 0x20 || c == 0x7F) continue;
+      if (len + 1 >= el->text_input.buflen) break;
+      memmove(&el->text_input.buf[caret + 1], &el->text_input.buf[caret], len - caret + 1);
+      el->text_input.buf[caret] = (char)c;
+      caret++;
+      len++;
+    }
+    el->text_input.caret = caret;
+    if (el->text_input.callback) el->text_input.callback(ctx, el->text_input.userdata);
   }
 }
 
@@ -1701,19 +1701,6 @@ sf_tex_t* sf_load_texture_bmp(sf_ctx_t *ctx, const char *filename, const char *t
   return tex;
 }
 
-sf_tex_t* sf_get_texture_(sf_ctx_t *ctx, const char *texname, bool should_log_failure) {
-  /* Linear search for a texture by name; use the sf_get_texture() macro instead. */
-  for (int32_t i = 0; i < ctx->tex_count; ++i) {
-    if (ctx->textures[i].name && strcmp(ctx->textures[i].name, texname) == 0) {
-      return &ctx->textures[i];
-    }
-  }
-  if (should_log_failure) {
-    SF_LOG(ctx, SF_LOG_WARN, SF_LOG_INDENT "texture '%s' not found\n", texname);
-  }
-  return NULL;
-}
-
 sf_sprite_2_t* sf_load_sprite(sf_ctx_t *ctx, const char *spritename, float duration, float scale, int frame_count, ...) {
   /* Create a sprite from a variadic list of texture names with per-frame duration and world scale. */
   char auto_name[32];
@@ -1757,77 +1744,6 @@ sf_sprite_2_t* sf_load_sprite(sf_ctx_t *ctx, const char *spritename, float durat
               SF_LOG_INDENT "used   : %d/%d\n",
               spr->name, spr->id, frame_count, duration, scale, ctx->sprite_count, SF_MAX_SPRITES);
   return spr;
-}
-
-sf_sprite_2_t* sf_get_sprite_(sf_ctx_t *ctx, const char *spritename, bool should_log_failure) {
-  /* Linear search for a sprite by name; use the sf_get_sprite() macro instead. */
-  for (int32_t i = 0; i < ctx->sprite_count; ++i) {
-    if (ctx->sprites[i].name && strcmp(ctx->sprites[i].name, spritename) == 0) {
-      return &ctx->sprites[i];
-    }
-  }
-  if (should_log_failure) SF_LOG(ctx, SF_LOG_WARN, SF_LOG_INDENT "sprite '%s' not found\n", spritename);
-  return NULL;
-}
-
-sf_emitr_t* sf_add_emitr(sf_ctx_t *ctx, const char *emitrname, sf_emitr_type_t type, sf_sprite_2_t *sprite, int max_p) {
-  /* Add a particle emitter of the given type with a pre-allocated particle pool; returns its pointer. */
-  char auto_name[32];
-  if (emitrname == NULL) {
-    snprintf(auto_name, sizeof(auto_name), "emitr_%d", ctx->emitr_count);
-    emitrname = auto_name;
-  }
-  if (NULL != sf_get_emitr_(ctx, emitrname, false)) {
-    SF_LOG(ctx, SF_LOG_ERROR, SF_LOG_INDENT "failed to add emitter '%s', name in use\n", emitrname);
-    return NULL;
-  }
-  if (ctx->emitr_count >= SF_MAX_EMITRS) {
-    SF_LOG(ctx, SF_LOG_ERROR, SF_LOG_INDENT "failed to add emitter '%s', max (%d) reached\n", emitrname, SF_MAX_EMITRS);
-    return NULL;
-  }
-
-  sf_emitr_t *em = &ctx->emitrs[ctx->emitr_count++];
-  memset(em, 0, sizeof(sf_emitr_t));
-  em->id = ctx->emitr_count - 1;
-  em->type = type;
-  em->sprite = sprite;
-  em->max_particles = max_p;
-  em->particles = sf_arena_alloc(ctx, &ctx->arena, max_p * sizeof(sf_particle_t));
-  em->frame = sf_add_frame(ctx, NULL);
-
-  size_t name_len = strlen(emitrname) + 1;
-  em->name = (const char*)sf_arena_alloc(ctx, &ctx->arena, name_len);
-  if (em->name) {
-    memcpy((void*)em->name, emitrname, name_len);
-    if (em->frame) em->frame->name = em->name;
-  }
-
-  em->spawn_rate = 10.0f; 
-  em->particle_life = 2.0f;
-  em->speed = 5.0f;
-  em->dir = (sf_fvec3_t){0, 1, 0};
-  em->spread = 0.5f;
-  em->volume_size = (sf_fvec3_t){5, 5, 5};
-
-  SF_LOG(ctx, SF_LOG_INFO,
-              SF_LOG_INDENT "name   : %s\n"
-              SF_LOG_INDENT "id     : %d\n"
-              SF_LOG_INDENT "type   : %s\n"
-              SF_LOG_INDENT "max_p  : %d\n"
-              SF_LOG_INDENT "used   : %d/%d\n",
-              em->name, em->id, type == SF_EMITR_DIR ? "dir" : type == SF_EMITR_VOLUME ? "volume" : "omni", max_p, ctx->emitr_count, SF_MAX_EMITRS);
-  return em;
-}
-
-sf_emitr_t* sf_get_emitr_(sf_ctx_t *ctx, const char *emitrname, bool should_log_failure) {
-  /* Linear search for an emitter by name; use the sf_get_emitr() macro instead. */
-  for (int32_t i = 0; i < ctx->emitr_count; ++i) {
-    if (ctx->emitrs[i].name && strcmp(ctx->emitrs[i].name, emitrname) == 0) {
-      return &ctx->emitrs[i];
-    }
-  }
-  if (should_log_failure) SF_LOG(ctx, SF_LOG_WARN, SF_LOG_INDENT "emitter '%s' not found\n", emitrname);
-  return NULL;
 }
 
 sf_obj_t* sf_load_obj(sf_ctx_t *ctx, const char *filename, const char *objname) {
@@ -1963,30 +1879,80 @@ sf_obj_t* sf_load_obj(sf_ctx_t *ctx, const char *filename, const char *objname) 
   return obj;
 }
 
-void sf_obj_recenter(sf_obj_t *obj) {
-  /* Shift all vertices so the bounding-sphere center is at the origin. */
-  if (!obj || obj->v_cnt == 0) return;
-  sf_fvec3_t c = obj->bs_center;
-  for (int i = 0; i < obj->v_cnt; i++) {
-    obj->v[i].x -= c.x;
-    obj->v[i].y -= c.y;
-    obj->v[i].z -= c.z;
+sf_skybox_t* sf_load_skybox(sf_ctx_t *ctx, const char *filename, const char *skyboxname) {
+  /* Load an equirectangular BMP panorama as a skybox. The texture dimensions must be powers of two. */
+  if (ctx->skybox_count >= SF_MAX_SKYBOXES) {
+    SF_LOG(ctx, SF_LOG_ERROR, SF_LOG_INDENT "failed to load skybox '%s', max (%d) reached\n", skyboxname, SF_MAX_SKYBOXES);
+    return NULL;
   }
-  obj->bs_center = (sf_fvec3_t){0.0f, 0.0f, 0.0f};
+  if (sf_get_skybox_(ctx, skyboxname, false) != NULL) {
+    SF_LOG(ctx, SF_LOG_ERROR, SF_LOG_INDENT "failed to load skybox '%s', name in use\n", skyboxname);
+    return NULL;
+  }
+  sf_tex_t *tex = sf_load_texture_bmp(ctx, filename, skyboxname);
+  if (!tex) return NULL;
+  sf_skybox_t *sb   = &ctx->skyboxes[ctx->skybox_count++];
+  sb->id            = ctx->skybox_count - 1;
+  sb->tex           = tex;
+  size_t name_len   = strlen(skyboxname) + 1;
+  sb->name          = (const char*)sf_arena_alloc(ctx, &ctx->arena, name_len);
+  if (sb->name) memcpy((void*)sb->name, skyboxname, name_len);
+  SF_LOG(ctx, SF_LOG_INFO,
+              SF_LOG_INDENT "file   : %s\n"
+              SF_LOG_INDENT "name   : %s\n"
+              SF_LOG_INDENT "id     : %d\n"
+              SF_LOG_INDENT "used   : %d/%d\n",
+              filename, skyboxname, sb->id, ctx->skybox_count, SF_MAX_SKYBOXES);
+  return sb;
 }
 
-sf_obj_t* sf_get_obj_(sf_ctx_t *ctx, const char *objname, bool should_log_failure) {
-  /* Linear search for a mesh by name; use the sf_get_obj() macro instead. */
-  for (int32_t i = 0; i < ctx->obj_count; ++i) {
-    if (ctx->objs[i].name && strcmp(ctx->objs[i].name, objname) == 0) {
-      return &ctx->objs[i];
-    }
+sf_emitr_t* sf_add_emitr(sf_ctx_t *ctx, const char *emitrname, sf_emitr_type_t type, sf_sprite_2_t *sprite, int max_p) {
+  /* Add a particle emitter of the given type with a pre-allocated particle pool; returns its pointer. */
+  char auto_name[32];
+  if (emitrname == NULL) {
+    snprintf(auto_name, sizeof(auto_name), "emitr_%d", ctx->emitr_count);
+    emitrname = auto_name;
   }
- 
-  if (should_log_failure) {
-    SF_LOG(ctx, SF_LOG_WARN, SF_LOG_INDENT "object '%s' not found\n", objname);
+  if (NULL != sf_get_emitr_(ctx, emitrname, false)) {
+    SF_LOG(ctx, SF_LOG_ERROR, SF_LOG_INDENT "failed to add emitter '%s', name in use\n", emitrname);
+    return NULL;
   }
-  return NULL;
+  if (ctx->emitr_count >= SF_MAX_EMITRS) {
+    SF_LOG(ctx, SF_LOG_ERROR, SF_LOG_INDENT "failed to add emitter '%s', max (%d) reached\n", emitrname, SF_MAX_EMITRS);
+    return NULL;
+  }
+
+  sf_emitr_t *em = &ctx->emitrs[ctx->emitr_count++];
+  memset(em, 0, sizeof(sf_emitr_t));
+  em->id = ctx->emitr_count - 1;
+  em->type = type;
+  em->sprite = sprite;
+  em->max_particles = max_p;
+  em->particles = sf_arena_alloc(ctx, &ctx->arena, max_p * sizeof(sf_particle_t));
+  em->frame = sf_add_frame(ctx, NULL);
+
+  size_t name_len = strlen(emitrname) + 1;
+  em->name = (const char*)sf_arena_alloc(ctx, &ctx->arena, name_len);
+  if (em->name) {
+    memcpy((void*)em->name, emitrname, name_len);
+    if (em->frame) em->frame->name = em->name;
+  }
+
+  em->spawn_rate = 10.0f; 
+  em->particle_life = 2.0f;
+  em->speed = 5.0f;
+  em->dir = (sf_fvec3_t){0, 1, 0};
+  em->spread = 0.5f;
+  em->volume_size = (sf_fvec3_t){5, 5, 5};
+
+  SF_LOG(ctx, SF_LOG_INFO,
+              SF_LOG_INDENT "name   : %s\n"
+              SF_LOG_INDENT "id     : %d\n"
+              SF_LOG_INDENT "type   : %s\n"
+              SF_LOG_INDENT "max_p  : %d\n"
+              SF_LOG_INDENT "used   : %d/%d\n",
+              em->name, em->id, type == SF_EMITR_DIR ? "dir" : type == SF_EMITR_VOLUME ? "volume" : "omni", max_p, ctx->emitr_count, SF_MAX_EMITRS);
+  return em;
 }
 
 sf_enti_t* sf_add_enti(sf_ctx_t *ctx, sf_obj_t *obj, const char *entiname) {
@@ -2031,21 +1997,6 @@ sf_enti_t* sf_add_enti(sf_ctx_t *ctx, sf_obj_t *obj, const char *entiname) {
               enti->name, enti->id, enti->obj.name, enti->obj.id, ctx->enti_count, SF_MAX_ENTITIES);
 
   return enti;
-}
-
-sf_enti_t* sf_get_enti_(sf_ctx_t *ctx, const char *entiname, bool should_log_failure) {
-  /* Linear search for an entity by name; use the sf_get_enti() macro instead. */
-  for (int32_t i = 0; i < ctx->enti_count; ++i) {
-    if (ctx->entities[i].name && strcmp(ctx->entities[i].name, entiname) == 0) {
-      return &ctx->entities[i];
-    }
-  }
-
-  if (should_log_failure) {
-    SF_LOG(ctx, SF_LOG_WARN, SF_LOG_INDENT "entity '%s' not found\n", entiname);
-  }
-
-  return NULL;
 }
 
 sf_cam_t* sf_add_cam(sf_ctx_t *ctx, const char *camname, int w, int h, float fov) {
@@ -2098,19 +2049,6 @@ sf_cam_t* sf_add_cam(sf_ctx_t *ctx, const char *camname, int w, int h, float fov
   return cam;
 }
 
-sf_cam_t* sf_get_cam_(sf_ctx_t *ctx, const char *camname, bool should_log_failure) {
-  /* Linear search for a camera by name; use the sf_get_cam() macro instead. */
-  for (int32_t i = 0; i < ctx->cam_count; ++i) {
-    if (ctx->cameras[i].name && strcmp(ctx->cameras[i].name, camname) == 0) {
-      return &ctx->cameras[i];
-    }
-  }
-  if (should_log_failure) {
-    SF_LOG(ctx, SF_LOG_WARN, SF_LOG_INDENT "camera '%s' not found\n", camname);
-  }
-  return NULL;
-}
-
 sf_light_t* sf_add_light(sf_ctx_t *ctx, const char *lightname, sf_light_type_t type, sf_fvec3_t color, float intensity) {
   /* Add a point or directional light with a scene-graph frame for positioning. */
   char auto_name[32];
@@ -2153,6 +2091,83 @@ sf_light_t* sf_add_light(sf_ctx_t *ctx, const char *lightname, sf_light_type_t t
   return l;
 }
 
+sf_tex_t* sf_get_texture_(sf_ctx_t *ctx, const char *texname, bool should_log_failure) {
+  /* Linear search for a texture by name; use the sf_get_texture() macro instead. */
+  for (int32_t i = 0; i < ctx->tex_count; ++i) {
+    if (ctx->textures[i].name && strcmp(ctx->textures[i].name, texname) == 0) {
+      return &ctx->textures[i];
+    }
+  }
+  if (should_log_failure) {
+    SF_LOG(ctx, SF_LOG_WARN, SF_LOG_INDENT "texture '%s' not found\n", texname);
+  }
+  return NULL;
+}
+
+sf_sprite_2_t* sf_get_sprite_(sf_ctx_t *ctx, const char *spritename, bool should_log_failure) {
+  /* Linear search for a sprite by name; use the sf_get_sprite() macro instead. */
+  for (int32_t i = 0; i < ctx->sprite_count; ++i) {
+    if (ctx->sprites[i].name && strcmp(ctx->sprites[i].name, spritename) == 0) {
+      return &ctx->sprites[i];
+    }
+  }
+  if (should_log_failure) SF_LOG(ctx, SF_LOG_WARN, SF_LOG_INDENT "sprite '%s' not found\n", spritename);
+  return NULL;
+}
+
+sf_emitr_t* sf_get_emitr_(sf_ctx_t *ctx, const char *emitrname, bool should_log_failure) {
+  /* Linear search for an emitter by name; use the sf_get_emitr() macro instead. */
+  for (int32_t i = 0; i < ctx->emitr_count; ++i) {
+    if (ctx->emitrs[i].name && strcmp(ctx->emitrs[i].name, emitrname) == 0) {
+      return &ctx->emitrs[i];
+    }
+  }
+  if (should_log_failure) SF_LOG(ctx, SF_LOG_WARN, SF_LOG_INDENT "emitter '%s' not found\n", emitrname);
+  return NULL;
+}
+
+sf_obj_t* sf_get_obj_(sf_ctx_t *ctx, const char *objname, bool should_log_failure) {
+  /* Linear search for a mesh by name; use the sf_get_obj() macro instead. */
+  for (int32_t i = 0; i < ctx->obj_count; ++i) {
+    if (ctx->objs[i].name && strcmp(ctx->objs[i].name, objname) == 0) {
+      return &ctx->objs[i];
+    }
+  }
+ 
+  if (should_log_failure) {
+    SF_LOG(ctx, SF_LOG_WARN, SF_LOG_INDENT "object '%s' not found\n", objname);
+  }
+  return NULL;
+}
+
+sf_enti_t* sf_get_enti_(sf_ctx_t *ctx, const char *entiname, bool should_log_failure) {
+  /* Linear search for an entity by name; use the sf_get_enti() macro instead. */
+  for (int32_t i = 0; i < ctx->enti_count; ++i) {
+    if (ctx->entities[i].name && strcmp(ctx->entities[i].name, entiname) == 0) {
+      return &ctx->entities[i];
+    }
+  }
+
+  if (should_log_failure) {
+    SF_LOG(ctx, SF_LOG_WARN, SF_LOG_INDENT "entity '%s' not found\n", entiname);
+  }
+
+  return NULL;
+}
+
+sf_cam_t* sf_get_cam_(sf_ctx_t *ctx, const char *camname, bool should_log_failure) {
+  /* Linear search for a camera by name; use the sf_get_cam() macro instead. */
+  for (int32_t i = 0; i < ctx->cam_count; ++i) {
+    if (ctx->cameras[i].name && strcmp(ctx->cameras[i].name, camname) == 0) {
+      return &ctx->cameras[i];
+    }
+  }
+  if (should_log_failure) {
+    SF_LOG(ctx, SF_LOG_WARN, SF_LOG_INDENT "camera '%s' not found\n", camname);
+  }
+  return NULL;
+}
+
 sf_light_t* sf_get_light_(sf_ctx_t *ctx, const char *lightname, bool should_log_failure) {
   /* Linear search for a light by name; use the sf_get_light() macro instead. */
   for (int32_t i = 0; i < ctx->light_count; ++i) {
@@ -2162,33 +2177,6 @@ sf_light_t* sf_get_light_(sf_ctx_t *ctx, const char *lightname, bool should_log_
   }
   if (should_log_failure) SF_LOG(ctx, SF_LOG_WARN, SF_LOG_INDENT "light '%s' not found\n", lightname);
   return NULL;
-}
-
-sf_skybox_t* sf_load_skybox(sf_ctx_t *ctx, const char *filename, const char *skyboxname) {
-  /* Load an equirectangular BMP panorama as a skybox. The texture dimensions must be powers of two. */
-  if (ctx->skybox_count >= SF_MAX_SKYBOXES) {
-    SF_LOG(ctx, SF_LOG_ERROR, SF_LOG_INDENT "failed to load skybox '%s', max (%d) reached\n", skyboxname, SF_MAX_SKYBOXES);
-    return NULL;
-  }
-  if (sf_get_skybox_(ctx, skyboxname, false) != NULL) {
-    SF_LOG(ctx, SF_LOG_ERROR, SF_LOG_INDENT "failed to load skybox '%s', name in use\n", skyboxname);
-    return NULL;
-  }
-  sf_tex_t *tex = sf_load_texture_bmp(ctx, filename, skyboxname);
-  if (!tex) return NULL;
-  sf_skybox_t *sb   = &ctx->skyboxes[ctx->skybox_count++];
-  sb->id            = ctx->skybox_count - 1;
-  sb->tex           = tex;
-  size_t name_len   = strlen(skyboxname) + 1;
-  sb->name          = (const char*)sf_arena_alloc(ctx, &ctx->arena, name_len);
-  if (sb->name) memcpy((void*)sb->name, skyboxname, name_len);
-  SF_LOG(ctx, SF_LOG_INFO,
-              SF_LOG_INDENT "file   : %s\n"
-              SF_LOG_INDENT "name   : %s\n"
-              SF_LOG_INDENT "id     : %d\n"
-              SF_LOG_INDENT "used   : %d/%d\n",
-              filename, skyboxname, sb->id, ctx->skybox_count, SF_MAX_SKYBOXES);
-  return sb;
 }
 
 sf_skybox_t* sf_get_skybox_(sf_ctx_t *ctx, const char *skyboxname, bool should_log_failure) {
@@ -2202,19 +2190,6 @@ sf_skybox_t* sf_get_skybox_(sf_ctx_t *ctx, const char *skyboxname, bool should_l
     SF_LOG(ctx, SF_LOG_WARN, SF_LOG_INDENT "skybox '%s' not found\n", skyboxname);
   }
   return NULL;
-}
-
-void sf_set_fog(sf_ctx_t *ctx, sf_fvec3_t color, float start, float end) {
-  /* Configure and enable fog.  Toggle off/on with ctx->fog_enabled = false/true. */
-  ctx->fog_color   = color;
-  ctx->fog_start   = start;
-  ctx->fog_end     = end;
-  ctx->fog_enabled = true;
-}
-
-void sf_set_active_skybox(sf_ctx_t *ctx, sf_skybox_t *skybox) {
-  /* Set or clear the active skybox rendered behind all scene geometry. Pass NULL to disable. */
-  ctx->active_skybox = skybox;
 }
 
 void sf_remove_enti(sf_ctx_t *ctx, sf_enti_t *enti) {
@@ -2296,6 +2271,19 @@ void sf_remove_skybox(sf_ctx_t *ctx, sf_skybox_t *skybox) {
   ctx->skyboxes[idx] = ctx->skyboxes[--ctx->skybox_count];
 }
 
+void sf_set_fog(sf_ctx_t *ctx, sf_fvec3_t color, float start, float end) {
+  /* Configure and enable fog.  Toggle off/on with ctx->fog_enabled = false/true. */
+  ctx->fog_color   = color;
+  ctx->fog_start   = start;
+  ctx->fog_end     = end;
+  ctx->fog_enabled = true;
+}
+
+void sf_set_active_skybox(sf_ctx_t *ctx, sf_skybox_t *skybox) {
+  /* Set or clear the active skybox rendered behind all scene geometry. Pass NULL to disable. */
+  ctx->active_skybox = skybox;
+}
+
 void sf_enti_set_pos(sf_ctx_t *ctx, sf_enti_t *enti, float x, float y, float z) {
   /* Set an entity's world position directly. */
   if (enti && enti->frame) {
@@ -2347,6 +2335,18 @@ void sf_enti_set_tex(sf_ctx_t *ctx, const char *entiname, const char *texname) {
   if (enti && tex) {
     enti->tex = tex;
   }
+}
+
+void sf_obj_recenter(sf_obj_t *obj) {
+  /* Shift all vertices so the bounding-sphere center is at the origin. */
+  if (!obj || obj->v_cnt == 0) return;
+  sf_fvec3_t c = obj->bs_center;
+  for (int i = 0; i < obj->v_cnt; i++) {
+    obj->v[i].x -= c.x;
+    obj->v[i].y -= c.y;
+    obj->v[i].z -= c.z;
+  }
+  obj->bs_center = (sf_fvec3_t){0.0f, 0.0f, 0.0f};
 }
 
 void sf_camera_set_psp(sf_ctx_t *ctx, sf_cam_t *cam, float fov, float near_plane, float far_plane) {
@@ -3022,16 +3022,6 @@ void sf_frame_walk(sf_ctx_t *ctx, sf_frame_t *root, sf_frame_walk_fn cb, void *u
   _sf_frame_walk_r(root, 0, cb, userdata);
 }
 
-bool _sf_frame_walk_r(sf_frame_t *f, int depth, sf_frame_walk_fn cb, void *ud) {
-  /* Recursive helper for sf_frame_walk; returns false to stop traversal. */
-  if (!f) return true;
-  if (!cb(f, depth, ud)) return false;
-  for (sf_frame_t *c = f->first_child; c; c = c->next_sibling) {
-    if (!_sf_frame_walk_r(c, depth + 1, cb, ud)) return false;
-  }
-  return true;
-}
-
 void _sf_set_up_frames(sf_ctx_t *ctx) {
   /* Create the three convention roots (DEFAULT, NED, FLU) with their fixed basis matrices. */
   ctx->roots[SF_CONV_DEFAULT] = &ctx->frames[ctx->frames_count++];
@@ -3087,6 +3077,16 @@ void _sf_write_frame_ref(FILE *f, sf_frame_t *fr, sf_ctx_t *ctx) {
   (void)ctx;
   if (!fr || !fr->parent || fr->parent->is_root || !fr->parent->name) return;
   fprintf(f, "    frame     = %s\n", fr->parent->name);
+}
+
+bool _sf_frame_walk_r(sf_frame_t *f, int depth, sf_frame_walk_fn cb, void *ud) {
+  /* Recursive helper for sf_frame_walk; returns false to stop traversal. */
+  if (!f) return true;
+  if (!cb(f, depth, ud)) return false;
+  for (sf_frame_t *c = f->first_child; c; c = c->next_sibling) {
+    if (!_sf_frame_walk_r(c, depth + 1, cb, ud)) return false;
+  }
+  return true;
 }
 
 /* SF_DRAWING_FUNCTIONS */
@@ -3404,7 +3404,6 @@ void sf_draw_debug_ovrlay(sf_ctx_t *ctx, sf_cam_t *cam) {
   sf_draw_debug_perf   (ctx, cam);
 }
 
-
 void sf_draw_debug_axes(sf_ctx_t *ctx, sf_cam_t *cam) {
   /* Draw the world-space X/Y/Z axes as RGB lines in a corner compass widget. */
   int cx = 40;
@@ -3671,27 +3670,6 @@ void sf_draw_sprite(sf_ctx_t *ctx, sf_cam_t *cam, sf_sprite_2_t *spr, sf_fvec3_t
   }
 }
 
-sf_sprite_3_t* sf_add_sprite_3d(sf_ctx_t *ctx, sf_sprite_2_t *spr, const char *name, sf_fvec3_t pos, float scale, float opacity, float angle) {
-  /* Add a billboard instance to the scene's bill pool. */
-  if (!ctx || ctx->sprite_3d_count >= SF_MAX_SPRITE_3DS) return NULL;
-  sf_sprite_3_t *b = &ctx->sprite_3ds[ctx->sprite_3d_count++];
-  if (name) { int i; for (i = 0; i < 31 && name[i]; i++) b->name[i] = name[i]; b->name[i] = '\0'; }
-  else { b->name[0] = '\0'; }
-  b->sprite  = spr;
-  b->pos     = pos;
-  b->scale   = scale;
-  b->opacity = opacity;
-  b->angle   = angle;
-  b->normal  = (sf_fvec3_t){0.f, 0.f, 0.f};
-  b->frame   = NULL;
-  return b;
-}
-
-void sf_clear_sprite_3ds(sf_ctx_t *ctx) {
-  /* Remove all billboard instances from the scene. */
-  if (ctx) ctx->sprite_3d_count = 0;
-}
-
 void sf_draw_sprite_3d(sf_ctx_t *ctx, sf_cam_t *cam, sf_sprite_3_t *bill, float anim_time) {
   /* Billboard a sprite instance with per-instance scale, opacity, and screen-space rotation. */
   if (!bill || !bill->sprite || bill->sprite->frame_count == 0) return;
@@ -3802,6 +3780,27 @@ void sf_draw_sprite_3d(sf_ctx_t *ctx, sf_cam_t *cam, sf_sprite_3_t *bill, float 
   }
 }
 
+sf_sprite_3_t* sf_add_sprite_3d(sf_ctx_t *ctx, sf_sprite_2_t *spr, const char *name, sf_fvec3_t pos, float scale, float opacity, float angle) {
+  /* Add a billboard instance to the scene's bill pool. */
+  if (!ctx || ctx->sprite_3d_count >= SF_MAX_SPRITE_3DS) return NULL;
+  sf_sprite_3_t *b = &ctx->sprite_3ds[ctx->sprite_3d_count++];
+  if (name) { int i; for (i = 0; i < 31 && name[i]; i++) b->name[i] = name[i]; b->name[i] = '\0'; }
+  else { b->name[0] = '\0'; }
+  b->sprite  = spr;
+  b->pos     = pos;
+  b->scale   = scale;
+  b->opacity = opacity;
+  b->angle   = angle;
+  b->normal  = (sf_fvec3_t){0.f, 0.f, 0.f};
+  b->frame   = NULL;
+  return b;
+}
+
+void sf_clear_sprite_3ds(sf_ctx_t *ctx) {
+  /* Remove all billboard instances from the scene. */
+  if (ctx) ctx->sprite_3d_count = 0;
+}
+
 /* SF_UI_FUNCTIONS */
 sf_ui_t* sf_ui_create (sf_ctx_t *ctx) {
   /* Allocate and initialize a UI context with a default style from the arena. */
@@ -3818,6 +3817,137 @@ sf_ui_t* sf_ui_create (sf_ctx_t *ctx) {
               SF_LOG_INDENT "capct  : %d\n",
               SF_MAX_UI_ELEMENTS);
   return ui;
+}
+
+void sf_ui_update(sf_ctx_t *ctx, sf_ui_t *ui) {
+  /* Process mouse hover/click input for every UI element and fire their callbacks. */
+  if (!ui) return;
+
+  int mx = ctx->input.mouse_x;
+  int my = ctx->input.mouse_y;
+  bool m_down = ctx->input.mouse_btns[SF_MOUSE_LEFT];
+  bool m_pressed = m_down && !ctx->input.mouse_btns_prev[SF_MOUSE_LEFT];
+  bool m_released = !m_down && ctx->input.mouse_btns_prev[SF_MOUSE_LEFT];
+
+  /* Check if an open dropdown popup area is consuming this click */
+  bool click_blocked = false;
+  for (int i = 0; i < ui->count; ++i) {
+    sf_ui_lmn_t *el = &ui->elements[i];
+    if (el->type != SF_UI_DROPDOWN || !el->dropdown.is_open) continue;
+    int h = el->v1.y - el->v0.y, w = el->v1.x - el->v0.x;
+    int n = el->dropdown.n_items;
+    int mv = (el->dropdown.max_visible > 0 && n > el->dropdown.max_visible)
+             ? el->dropdown.max_visible : n;
+    int py0 = el->v1.y, py1 = el->v1.y + mv * h;
+    if (mx >= el->v0.x && mx <= el->v0.x + w && my >= py0 && my <= py1) {
+      click_blocked = true; break;
+    }
+  }
+
+  for (int i = 0; i < ui->count; ++i) {
+    sf_ui_lmn_t *el = &ui->elements[i];
+
+    if (!_sf_ui_eff_visible(el) || el->is_disabled) {
+      el->is_hovered = false;
+      el->is_pressed = false;
+      continue;
+    }
+
+    el->is_hovered = (mx >= el->v0.x && mx <= el->v1.x &&
+                      my >= el->v0.y && my <= el->v1.y);
+
+    bool eff_pressed  = m_pressed  && (el->type == SF_UI_DROPDOWN || !click_blocked);
+    bool eff_released = m_released && (el->type == SF_UI_DROPDOWN || !click_blocked);
+
+    if (el->is_hovered && eff_pressed) {
+      el->is_pressed = true;
+    }
+
+    switch (el->type) {
+      case SF_UI_BUTTON:      _sf_update_button(ctx, el, m_down, eff_pressed, eff_released);   break;
+      case SF_UI_CHECKBOX:    _sf_update_checkbox(ctx, el, m_down, eff_pressed, eff_released); break;
+      case SF_UI_SLIDER:      _sf_update_slider(ctx, el, m_down, eff_pressed, eff_released);   break;
+      case SF_UI_TEXT_INPUT:  _sf_update_text_input(ctx, el, eff_pressed);                     break;
+      case SF_UI_DRAG_FLOAT:  _sf_update_drag_float(ctx, el, m_down, eff_pressed);             break;
+      case SF_UI_DROPDOWN:    _sf_update_dropdown(ctx, el, m_pressed);                         break;
+      case SF_UI_PANEL:       _sf_update_panel(ctx, el, eff_pressed);                          break;
+      case SF_UI_LABEL:       break;
+    }
+
+    if (!m_down) {
+      el->is_pressed = false;
+    }
+  }
+}
+
+void sf_ui_render(sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_t *ui) {
+  /* Draw all visible UI elements; dropdown popups are drawn last to appear on top. */
+  if (!ui) return;
+  for (int i = 0; i < ui->count; ++i) {
+    sf_ui_lmn_t *el = &ui->elements[i];
+    if (!_sf_ui_eff_visible(el)) continue;
+    switch (el->type) {
+      case SF_UI_BUTTON:      _sf_draw_button(ctx, cam, el);          break;
+      case SF_UI_SLIDER:      _sf_draw_slider(ctx, cam, el);          break;
+      case SF_UI_CHECKBOX:    _sf_draw_checkbox(ctx, cam, el);        break;
+      case SF_UI_LABEL:       _sf_draw_label(ctx, cam, el);       break;
+      case SF_UI_TEXT_INPUT:  _sf_draw_text_input(ctx, cam, el);  break;
+      case SF_UI_DRAG_FLOAT:  _sf_draw_drag_float(ctx, cam, el);  break;
+      case SF_UI_DROPDOWN:    _sf_draw_dropdown(ctx, cam, el);    break;
+      case SF_UI_PANEL:       _sf_draw_panel(ctx, cam, el);       break;
+      case SF_UI_IMAGE:       _sf_draw_image(ctx, cam, el);       break;
+    }
+  }
+  for (int i = 0; i < ui->count; ++i) {
+    sf_ui_lmn_t *el = &ui->elements[i];
+    if (!_sf_ui_eff_visible(el)) continue;
+    if (el->type == SF_UI_DROPDOWN && el->dropdown.is_open) {
+      _sf_draw_drpdwn_popup(ctx, cam, el);
+    }
+  }
+}
+
+void sf_ui_render_popups(sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_t *ui) {
+  /* Re-draw only open dropdown popups — call after any custom blitting to keep them on top. */
+  if (!ui) return;
+  for (int i = 0; i < ui->count; ++i) {
+    sf_ui_lmn_t *el = &ui->elements[i];
+    if (!_sf_ui_eff_visible(el)) continue;
+    if (el->type == SF_UI_DROPDOWN && el->dropdown.is_open)
+      _sf_draw_drpdwn_popup(ctx, cam, el);
+  }
+}
+
+void sf_ui_clear(sf_ctx_t *ctx) {
+  /* Remove all UI elements and clear focus without freeing arena memory. */
+  if (!ctx->ui) return;
+  ctx->ui->count = 0;
+  ctx->ui->focused = NULL;
+}
+
+sf_ui_lmn_t* sf_ui_get_by_name(sf_ui_t *ui, const char *name) {
+  /* Look up a UI element by its name string; returns NULL if not found. */
+  if (!ui || !name) return NULL;
+  for (int i = 0; i < ui->count; i++) {
+    sf_ui_lmn_t *el = &ui->elements[i];
+    if (el->name && strcmp(el->name, name) == 0) return el;
+  }
+  return NULL;
+}
+
+void sf_ui_set_callback(sf_ui_lmn_t *el, sf_ui_cb cb, void *userdata) {
+  /* Assign a callback and userdata to any UI element type. */
+  if (!el) return;
+  switch (el->type) {
+    case SF_UI_BUTTON:     el->button.callback = cb;     el->button.userdata = userdata;     break;
+    case SF_UI_SLIDER:     el->slider.callback = cb;     el->slider.userdata = userdata;     break;
+    case SF_UI_CHECKBOX:   el->checkbox.callback = cb;   el->checkbox.userdata = userdata;   break;
+    case SF_UI_TEXT_INPUT: el->text_input.callback = cb; el->text_input.userdata = userdata; break;
+    case SF_UI_DRAG_FLOAT: el->drag_float.callback = cb; el->drag_float.userdata = userdata; break;
+    case SF_UI_DROPDOWN:   el->dropdown.callback = cb;   el->dropdown.userdata = userdata;   break;
+    case SF_UI_LABEL:
+    case SF_UI_PANEL: break;
+  }
 }
 
 sf_ui_lmn_t* sf_ui_add_button(sf_ctx_t *ctx, const char *text, sf_ivec2_t v0, sf_ivec2_t v1, void (*cb)(sf_ctx_t*, void*), void *userdata) {
@@ -3899,158 +4029,6 @@ sf_ui_lmn_t* sf_ui_add_checkbox(sf_ctx_t *ctx, const char *text, sf_ivec2_t v0, 
               SF_LOG_INDENT "used   : %d/%d\n",
               text, v0.x, v0.y, v1.x, v1.y, init_state ? "checked" : "unchecked", ctx->ui->count, SF_MAX_UI_ELEMENTS);
   return el;
-}
-
-void _sf_draw_image(sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_lmn_t *el) {
-  /* Scale-blit el->image.tex into el's rect; skip alpha=0 pixels when keyed. */
-  (void)ctx;
-  sf_tex_t *tex = el->image.tex;
-  if (!tex || !tex->px) return;
-  int dw = el->v1.x - el->v0.x, dh = el->v1.y - el->v0.y;
-  if (dw <= 0 || dh <= 0) return;
-  bool keyed = el->image.keyed;
-  for (int y = 0; y < dh; y++) {
-    int py = el->v0.y + y; if (py < 0 || py >= cam->h) continue;
-    int sy = (y * tex->h) / dh;
-    for (int x = 0; x < dw; x++) {
-      int px_ = el->v0.x + x; if (px_ < 0 || px_ >= cam->w) continue;
-      int sx = (x * tex->w) / dw;
-      sf_pkd_clr_t c = tex->px[sy * tex->w + sx];
-      if (keyed && (c >> 24) == 0) continue;
-      cam->buffer[py * cam->w + px_] = c;
-    }
-  }
-}
-
-void sf_ui_render(sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_t *ui) {
-  /* Draw all visible UI elements; dropdown popups are drawn last to appear on top. */
-  if (!ui) return;
-  for (int i = 0; i < ui->count; ++i) {
-    sf_ui_lmn_t *el = &ui->elements[i];
-    if (!_sf_ui_eff_visible(el)) continue;
-    switch (el->type) {
-      case SF_UI_BUTTON:      _sf_draw_button(ctx, cam, el);          break;
-      case SF_UI_SLIDER:      _sf_draw_slider(ctx, cam, el);          break;
-      case SF_UI_CHECKBOX:    _sf_draw_checkbox(ctx, cam, el);        break;
-      case SF_UI_LABEL:       _sf_draw_label(ctx, cam, el);       break;
-      case SF_UI_TEXT_INPUT:  _sf_draw_text_input(ctx, cam, el);  break;
-      case SF_UI_DRAG_FLOAT:  _sf_draw_drag_float(ctx, cam, el);  break;
-      case SF_UI_DROPDOWN:    _sf_draw_dropdown(ctx, cam, el);    break;
-      case SF_UI_PANEL:       _sf_draw_panel(ctx, cam, el);       break;
-      case SF_UI_IMAGE:       _sf_draw_image(ctx, cam, el);       break;
-    }
-  }
-  for (int i = 0; i < ui->count; ++i) {
-    sf_ui_lmn_t *el = &ui->elements[i];
-    if (!_sf_ui_eff_visible(el)) continue;
-    if (el->type == SF_UI_DROPDOWN && el->dropdown.is_open) {
-      _sf_draw_drpdwn_popup(ctx, cam, el);
-    }
-  }
-}
-
-void sf_ui_render_popups(sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_t *ui) {
-  /* Re-draw only open dropdown popups — call after any custom blitting to keep them on top. */
-  if (!ui) return;
-  for (int i = 0; i < ui->count; ++i) {
-    sf_ui_lmn_t *el = &ui->elements[i];
-    if (!_sf_ui_eff_visible(el)) continue;
-    if (el->type == SF_UI_DROPDOWN && el->dropdown.is_open)
-      _sf_draw_drpdwn_popup(ctx, cam, el);
-  }
-}
-
-void sf_ui_update(sf_ctx_t *ctx, sf_ui_t *ui) {
-  /* Process mouse hover/click input for every UI element and fire their callbacks. */
-  if (!ui) return;
-
-  int mx = ctx->input.mouse_x;
-  int my = ctx->input.mouse_y;
-  bool m_down = ctx->input.mouse_btns[SF_MOUSE_LEFT];
-  bool m_pressed = m_down && !ctx->input.mouse_btns_prev[SF_MOUSE_LEFT];
-  bool m_released = !m_down && ctx->input.mouse_btns_prev[SF_MOUSE_LEFT];
-
-  /* Check if an open dropdown popup area is consuming this click */
-  bool click_blocked = false;
-  for (int i = 0; i < ui->count; ++i) {
-    sf_ui_lmn_t *el = &ui->elements[i];
-    if (el->type != SF_UI_DROPDOWN || !el->dropdown.is_open) continue;
-    int h = el->v1.y - el->v0.y, w = el->v1.x - el->v0.x;
-    int n = el->dropdown.n_items;
-    int mv = (el->dropdown.max_visible > 0 && n > el->dropdown.max_visible)
-             ? el->dropdown.max_visible : n;
-    int py0 = el->v1.y, py1 = el->v1.y + mv * h;
-    if (mx >= el->v0.x && mx <= el->v0.x + w && my >= py0 && my <= py1) {
-      click_blocked = true; break;
-    }
-  }
-
-  for (int i = 0; i < ui->count; ++i) {
-    sf_ui_lmn_t *el = &ui->elements[i];
-
-    if (!_sf_ui_eff_visible(el) || el->is_disabled) {
-      el->is_hovered = false;
-      el->is_pressed = false;
-      continue;
-    }
-
-    el->is_hovered = (mx >= el->v0.x && mx <= el->v1.x &&
-                      my >= el->v0.y && my <= el->v1.y);
-
-    bool eff_pressed  = m_pressed  && (el->type == SF_UI_DROPDOWN || !click_blocked);
-    bool eff_released = m_released && (el->type == SF_UI_DROPDOWN || !click_blocked);
-
-    if (el->is_hovered && eff_pressed) {
-      el->is_pressed = true;
-    }
-
-    switch (el->type) {
-      case SF_UI_BUTTON:      _sf_update_button(ctx, el, m_down, eff_pressed, eff_released);   break;
-      case SF_UI_CHECKBOX:    _sf_update_checkbox(ctx, el, m_down, eff_pressed, eff_released); break;
-      case SF_UI_SLIDER:      _sf_update_slider(ctx, el, m_down, eff_pressed, eff_released);   break;
-      case SF_UI_TEXT_INPUT:  _sf_update_text_input(ctx, el, eff_pressed);                     break;
-      case SF_UI_DRAG_FLOAT:  _sf_update_drag_float(ctx, el, m_down, eff_pressed);             break;
-      case SF_UI_DROPDOWN:    _sf_update_dropdown(ctx, el, m_pressed);                         break;
-      case SF_UI_PANEL:       _sf_update_panel(ctx, el, eff_pressed);                          break;
-      case SF_UI_LABEL:       break;
-    }
-
-    if (!m_down) {
-      el->is_pressed = false;
-    }
-  }
-}
-
-void sf_ui_clear(sf_ctx_t *ctx) {
-  /* Remove all UI elements and clear focus without freeing arena memory. */
-  if (!ctx->ui) return;
-  ctx->ui->count = 0;
-  ctx->ui->focused = NULL;
-}
-
-void sf_ui_set_callback(sf_ui_lmn_t *el, sf_ui_cb cb, void *userdata) {
-  /* Assign a callback and userdata to any UI element type. */
-  if (!el) return;
-  switch (el->type) {
-    case SF_UI_BUTTON:     el->button.callback = cb;     el->button.userdata = userdata;     break;
-    case SF_UI_SLIDER:     el->slider.callback = cb;     el->slider.userdata = userdata;     break;
-    case SF_UI_CHECKBOX:   el->checkbox.callback = cb;   el->checkbox.userdata = userdata;   break;
-    case SF_UI_TEXT_INPUT: el->text_input.callback = cb; el->text_input.userdata = userdata; break;
-    case SF_UI_DRAG_FLOAT: el->drag_float.callback = cb; el->drag_float.userdata = userdata; break;
-    case SF_UI_DROPDOWN:   el->dropdown.callback = cb;   el->dropdown.userdata = userdata;   break;
-    case SF_UI_LABEL:
-    case SF_UI_PANEL: break;
-  }
-}
-
-sf_ui_lmn_t* sf_ui_get_by_name(sf_ui_t *ui, const char *name) {
-  /* Look up a UI element by its name string; returns NULL if not found. */
-  if (!ui || !name) return NULL;
-  for (int i = 0; i < ui->count; i++) {
-    sf_ui_lmn_t *el = &ui->elements[i];
-    if (el->name && strcmp(el->name, name) == 0) return el;
-  }
-  return NULL;
 }
 
 sf_ui_lmn_t* sf_ui_add_label(sf_ctx_t *ctx, const char *text, sf_ivec2_t pos, sf_pkd_clr_t color) {
@@ -4248,23 +4226,6 @@ void sf_ui_lay_separator(sf_ctx_t *ctx) {
   sf_ui_lmn_t *el = sf_ui_add_label(ctx, "", v0, 0xFF666666);
   if (el) { el->v0 = v0; el->v1 = v1; }
   lay->y += 4;
-}
-
-void _sf_ui_lay_next_cell(sf_ctx_t *ctx, sf_ivec2_t *out_v0, sf_ivec2_t *out_v1) {
-  /* Compute the next cell rect and advance the layout cursor. */
-  if (!ctx->ui || ctx->ui->lay_depth <= 0) return;
-  sf_ui_lay_t *lay = &ctx->ui->lay_stack[ctx->ui->lay_depth - 1];
-  int cx = lay->x + lay->pad;
-  for (int i = 0; i < lay->col_idx; i++) cx += lay->col_widths[i] + 2;
-  out_v0->x = cx;
-  out_v0->y = lay->y;
-  out_v1->x = cx + lay->col_widths[lay->col_idx];
-  out_v1->y = lay->y + lay->row_h;
-  lay->col_idx++;
-  if (lay->col_idx >= lay->col_count) {
-    lay->y += lay->row_h + 2;
-    lay->col_idx = 0;
-  }
 }
 
 sf_ui_lmn_t* sf_ui_lay_button(sf_ctx_t *ctx, const char *text, sf_ui_cb cb, void *ud) {
@@ -4528,15 +4489,6 @@ bool _sf_ui_eff_visible(sf_ui_lmn_t *el) {
   return true;
 }
 
-void _sf_update_button(sf_ctx_t *ctx, sf_ui_lmn_t *el, bool m_down, bool m_pressed, bool m_released) {
-  /* Fire the button callback on mouse-up while hovered. */
-  if (el->is_hovered && el->is_pressed && m_released) {
-    if (el->button.callback) {
-      el->button.callback(ctx, el->button.userdata);
-    }
-  }
-}
-
 void _sf_draw_button(sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_lmn_t *btn) {
   /* Render a button: fill rect with hover/pressed/disabled tint and center the label. */
   if (!btn->is_visible) return;
@@ -4738,6 +4690,27 @@ void _sf_draw_panel(sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_lmn_t *el) {
   }
 }
 
+void _sf_draw_image(sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_lmn_t *el) {
+  /* Scale-blit el->image.tex into el's rect; skip alpha=0 pixels when keyed. */
+  (void)ctx;
+  sf_tex_t *tex = el->image.tex;
+  if (!tex || !tex->px) return;
+  int dw = el->v1.x - el->v0.x, dh = el->v1.y - el->v0.y;
+  if (dw <= 0 || dh <= 0) return;
+  bool keyed = el->image.keyed;
+  for (int y = 0; y < dh; y++) {
+    int py = el->v0.y + y; if (py < 0 || py >= cam->h) continue;
+    int sy = (y * tex->h) / dh;
+    for (int x = 0; x < dw; x++) {
+      int px_ = el->v0.x + x; if (px_ < 0 || px_ >= cam->w) continue;
+      int sx = (x * tex->w) / dw;
+      sf_pkd_clr_t c = tex->px[sy * tex->w + sx];
+      if (keyed && (c >> 24) == 0) continue;
+      cam->buffer[py * cam->w + px_] = c;
+    }
+  }
+}
+
 void _sf_update_text_input(sf_ctx_t *ctx, sf_ui_lmn_t *el, bool m_pressed) {
   /* Handle focus, character insertion/deletion, and caret movement for a text-input element. */
   if (!ctx->ui) return;
@@ -4839,6 +4812,15 @@ void _sf_update_panel(sf_ctx_t *ctx, sf_ui_lmn_t *el, bool m_pressed) {
   if (flags & SF_UI_PANEL_CLOSABLE)    el->is_visible = false;
 }
 
+void _sf_update_button(sf_ctx_t *ctx, sf_ui_lmn_t *el, bool m_down, bool m_pressed, bool m_released) {
+  /* Fire the button callback on mouse-up while hovered. */
+  if (el->is_hovered && el->is_pressed && m_released) {
+    if (el->button.callback) {
+      el->button.callback(ctx, el->button.userdata);
+    }
+  }
+}
+
 void _sf_update_checkbox(sf_ctx_t *ctx, sf_ui_lmn_t *el, bool m_down, bool m_pressed, bool m_released) {
   if (el->is_hovered && el->is_pressed && m_released) {
     el->checkbox.is_checked = !el->checkbox.is_checked;
@@ -4890,6 +4872,23 @@ int _sf_ui_type_from_str(const char *s) {
   if (strcmp(s, "dropdown")   == 0) return SF_UI_DROPDOWN;
   if (strcmp(s, "panel")      == 0) return SF_UI_PANEL;
   return -1;
+}
+
+void _sf_ui_lay_next_cell(sf_ctx_t *ctx, sf_ivec2_t *out_v0, sf_ivec2_t *out_v1) {
+  /* Compute the next cell rect and advance the layout cursor. */
+  if (!ctx->ui || ctx->ui->lay_depth <= 0) return;
+  sf_ui_lay_t *lay = &ctx->ui->lay_stack[ctx->ui->lay_depth - 1];
+  int cx = lay->x + lay->pad;
+  for (int i = 0; i < lay->col_idx; i++) cx += lay->col_widths[i] + 2;
+  out_v0->x = cx;
+  out_v0->y = lay->y;
+  out_v1->x = cx + lay->col_widths[lay->col_idx];
+  out_v1->y = lay->y + lay->row_h;
+  lay->col_idx++;
+  if (lay->col_idx >= lay->col_count) {
+    lay->y += lay->row_h + 2;
+    lay->col_idx = 0;
+  }
 }
 
 /* SF_MESH_AUTHORING_FUNCTIONS */
@@ -5225,56 +5224,6 @@ sf_ray_t sf_ray_from_screen(sf_ctx_t *ctx, sf_cam_t *cam, int sx, int sy) {
   return r;
 }
 
-bool sf_ray_triangle(sf_ray_t r, sf_fvec3_t a, sf_fvec3_t b, sf_fvec3_t c, float *out_t) {
-  /* Möller–Trumbore ray-triangle intersection; writes hit distance to out_t if non-NULL. */
-  sf_fvec3_t e1 = sf_fvec3_sub(b, a);
-  sf_fvec3_t e2 = sf_fvec3_sub(c, a);
-  sf_fvec3_t p  = sf_fvec3_cross(r.d, e2);
-  float det = sf_fvec3_dot(e1, p);
-  if (det > -1e-6f && det < 1e-6f) return false;
-  float inv = 1.0f / det;
-  sf_fvec3_t s = sf_fvec3_sub(r.o, a);
-  float u = sf_fvec3_dot(s, p) * inv;
-  if (u < 0.0f || u > 1.0f) return false;
-  sf_fvec3_t q = sf_fvec3_cross(s, e1);
-  float v = sf_fvec3_dot(r.d, q) * inv;
-  if (v < 0.0f || u + v > 1.0f) return false;
-  float t = sf_fvec3_dot(e2, q) * inv;
-  if (t <= 0.0f) return false;
-  if (out_t) *out_t = t;
-  return true;
-}
-
-bool sf_ray_plane_y(sf_ray_t r, float y, sf_fvec3_t *out) {
-  /* Intersect a ray with the horizontal plane at height y; writes the hit point to out if non-NULL. */
-  if (fabsf(r.d.y) < 1e-6f) return false;
-  float t = (y - r.o.y) / r.d.y;
-  if (t < 0.0f) return false;
-  if (out) *out = (sf_fvec3_t){ r.o.x + r.d.x * t, y, r.o.z + r.d.z * t };
-  return true;
-}
-
-bool sf_ray_aabb(sf_ray_t r, sf_fvec3_t bmin, sf_fvec3_t bmax, float *out_t) {
-  /* Slab-method AABB intersection; writes nearest hit distance to out_t if non-NULL. */
-  float tmin = 0.0f, tmax = 1e30f;
-  float o[3] = {r.o.x, r.o.y, r.o.z}, d[3] = {r.d.x, r.d.y, r.d.z};
-  float mn[3] = {bmin.x, bmin.y, bmin.z}, mx[3] = {bmax.x, bmax.y, bmax.z};
-  for (int i = 0; i < 3; i++) {
-    if (fabsf(d[i]) < 1e-6f) {
-      if (o[i] < mn[i] || o[i] > mx[i]) return false;
-    } else {
-      float inv = 1.0f / d[i];
-      float t1 = (mn[i] - o[i]) * inv, t2 = (mx[i] - o[i]) * inv;
-      if (t1 > t2) { float s = t1; t1 = t2; t2 = s; }
-      if (t1 > tmin) tmin = t1;
-      if (t2 < tmax) tmax = t2;
-      if (tmin > tmax) return false;
-    }
-  }
-  if (out_t) *out_t = tmin;
-  return true;
-}
-
 sf_enti_t* sf_raycast_entities(sf_ctx_t *ctx, sf_ray_t ray, float *out_t) {
   /* Test a ray against every entity's triangles and return the closest hit entity. */
   sf_enti_t *hit = NULL;
@@ -5351,6 +5300,56 @@ int sf_raycast_all(sf_ctx_t *ctx, sf_ray_t ray, sf_hit_t *out_hits, int max_hits
     out_hits[j + 1] = tmp;
   }
   return count;
+}
+
+bool sf_ray_triangle(sf_ray_t r, sf_fvec3_t a, sf_fvec3_t b, sf_fvec3_t c, float *out_t) {
+  /* Möller–Trumbore ray-triangle intersection; writes hit distance to out_t if non-NULL. */
+  sf_fvec3_t e1 = sf_fvec3_sub(b, a);
+  sf_fvec3_t e2 = sf_fvec3_sub(c, a);
+  sf_fvec3_t p  = sf_fvec3_cross(r.d, e2);
+  float det = sf_fvec3_dot(e1, p);
+  if (det > -1e-6f && det < 1e-6f) return false;
+  float inv = 1.0f / det;
+  sf_fvec3_t s = sf_fvec3_sub(r.o, a);
+  float u = sf_fvec3_dot(s, p) * inv;
+  if (u < 0.0f || u > 1.0f) return false;
+  sf_fvec3_t q = sf_fvec3_cross(s, e1);
+  float v = sf_fvec3_dot(r.d, q) * inv;
+  if (v < 0.0f || u + v > 1.0f) return false;
+  float t = sf_fvec3_dot(e2, q) * inv;
+  if (t <= 0.0f) return false;
+  if (out_t) *out_t = t;
+  return true;
+}
+
+bool sf_ray_plane_y(sf_ray_t r, float y, sf_fvec3_t *out) {
+  /* Intersect a ray with the horizontal plane at height y; writes the hit point to out if non-NULL. */
+  if (fabsf(r.d.y) < 1e-6f) return false;
+  float t = (y - r.o.y) / r.d.y;
+  if (t < 0.0f) return false;
+  if (out) *out = (sf_fvec3_t){ r.o.x + r.d.x * t, y, r.o.z + r.d.z * t };
+  return true;
+}
+
+bool sf_ray_aabb(sf_ray_t r, sf_fvec3_t bmin, sf_fvec3_t bmax, float *out_t) {
+  /* Slab-method AABB intersection; writes nearest hit distance to out_t if non-NULL. */
+  float tmin = 0.0f, tmax = 1e30f;
+  float o[3] = {r.o.x, r.o.y, r.o.z}, d[3] = {r.d.x, r.d.y, r.d.z};
+  float mn[3] = {bmin.x, bmin.y, bmin.z}, mx[3] = {bmax.x, bmax.y, bmax.z};
+  for (int i = 0; i < 3; i++) {
+    if (fabsf(d[i]) < 1e-6f) {
+      if (o[i] < mn[i] || o[i] > mx[i]) return false;
+    } else {
+      float inv = 1.0f / d[i];
+      float t1 = (mn[i] - o[i]) * inv, t2 = (mx[i] - o[i]) * inv;
+      if (t1 > t2) { float s = t1; t1 = t2; t2 = s; }
+      if (t1 > tmin) tmin = t1;
+      if (t2 < tmax) tmax = t2;
+      if (tmin > tmax) return false;
+    }
+  }
+  if (out_t) *out_t = tmin;
+  return true;
 }
 
 /* SF_GIZMO_FUNCTIONS */
@@ -5894,7 +5893,6 @@ float _sf_seg_dist2(sf_ivec2_t a, sf_ivec2_t b, int px, int py, float *out_t) {
 }
 
 /* SF_IMPLEMENTATION_HELPERS */
-
 bool _sf_resolve_asset(const char* filename, char* out_path, size_t max_len) {
   char dir_stack[32][512];
   int stack_head = 0;
