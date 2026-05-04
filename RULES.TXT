@@ -1,0 +1,12 @@
+Saffron.h design rules
+1. Indentation / tabs are two spaces
+2. Functions must be prefixed with sf_ 
+3. A function prefixed with _ is meant for internal use only and is usually a helper
+4. No static functions in saffron.h - all functions must appear in the header and implementation section
+5. Functions must appear in the same order in the header and implementation sections
+6. Only one comment per function on the line below the function definition
+7. Functions are organized into categories which are marked with a block comment, ie /* SF_CATEGORY */, in both the header and implementation sections
+8. Categories must appear in the same order in the header and implementation sections
+9. Line things up visually
+10. The first line of a log is function_name :: log_level, all lines after that are indented by SF_LOG_INDENT and have 7 characters before the :. Example:
+
