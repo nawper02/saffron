@@ -243,6 +243,20 @@ def remove_ranges(s: str, ranges: List[Tuple[int, int]]) -> str:
     out.append(s[pos:])
     return "".join(out)
 
+def normalize_category_spacing(s: str) -> str:
+    """
+    Collapse excessive blank lines before SF category markers.
+
+    This does not alter function bodies. It only changes whitespace directly
+    before lines like:
+        /* SF_GAMMA_LUT */
+        /* SF_FONT_DATA */
+    """
+    return re.sub(
+        r"\n{3,}([ \t]*/\*\s*SF_[A-Z0-9_]+\s*\*/)",
+        r"\n\n\1",
+        s
+    )
 
 def tidy_between_blocks(parts: List[str]) -> str:
     """Join blocks with exactly the blank lines already implied by block text."""
@@ -352,8 +366,8 @@ def reorder(text: str, *, verbose: bool = False) -> Tuple[str, List[str]]:
                     kept += "\n"
         new_pieces.append(kept)
 
-    new_impl = "".join(new_pieces)
-    return before_impl + new_impl, notes
+        new_impl = normalize_category_spacing("".join(new_pieces))
+        return before_impl + new_impl, notes
 
 
 def main(argv: Optional[List[str]] = None) -> int:
