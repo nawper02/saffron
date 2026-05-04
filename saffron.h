@@ -743,6 +743,7 @@ void           _sf_draw_drag_float  (sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_lmn_t *
 void           _sf_draw_dropdown    (sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_lmn_t *el);
 void           _sf_draw_drpdwn_popup(sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_lmn_t *el);
 void           _sf_draw_panel       (sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_lmn_t *el);
+void           _sf_draw_image       (sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_lmn_t *el);
 void           _sf_update_text_input(sf_ctx_t *ctx, sf_ui_lmn_t *el, bool m_pressed);
 void           _sf_update_drag_float(sf_ctx_t *ctx, sf_ui_lmn_t *el, bool m_down, bool m_pressed);
 void           _sf_update_dropdown  (sf_ctx_t *ctx, sf_ui_lmn_t *el, bool m_pressed);
@@ -4179,10 +4180,16 @@ int sf_ui_lay_end_panel(sf_ctx_t *ctx) {
   /* End the current layout panel; auto-sizes panel height. Returns bottom y. */
   if (!ctx->ui || ctx->ui->lay_depth <= 0) return 0;
   sf_ui_lay_t *lay = &ctx->ui->lay_stack[--ctx->ui->lay_depth];
+  int top_y = lay->panel ? lay->panel->v0.y : lay->y;
+  if (lay->panel && lay->panel->panel.collapsed) {
+    lay->panel->v1.y = top_y + 16;
+    lay->panel->panel.content_h = 0;
+    return top_y + 16;
+  }
   int bottom_y = lay->y + lay->pad;
   if (lay->panel) {
     lay->panel->v1.y = bottom_y;
-    lay->panel->panel.content_h = bottom_y - lay->panel->v0.y - 16;
+    lay->panel->panel.content_h = bottom_y - top_y - 16;
   }
   return bottom_y;
 }
