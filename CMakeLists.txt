@@ -53,8 +53,28 @@ install(DIRECTORY "sf_assets/"
 install(DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/sf_assets/"
         DESTINATION ${CMAKE_INSTALL_DATADIR}/saffron/sf_assets)
 
-# Regenerate docs whenever saffron.h changes
+# Python for compile time generations and such
 find_package(Python3 QUIET COMPONENTS Interpreter)
+
+# Keep saffron.h implementation function order synced with header order
+if(Python3_FOUND)
+    set(SF_REORGANIZE_SCRIPT "${CMAKE_CURRENT_SOURCE_DIR}/sf_utils/sf_reorganize.py")
+    set(SAFFRON_HEADER       "${CMAKE_CURRENT_SOURCE_DIR}/saffron.h")
+
+    add_custom_target(reorganize_saffron
+        COMMAND ${Python3_EXECUTABLE}
+                "${SF_REORGANIZE_SCRIPT}"
+                "${SAFFRON_HEADER}"
+                --in-place
+                --backup
+        DEPENDS "${SAFFRON_HEADER}"
+                "${SF_REORGANIZE_SCRIPT}"
+        COMMENT "Reorganizing saffron.h implementation order"
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+    )
+endif()
+
+# Regenerate docs whenever saffron.h changes
 if(Python3_FOUND)
     add_custom_command(
         OUTPUT  "${CMAKE_CURRENT_SOURCE_DIR}/sf_docs/saffron_manual.md"
@@ -63,6 +83,20 @@ if(Python3_FOUND)
         DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/saffron.h"
                 "${CMAKE_CURRENT_SOURCE_DIR}/sf_docs/gen_docs.py"
         COMMENT "Generating sf_docs/saffron_manual.md"
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+    )
+        set(SF_REORGANIZE_SCRIPT "${CMAKE_CURRENT_SOURCE_DIR}/sf_utils/sf_reorganize.py")
+    set(SAFFRON_HEADER       "${CMAKE_CURRENT_SOURCE_DIR}/saffron.h")
+
+    add_custom_target(reorganize_saffron
+        COMMAND ${Python3_EXECUTABLE}
+                "${SF_REORGANIZE_SCRIPT}"
+                "${SAFFRON_HEADER}"
+                --in-place
+                --backup
+        DEPENDS "${SAFFRON_HEADER}"
+                "${SF_REORGANIZE_SCRIPT}"
+        COMMENT "Reorganizing saffron.h implementation order"
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
     )
     add_custom_target(generate_docs ALL
