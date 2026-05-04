@@ -205,18 +205,18 @@ typedef struct {
   float                             frame_duration;
   float                             base_scale;
   float                             opacity;
-} sf_sprite_t;
+} sf_sprite_2_t;
 
 typedef struct {
   char                              name[32];
-  sf_sprite_t                      *sprite;
+  sf_sprite_2_t                    *sprite;
   sf_fvec3_t                        pos;
   float                             scale;
   float                             opacity;
   float                             angle;
   sf_fvec3_t                        normal;
   sf_frame_t                       *frame;
-} sf_sprite_3d_t;
+} sf_sprite_3_t;
 
 typedef struct {
   int32_t                           id;
@@ -243,7 +243,7 @@ typedef struct {
   int32_t                           id;
   const char                       *name;
   sf_emitr_type_t                   type;
-  sf_sprite_t                      *sprite;
+  sf_sprite_2_t                    *sprite;
   sf_frame_t                       *frame;
 
   sf_particle_t                    *particles;
@@ -458,9 +458,9 @@ struct sf_ctx_t_ {
   int32_t                           tex_count;
   sf_cam_t                         *cameras;
   int32_t                           cam_count;
-  sf_sprite_t                      *sprites;
+  sf_sprite_2_t                    *sprites;
   int32_t                           sprite_count;
-  sf_sprite_3d_t                        *sprite_3ds;
+  sf_sprite_3_t                    *sprite_3ds;
   int32_t                           sprite_3d_count;
   sf_emitr_t                       *emitrs;
   int32_t                           emitr_count;
@@ -539,9 +539,9 @@ bool           sf_key_pressed       (sf_ctx_t *ctx, sf_key_t key);
 /* SF_SCENE_FUNCTIONS */
 sf_tex_t*      sf_load_texture_bmp  (sf_ctx_t *ctx, const char *filename, const char *texname);
 sf_tex_t*      sf_get_texture_      (sf_ctx_t *ctx, const char *texname, bool should_log_failure);
-sf_sprite_t*   sf_load_sprite       (sf_ctx_t *ctx, const char *spritename, float duration, float scale, int frame_count, ...);
-sf_sprite_t*   sf_get_sprite_       (sf_ctx_t *ctx, const char *spritename, bool should_log_failure);
-sf_emitr_t*    sf_add_emitr         (sf_ctx_t *ctx, const char *emitrname, sf_emitr_type_t type, sf_sprite_t *sprite, int max_p);
+sf_sprite_2_t* sf_load_sprite       (sf_ctx_t *ctx, const char *spritename, float duration, float scale, int frame_count, ...);
+sf_sprite_2_t* sf_get_sprite_       (sf_ctx_t *ctx, const char *spritename, bool should_log_failure);
+sf_emitr_t*    sf_add_emitr         (sf_ctx_t *ctx, const char *emitrname, sf_emitr_type_t type, sf_sprite_2_t *sprite, int max_p);
 sf_emitr_t*    sf_get_emitr_        (sf_ctx_t *ctx, const char *emitrname, bool should_log_failure);
 sf_obj_t*      sf_load_obj          (sf_ctx_t *ctx, const char *filename, const char *objname);
 sf_obj_t*      sf_get_obj_          (sf_ctx_t *ctx, const char *objname, bool should_log_failure);
@@ -610,9 +610,9 @@ void           sf_draw_debug_frames (sf_ctx_t *ctx, sf_cam_t *cam, float axis_si
 void           sf_draw_debug_lights (sf_ctx_t *ctx, sf_cam_t *cam, float size);
 void           sf_draw_debug_cams   (sf_ctx_t *ctx, sf_cam_t *view_cam, float ray_len);
 void           sf_draw_debug_perf   (sf_ctx_t *ctx, sf_cam_t *cam);
-void           sf_draw_sprite       (sf_ctx_t *ctx, sf_cam_t *cam, sf_sprite_t *spr, sf_fvec3_t pos_w, float anim_time, float scale_mult);
-void           sf_draw_sprite_3d    (sf_ctx_t *ctx, sf_cam_t *cam, sf_sprite_3d_t *bill, float anim_time);
-sf_sprite_3d_t*     sf_add_sprite_3d(sf_ctx_t *ctx, sf_sprite_t *spr, const char *name, sf_fvec3_t pos, float scale, float opacity, float angle);
+void           sf_draw_sprite       (sf_ctx_t *ctx, sf_cam_t *cam, sf_sprite_2_t *spr, sf_fvec3_t pos_w, float anim_time, float scale_mult);
+void           sf_draw_sprite_3d    (sf_ctx_t *ctx, sf_cam_t *cam, sf_sprite_3_t *bill, float anim_time);
+sf_sprite_3_t* sf_add_sprite_3d     (sf_ctx_t *ctx, sf_sprite_2_t *spr, const char *name, sf_fvec3_t pos, float scale, float opacity, float angle);
 void           sf_clear_sprite_3ds  (sf_ctx_t *ctx);
 
 /* SF_UI_FUNCTIONS */
@@ -755,9 +755,9 @@ void sf_init(sf_ctx_t *ctx, int w, int h) {
   ctx->textures                     = sf_arena_alloc(ctx, &ctx->arena, SF_MAX_TEXTURES * sizeof(sf_tex_t));
   ctx->cameras                      = sf_arena_alloc(ctx, &ctx->arena, SF_MAX_CAMS     * sizeof(sf_cam_t));
   ctx->frames                       = sf_arena_alloc(ctx, &ctx->arena, SF_MAX_FRAMES   * sizeof(sf_frame_t));
-  ctx->sprites                      = sf_arena_alloc(ctx, &ctx->arena, SF_MAX_SPRITES  * sizeof(sf_sprite_t));
+  ctx->sprites                      = sf_arena_alloc(ctx, &ctx->arena, SF_MAX_SPRITES  * sizeof(sf_sprite_2_t));
   ctx->emitrs                       = sf_arena_alloc(ctx, &ctx->arena, SF_MAX_EMITRS   * sizeof(sf_emitr_t));
-  ctx->sprite_3ds                        = sf_arena_alloc(ctx, &ctx->arena, SF_MAX_SPRITE_3DS    * sizeof(sf_sprite_3d_t));
+  ctx->sprite_3ds                   = sf_arena_alloc(ctx, &ctx->arena, SF_MAX_SPRITE_3DS * sizeof(sf_sprite_3_t));
   ctx->skyboxes                     = sf_arena_alloc(ctx, &ctx->arena, SF_MAX_SKYBOXES * sizeof(sf_skybox_t));
   ctx->obj_count                    = 0;
   ctx->enti_count                   = 0;
@@ -767,7 +767,7 @@ void sf_init(sf_ctx_t *ctx, int w, int h) {
   ctx->frames_count                 = 0;
   ctx->free_frames                  = NULL;
   ctx->sprite_count                 = 0;
-  ctx->sprite_3d_count                   = 0;
+  ctx->sprite_3d_count              = 0;
   ctx->emitr_count                  = 0;
   ctx->skybox_count                 = 0;
   ctx->active_skybox                = NULL;
@@ -785,7 +785,7 @@ void sf_init(sf_ctx_t *ctx, int w, int h) {
   ctx->frame_count                  = 0;
   ctx->ui                           = sf_ui_create(ctx);
   _sf_set_up_frames(ctx);
-  ctx->main_camera.frame                = sf_add_frame(ctx, NULL);
+  ctx->main_camera.frame            = sf_add_frame(ctx, NULL);
 
   SF_LOG(ctx, SF_LOG_INFO,
               SF_LOG_INDENT "buffer : %dx%d\n"
@@ -1597,7 +1597,7 @@ sf_tex_t* sf_get_texture_(sf_ctx_t *ctx, const char *texname, bool should_log_fa
   return NULL;
 }
 
-sf_sprite_t* sf_load_sprite(sf_ctx_t *ctx, const char *spritename, float duration, float scale, int frame_count, ...) {
+sf_sprite_2_t* sf_load_sprite(sf_ctx_t *ctx, const char *spritename, float duration, float scale, int frame_count, ...) {
   /* Create a sprite from a variadic list of texture names with per-frame duration and world scale. */
   char auto_name[32];
   if (spritename == NULL) {
@@ -1613,7 +1613,7 @@ sf_sprite_t* sf_load_sprite(sf_ctx_t *ctx, const char *spritename, float duratio
     return NULL;
   }
 
-  sf_sprite_t *spr = &ctx->sprites[ctx->sprite_count++];
+  sf_sprite_2_t *spr = &ctx->sprites[ctx->sprite_count++];
   spr->id = ctx->sprite_count - 1;
   spr->frame_count = frame_count;
   spr->frame_duration = duration;
@@ -1642,7 +1642,7 @@ sf_sprite_t* sf_load_sprite(sf_ctx_t *ctx, const char *spritename, float duratio
   return spr;
 }
 
-sf_sprite_t* sf_get_sprite_(sf_ctx_t *ctx, const char *spritename, bool should_log_failure) {
+sf_sprite_2_t* sf_get_sprite_(sf_ctx_t *ctx, const char *spritename, bool should_log_failure) {
   /* Linear search for a sprite by name; use the sf_get_sprite() macro instead. */
   for (int32_t i = 0; i < ctx->sprite_count; ++i) {
     if (ctx->sprites[i].name && strcmp(ctx->sprites[i].name, spritename) == 0) {
@@ -1653,7 +1653,7 @@ sf_sprite_t* sf_get_sprite_(sf_ctx_t *ctx, const char *spritename, bool should_l
   return NULL;
 }
 
-sf_emitr_t* sf_add_emitr(sf_ctx_t *ctx, const char *emitrname, sf_emitr_type_t type, sf_sprite_t *sprite, int max_p) {
+sf_emitr_t* sf_add_emitr(sf_ctx_t *ctx, const char *emitrname, sf_emitr_type_t type, sf_sprite_2_t *sprite, int max_p) {
   /* Add a particle emitter of the given type with a pre-allocated particle pool; returns its pointer. */
   char auto_name[32];
   if (emitrname == NULL) {
@@ -2310,7 +2310,7 @@ bool sf_save_sff(sf_ctx_t *ctx, const char *filepath) {
   if (ctx->tex_count) fprintf(f, "\n");
 
   for (int i = 0; i < ctx->sprite_count; i++) {
-    sf_sprite_t *s = &ctx->sprites[i];
+    sf_sprite_2_t *s = &ctx->sprites[i];
     if (!s->name || s->frame_count == 0) continue;
     fprintf(f, "sprite %s {\n", s->name);
     fprintf(f, "    duration = %.2f\n", s->frame_duration);
@@ -2357,7 +2357,7 @@ bool sf_save_sff(sf_ctx_t *ctx, const char *filepath) {
   }
 
   for (int i = 0; i < ctx->sprite_3d_count; i++) {
-    sf_sprite_3d_t *b = &ctx->sprite_3ds[i];
+    sf_sprite_3_t *b = &ctx->sprite_3ds[i];
     if (!b->sprite || !b->sprite->name) continue;
     const char *bname = b->name[0] ? b->name : "bill";
     fprintf(f, "billboard %s {\n", bname);
@@ -2582,7 +2582,7 @@ void _sf_sff_prse_sprit(sf_ctx_t *ctx, FILE *f, const char *name, int *sprite_co
   if (frame_count == 0) return;
   if (ctx->sprite_count >= SF_MAX_SPRITES) return;
   if (NULL != sf_get_sprite_(ctx, name, false)) return;
-  sf_sprite_t *spr = &ctx->sprites[ctx->sprite_count++];
+  sf_sprite_2_t *spr = &ctx->sprites[ctx->sprite_count++];
   spr->id = ctx->sprite_count - 1;
   spr->frame_count = frame_count;
   spr->frame_duration = duration;
@@ -2619,7 +2619,7 @@ void _sf_sff_prse_emitr(sf_ctx_t *ctx, FILE *f, const char *name, int *emitr_cou
   sf_emitr_type_t type = SF_EMITR_OMNI;
   if      (strcmp(type_str, "dir") == 0) type = SF_EMITR_DIR;
   else if (strcmp(type_str, "vol") == 0) type = SF_EMITR_VOLUME;
-  sf_sprite_t *spr = sf_get_sprite_(ctx, spr_name, true);
+  sf_sprite_2_t *spr = sf_get_sprite_(ctx, spr_name, true);
   if (!spr) return;
   sf_emitr_t *em = sf_add_emitr(ctx, name, type, spr, max_p);
   if (!em) return;
@@ -2652,9 +2652,9 @@ void _sf_sff_prse_sprit_3d(sf_ctx_t *ctx, FILE *f, const char *name, int *sprite
     else if (strcmp(key, "normal")  == 0) normal  = _sf_sff_prse_vec3(val);
   }
   if (!spr_name[0]) return;
-  sf_sprite_t *spr = sf_get_sprite_(ctx, spr_name, true);
+  sf_sprite_2_t *spr = sf_get_sprite_(ctx, spr_name, true);
   if (!spr) return;
-  sf_sprite_3d_t *b = sf_add_sprite_3d(ctx, spr, name, pos, scale, opacity, angle);
+  sf_sprite_3_t *b = sf_add_sprite_3d(ctx, spr, name, pos, scale, opacity, angle);
   if (b) {
     b->normal = normal;
     if (frame_name[0]) b->frame = _sf_sff_get_frame_(ctx, frame_name);
@@ -3334,7 +3334,7 @@ void sf_draw_debug_perf(sf_ctx_t *ctx, sf_cam_t *cam) {
   sf_put_text(ctx, cam, buf, (sf_ivec2_t){col + 32, ty}, val, 1);
 }
 
-void sf_draw_sprite(sf_ctx_t *ctx, sf_cam_t *cam, sf_sprite_t *spr, sf_fvec3_t pos_w, float anim_time, float scale_mult) {
+void sf_draw_sprite(sf_ctx_t *ctx, sf_cam_t *cam, sf_sprite_2_t *spr, sf_fvec3_t pos_w, float anim_time, float scale_mult) {
   /* Billboard a sprite frame at a world position with depth testing and alpha blending. */
   if (!spr || spr->frame_count == 0) return;
   int frame_idx = (int)(anim_time / spr->frame_duration) % spr->frame_count;
@@ -3398,10 +3398,10 @@ void sf_draw_sprite(sf_ctx_t *ctx, sf_cam_t *cam, sf_sprite_t *spr, sf_fvec3_t p
   }
 }
 
-sf_sprite_3d_t* sf_add_sprite_3d(sf_ctx_t *ctx, sf_sprite_t *spr, const char *name, sf_fvec3_t pos, float scale, float opacity, float angle) {
+sf_sprite_3_t* sf_add_sprite_3d(sf_ctx_t *ctx, sf_sprite_2_t *spr, const char *name, sf_fvec3_t pos, float scale, float opacity, float angle) {
   /* Add a billboard instance to the scene's bill pool. */
   if (!ctx || ctx->sprite_3d_count >= SF_MAX_SPRITE_3DS) return NULL;
-  sf_sprite_3d_t *b = &ctx->sprite_3ds[ctx->sprite_3d_count++];
+  sf_sprite_3_t *b = &ctx->sprite_3ds[ctx->sprite_3d_count++];
   if (name) { int i; for (i = 0; i < 31 && name[i]; i++) b->name[i] = name[i]; b->name[i] = '\0'; }
   else { b->name[0] = '\0'; }
   b->sprite  = spr;
@@ -3419,7 +3419,7 @@ void sf_clear_sprite_3ds(sf_ctx_t *ctx) {
   if (ctx) ctx->sprite_3d_count = 0;
 }
 
-void sf_draw_sprite_3d(sf_ctx_t *ctx, sf_cam_t *cam, sf_sprite_3d_t *bill, float anim_time) {
+void sf_draw_sprite_3d(sf_ctx_t *ctx, sf_cam_t *cam, sf_sprite_3_t *bill, float anim_time) {
   /* Billboard a sprite instance with per-instance scale, opacity, and screen-space rotation. */
   if (!bill || !bill->sprite || bill->sprite->frame_count == 0) return;
   int frame_idx = bill->sprite->frame_duration > 0.f

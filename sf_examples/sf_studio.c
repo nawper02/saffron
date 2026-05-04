@@ -87,9 +87,9 @@ static const char *g_cr_titem[SFGEN_MAX_TEX];
 static int         g_cr_tnc = 0, g_cr_tsel = 0;
 static char        g_ct_sname[SFGEN_MAX_SPR][64];
 static const char *g_ct_sitem[SFGEN_MAX_SPR];
-static sf_sprite_t*g_ct_sprites[SFGEN_MAX_SPR];
+static sf_sprite_2_t*g_ct_sprites[SFGEN_MAX_SPR];
 static int         g_ct_snc = 0, g_ct_ssel = 0;
-static sf_sprite_t*g_sfgen_leaf = NULL;
+static sf_sprite_2_t*g_sfgen_leaf = NULL;
 static sf_ui_lmn_t *g_sfgen_panel = NULL; /* SFGEN left panel — for icon visibility check */
 
 /* Generated objects */
@@ -607,7 +607,7 @@ static void spawn_primitive(int kind) {
             if (sf_ctx.enti_count > enti_before) {
               sf_frame_t *new_frame = sf_ctx.entities[enti_before].frame;
               for (int i = bb_before; i < sf_ctx.sprite_3d_count; i++) {
-                sf_sprite_3d_t *b = &sf_ctx.sprite_3ds[i];
+                sf_sprite_3_t *b = &sf_ctx.sprite_3ds[i];
                 if (b->frame && b->frame != new_frame)
                   b->frame = new_frame;
               }
@@ -639,7 +639,7 @@ static void spawn_primitive(int kind) {
 
 static void spawn_emitter(void) {
   /* default sprite: try Stars.bmp, else fall back to first loaded texture */
-  sf_sprite_t *spr = sf_get_sprite_(&sf_ctx, "spr_Stars", false);
+  sf_sprite_2_t *spr = sf_get_sprite_(&sf_ctx, "spr_Stars", false);
   if (!spr) {
     sf_tex_t *stars = NULL;
     for (int i = 0; i < sf_ctx.tex_count; i++) {
@@ -1196,7 +1196,7 @@ static void cb_apply_emitr_sprite(sf_ctx_t *ctx, void *ud) {
 
   char sname[80];
   snprintf(sname, sizeof(sname), "spr_%s", stemname);
-  sf_sprite_t *spr = sf_get_sprite_(&sf_ctx, sname, false);
+  sf_sprite_2_t *spr = sf_get_sprite_(&sf_ctx, sname, false);
   if (!spr) spr = sf_load_sprite(&sf_ctx, sname, 1.0f, 0.3f, 1, tex->name);
   if (spr) g_sel_emitr->sprite = spr;
 }
@@ -1529,7 +1529,7 @@ static void cb_picker_pick(sf_ctx_t *ctx, void *ud) {
     if (!tex) tex = sf_load_texture_bmp(&sf_ctx, fname, sname);
     if (!tex) goto done;
     char sprname[80]; snprintf(sprname, sizeof(sprname), "spr_%s", sname);
-    sf_sprite_t *spr = sf_get_sprite_(&sf_ctx, sprname, false);
+    sf_sprite_2_t *spr = sf_get_sprite_(&sf_ctx, sprname, false);
     if (!spr) spr = sf_load_sprite(&sf_ctx, sprname, 1.0f, 0.3f, 1, tex->name);
     if (spr) g_sel_emitr->sprite = spr;
   } else if (g_picker_apply == PICK_APPLY_MODEL) {
@@ -1552,7 +1552,7 @@ static void cb_picker_pick(sf_ctx_t *ctx, void *ud) {
     if (!t) t = sf_load_texture_bmp(&g_sfgen_ctx, fname, nm);
     if (t) {
       char sprname[80]; snprintf(sprname, sizeof(sprname), "spr_%s", nm);
-      sf_sprite_t *spr = sf_get_sprite_(&g_sfgen_ctx, sprname, false);
+      sf_sprite_2_t *spr = sf_get_sprite_(&g_sfgen_ctx, sprname, false);
       if (!spr) spr = sf_load_sprite(&g_sfgen_ctx, sprname, 1.0f, 0.7f, 1, nm);
       if (spr) g_sfgen_leaf = spr;
     }
@@ -1781,7 +1781,7 @@ static void sfgen_grow(sf_obj_t *obj, sf_fvec3_t pos, sf_fvec3_t dir,
             float lo = fminf(ct_lo, 1.0f);
             float la = sfgen_rnd()*2.f*SF_PI;
             char bname[32]; snprintf(bname, sizeof(bname), "lf_%d", g_sfgen_ctx.sprite_3d_count);
-            sf_sprite_3d_t *bl = sf_add_sprite_3d(&g_sfgen_ctx, g_sfgen_leaf, bname, lp, ls, lo, la);
+            sf_sprite_3_t *bl = sf_add_sprite_3d(&g_sfgen_ctx, g_sfgen_leaf, bname, lp, ls, lo, la);
             if (bl) {
                 bl->frame = g_ct_enti ? g_ct_enti->frame : NULL;
                 if (ct_rand3d) {
@@ -2665,7 +2665,7 @@ static void sfgen_save_tree(void) {
         fprintf(f,"}\n\n");
     }
     for (int i=0;i<g_sfgen_ctx.sprite_3d_count;i++){
-        sf_sprite_3d_t *b=&g_sfgen_ctx.sprite_3ds[i];
+        sf_sprite_3_t *b=&g_sfgen_ctx.sprite_3ds[i];
         if (!b->sprite||!b->sprite->name) continue;
         fprintf(f,"billboard %s {\n    sprite=%s\n    pos=(%.4f,%.4f,%.4f)\n    scale=%.4f\n    opacity=%.4f\n    angle=%.4f\n    normal=(%.4f,%.4f,%.4f)\n",
                 b->name[0]?b->name:"bill",b->sprite->name,

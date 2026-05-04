@@ -4,6 +4,7 @@ Before PR
     !!Totally refactor / simplify / clean up sf_studio implementation -- its clearly too long and messy for claude
     Make a generated assets dir, make anything needed by an sff file get saved to that dir with unique id, and add that to the asset path, hook it to install btn
     Sort out file ambiguity
+    blit pip cam could just use sf_draw_pip_cam
   Bugs
     Cant add multiple of the same sff /tree (at least the leaves dont show up)
     Collapsing texture collapses texture and parenting

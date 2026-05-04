@@ -56,8 +56,6 @@
 | `sf_key_pressed` | Events & Input |
 | `sf_load_texture_bmp` | Scene |
 | `sf_get_texture_` | Scene |
-| `sf_load_sprite` | Scene |
-| `sf_get_sprite_` | Scene |
 | `sf_add_emitr` | Scene |
 | `sf_get_emitr_` | Scene |
 | `sf_load_obj` | Scene |
@@ -125,7 +123,6 @@
 | `sf_draw_debug_perf` | Drawing |
 | `sf_draw_sprite` | Drawing |
 | `sf_draw_sprite_3d` | Drawing |
-| `sf_add_sprite_3d` | Drawing |
 | `sf_clear_sprite_3ds` | Drawing |
 | `sf_ui_create` | UI |
 | `sf_ui_update` | UI |
@@ -329,9 +326,9 @@
 
 **`sf_light_t`** — fields: `type`, `color`, `intensity`, `frame`, `name`, `id`
 
-**`sf_sprite_t`** — fields: `id`, `name`, `SF_MAX_SPRITE_FRAMES`, `frame_count`, `frame_duration`, `base_scale`, `opacity`
+**`sf_sprite_2_t`** — fields: `id`, `name`, `SF_MAX_SPRITE_FRAMES`, `frame_count`, `frame_duration`, `base_scale`, `opacity`
 
-**`sf_sprite_3d_t`** — fields: `name`, `sprite`, `pos`, `scale`, `opacity`, `angle`, `normal`, `frame`
+**`sf_sprite_3_t`** — fields: `name`, `sprite`, `pos`, `scale`, `opacity`, `angle`, `normal`, `frame`
 
 **`sf_skybox_t`** — fields: `id`, `name`, `tex`
 
@@ -580,22 +577,10 @@ sf_tex_t* sf_load_texture_bmp (sf_ctx_t *ctx, const char *filename, const char *
 sf_tex_t* sf_get_texture_ (sf_ctx_t *ctx, const char *texname, bool should_log_failure);
 ```
 
-### `sf_load_sprite`
-
-```c
-sf_sprite_t* sf_load_sprite (sf_ctx_t *ctx, const char *spritename, float duration, float scale, int frame_count, ...);
-```
-
-### `sf_get_sprite_`
-
-```c
-sf_sprite_t* sf_get_sprite_ (sf_ctx_t *ctx, const char *spritename, bool should_log_failure);
-```
-
 ### `sf_add_emitr`
 
 ```c
-sf_emitr_t* sf_add_emitr (sf_ctx_t *ctx, const char *emitrname, sf_emitr_type_t type, sf_sprite_t *sprite, int max_p);
+sf_emitr_t* sf_add_emitr (sf_ctx_t *ctx, const char *emitrname, sf_emitr_type_t type, sf_sprite_2_t *sprite, int max_p);
 ```
 
 ### `sf_get_emitr_`
@@ -1041,19 +1026,13 @@ void sf_draw_debug_perf (sf_ctx_t *ctx, sf_cam_t *cam);
 Billboard a sprite frame at a world position with depth testing and alpha blending.
 
 ```c
-void sf_draw_sprite (sf_ctx_t *ctx, sf_cam_t *cam, sf_sprite_t *spr, sf_fvec3_t pos_w, float anim_time, float scale_mult);
+void sf_draw_sprite (sf_ctx_t *ctx, sf_cam_t *cam, sf_sprite_2_t *spr, sf_fvec3_t pos_w, float anim_time, float scale_mult);
 ```
 
 ### `sf_draw_sprite_3d`
 
 ```c
-void sf_draw_sprite_3d (sf_ctx_t *ctx, sf_cam_t *cam, sf_sprite_3d_t *bill, float anim_time);
-```
-
-### `sf_add_sprite_3d`
-
-```c
-sf_sprite_3d_t* sf_add_sprite_3d(sf_ctx_t *ctx, sf_sprite_t *spr, const char *name, sf_fvec3_t pos, float scale, float opacity, float angle);
+void sf_draw_sprite_3d (sf_ctx_t *ctx, sf_cam_t *cam, sf_sprite_3_t *bill, float anim_time);
 ```
 
 ### `sf_clear_sprite_3ds`
