@@ -85,20 +85,7 @@ if(Python3_FOUND)
         COMMENT "Generating sf_docs/saffron_manual.md"
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
     )
-        set(SF_REORGANIZE_SCRIPT "${CMAKE_CURRENT_SOURCE_DIR}/sf_utils/sf_reorganize.py")
-    set(SAFFRON_HEADER       "${CMAKE_CURRENT_SOURCE_DIR}/saffron.h")
 
-    add_custom_target(reorganize_saffron
-        COMMAND ${Python3_EXECUTABLE}
-                "${SF_REORGANIZE_SCRIPT}"
-                "${SAFFRON_HEADER}"
-                --in-place
-                --backup
-        DEPENDS "${SAFFRON_HEADER}"
-                "${SF_REORGANIZE_SCRIPT}"
-        COMMENT "Reorganizing saffron.h implementation order"
-        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
-    )
     add_custom_target(generate_docs ALL
         DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/sf_docs/saffron_manual.md"
     )
