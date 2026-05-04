@@ -16,6 +16,9 @@
 - [UI](#ui)
 - [Mesh Authoring](#mesh-authoring)
 - [Picking / Raycasting](#picking--raycasting)
+- [SF_GIZMO_FUNCTIONS](#sfgizmofunctions)
+- [SF_ORBIT_CAM_FUNCTIONS](#sforbitcamfunctions)
+- [SF_THUMBNAIL_FUNCTIONS](#sfthumbnailfunctions)
 - [Logging](#logging)
 - [Math](#math)
 
@@ -55,20 +58,28 @@
 | `sf_key_down` | Events & Input |
 | `sf_key_pressed` | Events & Input |
 | `sf_load_texture_bmp` | Scene |
-| `sf_get_texture_` | Scene |
-| `sf_add_emitr` | Scene |
-| `sf_get_emitr_` | Scene |
 | `sf_load_obj` | Scene |
-| `sf_get_obj_` | Scene |
-| `sf_add_enti` | Scene |
-| `sf_get_enti_` | Scene |
-| `sf_add_cam` | Scene |
-| `sf_get_cam_` | Scene |
-| `sf_add_light` | Scene |
-| `sf_get_light_` | Scene |
-| `sf_set_fog` | Scene |
 | `sf_load_skybox` | Scene |
+| `sf_add_emitr` | Scene |
+| `sf_add_enti` | Scene |
+| `sf_add_cam` | Scene |
+| `sf_add_light` | Scene |
+| `sf_get_texture_` | Scene |
+| `sf_get_emitr_` | Scene |
+| `sf_get_obj_` | Scene |
+| `sf_get_enti_` | Scene |
+| `sf_get_cam_` | Scene |
+| `sf_get_light_` | Scene |
 | `sf_get_skybox_` | Scene |
+| `sf_remove_enti` | Scene |
+| `sf_remove_light` | Scene |
+| `sf_remove_cam` | Scene |
+| `sf_remove_emitr` | Scene |
+| `sf_remove_obj` | Scene |
+| `sf_remove_tex` | Scene |
+| `sf_remove_sprite` | Scene |
+| `sf_remove_skybox` | Scene |
+| `sf_set_fog` | Scene |
 | `sf_set_active_skybox` | Scene |
 | `sf_enti_set_pos` | Scene |
 | `sf_enti_move` | Scene |
@@ -102,9 +113,11 @@
 | `sf_frame_look_at` | Frames |
 | `sf_frame_set_parent` | Frames |
 | `sf_remove_frame` | Frames |
+| `sf_frame_walk` | Frames |
 | `_sf_set_up_frames` | Frames |
 | `_sf_calc_frame_tree` | Frames |
 | `_sf_write_frame_ref` | Frames |
+| `_sf_frame_walk_r` | Frames |
 | `sf_fill` | Drawing |
 | `sf_pixel` | Drawing |
 | `sf_pixel_depth` | Drawing |
@@ -140,6 +153,22 @@
 | `sf_ui_add_dropdown` | UI |
 | `sf_ui_add_panel` | UI |
 | `sf_ui_add_image` | UI |
+| `sf_ui_lay_begin_panel` | UI |
+| `sf_ui_lay_end_panel` | UI |
+| `sf_ui_lay_row` | UI |
+| `sf_ui_lay_col` | UI |
+| `sf_ui_lay_indent` | UI |
+| `sf_ui_lay_unindent` | UI |
+| `sf_ui_lay_spacing` | UI |
+| `sf_ui_lay_separator` | UI |
+| `sf_ui_lay_button` | UI |
+| `sf_ui_lay_label` | UI |
+| `sf_ui_lay_drag_float` | UI |
+| `sf_ui_lay_checkbox` | UI |
+| `sf_ui_lay_text_input` | UI |
+| `sf_ui_lay_slider` | UI |
+| `sf_ui_lay_dropdown` | UI |
+| `sf_ui_lay_image` | UI |
 | `sf_save_sfui` | UI |
 | `sf_load_sfui` | UI |
 | `_sf_ui_find_prnt_pnl` | UI |
@@ -153,6 +182,7 @@
 | `_sf_draw_dropdown` | UI |
 | `_sf_draw_drpdwn_popup` | UI |
 | `_sf_draw_panel` | UI |
+| `_sf_draw_image` | UI |
 | `_sf_update_text_input` | UI |
 | `_sf_update_drag_float` | UI |
 | `_sf_update_dropdown` | UI |
@@ -162,6 +192,7 @@
 | `_sf_update_slider` | UI |
 | `_sf_ui_type_str` | UI |
 | `_sf_ui_type_from_str` | UI |
+| `_sf_ui_lay_next_cell` | UI |
 | `sf_obj_create_empty` | Mesh Authoring |
 | `sf_obj_add_vert` | Mesh Authoring |
 | `sf_obj_add_uv` | Mesh Authoring |
@@ -175,11 +206,27 @@
 | `sf_obj_make_heightmap` | Mesh Authoring |
 | `sf_obj_save_obj` | Mesh Authoring |
 | `sf_noise_fbm` | Mesh Authoring |
+| `sf_noise_3d` | Mesh Authoring |
+| `sf_noise_fbm_3d` | Mesh Authoring |
 | `sf_ray_from_screen` | Picking / Raycasting |
 | `sf_raycast_entities` | Picking / Raycasting |
+| `sf_raycast_all` | Picking / Raycasting |
 | `sf_ray_triangle` | Picking / Raycasting |
 | `sf_ray_plane_y` | Picking / Raycasting |
 | `sf_ray_aabb` | Picking / Raycasting |
+| `sf_gizmo_update` | SF_GIZMO_FUNCTIONS |
+| `sf_gizmo_hit` | SF_GIZMO_FUNCTIONS |
+| `sf_gizmo_begin_drag` | SF_GIZMO_FUNCTIONS |
+| `sf_gizmo_drag` | SF_GIZMO_FUNCTIONS |
+| `sf_gizmo_end_drag` | SF_GIZMO_FUNCTIONS |
+| `sf_gizmo_render` | SF_GIZMO_FUNCTIONS |
+| `sf_orbit_cam_apply` | SF_ORBIT_CAM_FUNCTIONS |
+| `sf_orbit_cam_rotate` | SF_ORBIT_CAM_FUNCTIONS |
+| `sf_orbit_cam_zoom` | SF_ORBIT_CAM_FUNCTIONS |
+| `sf_orbit_cam_pan` | SF_ORBIT_CAM_FUNCTIONS |
+| `sf_orbit_cam_focus` | SF_ORBIT_CAM_FUNCTIONS |
+| `sf_render_thumb_enti` | SF_THUMBNAIL_FUNCTIONS |
+| `sf_render_thumb_sff` | SF_THUMBNAIL_FUNCTIONS |
 | `sf_log_` | Logging |
 | `sf_set_logger` | Logging |
 | `sf_logger_console` | Logging |
@@ -206,6 +253,9 @@
 | `_sf_project_vertex` | Math |
 | `_sf_hash_2d` | Math |
 | `_sf_smooth_noise` | Math |
+| `_sf_hash_3d` | Math |
+| `_sf_smooth_noise_3d` | Math |
+| `_sf_seg_dist2` | Math |
 
 ---
 
@@ -234,6 +284,9 @@
 | `SF_SKYBOX_SPAN` | `128` |
 | `SF_MAX_SPRITE_FRAMES` | `16` |
 | `SF_MAX_SPRITE_3DS` | `8192` |
+| `SF_MAX_HITS` | `32` |
+| `SF_MAX_UI_LAY_COLS` | `8` |
+| `SF_MAX_UI_LAY_STACK` | `16` |
 | `SF_PERF_HIST_SIZE` | `64` |
 | `SF_PI` | `3.14159265359f` |
 | `SF_NANOS_PER_SEC` | `1000000000ULL` |
@@ -264,6 +317,7 @@
 | `sf_log_fn` | `void (*sf_log_fn )(const char* message, void* userdata)` |
 | `sf_pkd_clr_t` | `uint32_t` |
 | `sf_height_fn` | `float (*sf_height_fn )(float x, float z, void *ud)` |
+| `sf_frame_walk_fn` | `bool (*sf_frame_walk_fn)(sf_frame_t *frame, int depth, void *userdata)` |
 | `sf_event_cb` | `void (*sf_event_cb )(struct sf_ctx_t_ *ctx, const sf_event_t *event, void *userdata)` |
 | `sf_ui_cb` | `void (*sf_ui_cb)(struct sf_ctx_t_ *ctx, void *userdata)` |
 
@@ -278,6 +332,12 @@
 **`sf_light_type_t`** — `SF_LIGHT_DIR`, `SF_LIGHT_POINT`
 
 **`sf_emitr_type_t`** — `SF_EMITR_DIR`, `SF_EMITR_OMNI`, `SF_EMITR_VOLUME`
+
+**`sf_gz_axis_t`** — `SF_GZ_AX_X`, `SF_GZ_AX_Y`, `SF_GZ_AX_Z`, `SF_GZ_AX_NONE`
+
+**`sf_hit_kind_t`** — `SF_HIT_NONE`, `SF_HIT_ENTI`, `SF_HIT_LIGHT`, `SF_HIT_CAM`, `SF_HIT_EMITR`
+
+**`sf_ui_panel_flags_t`** — `SF_UI_PANEL_COLLAPSIBLE`, `SF_UI_PANEL_CLOSABLE`, `SF_UI_PANEL_FIXED`, `SF_UI_PANEL_DRAGGABLE`
 
 **`sf_key_t`** — `SF_KEY_UNKNOWN`, `SF_KEY_A`, `SF_KEY_B`, `SF_KEY_C`, `SF_KEY_D`, `SF_KEY_E`, `SF_KEY_F`, `SF_KEY_G`, `SF_KEY_H`, `SF_KEY_I`, `SF_KEY_J`, `SF_KEY_K`, `SF_KEY_L`, `SF_KEY_M`, `SF_KEY_N`, `SF_KEY_O`, `SF_KEY_P`, `SF_KEY_Q`, `SF_KEY_R`, `SF_KEY_S`, `SF_KEY_T`, `SF_KEY_U`, `SF_KEY_V`, `SF_KEY_W`, `SF_KEY_X`, `SF_KEY_Y`, `SF_KEY_Z`, `SF_KEY_0`, `SF_KEY_1`, `SF_KEY_2`, `SF_KEY_3`, `SF_KEY_4`, `SF_KEY_5`, `SF_KEY_6`, `SF_KEY_7`, `SF_KEY_8`, `SF_KEY_9`, `SF_KEY_SPACE`, `SF_KEY_LSHIFT`, `SF_KEY_UP`, `SF_KEY_DOWN`, `SF_KEY_LEFT`, `SF_KEY_RIGHT`, `SF_KEY_BACKSPACE`, `SF_KEY_RETURN`, `SF_KEY_ESC`, `SF_KEY_TAB`, `SF_KEY_DEL`, `SF_KEY_HOME`, `SF_KEY_END`, `SF_KEY_LCTRL`, `SF_KEY_MAX`
 
@@ -338,6 +398,12 @@
 
 **`sf_arena_t`** — fields: `size`, `offset`, `buffer`
 
+**`sf_gizmo_t`** — fields: `frame`, `active`, `screen_origin`, `screen_tip`, `pixel_per_unit`, `drag_axis`, `drag_start_pos`, `drag_start_mx`, `drag_start_my`, `hover_axis`
+
+**`sf_orbit_cam_t`** — fields: `target`, `yaw`, `pitch`, `dist`
+
+**`sf_hit_t`** — fields: `kind`, `ptr`, `t`
+
 **`mouse_move`** — fields: `type`, `key`, `x`, `y`, `dx`, `dy`, `btn`, `x`, `y`, `dy`, `text`
 
 **`sf_callback_entry_t`** — fields: `cb`, `userdata`
@@ -348,7 +414,9 @@
 
 **`sf_ui_lmn_t`** — fields: 
 
-**`sf_ui_t`** — fields: `elements`, `count`, `default_style`, `focused`, `active_panel`
+**`sf_ui_lay_t`** — fields: `x`, `y`, `width`, `row_h`, `pad`, `col_count`, `col_idx`, `SF_MAX_UI_LAY_COLS`, `panel`, `flags`
+
+**`sf_ui_t`** — fields: `elements`, `count`, `default_style`, `focused`, `active_panel`, `SF_MAX_UI_LAY_STACK`, `lay_depth`
 
 
 ## Core
@@ -409,16 +477,14 @@ void sf_render_emitrs (sf_ctx_t *ctx, sf_cam_t *cam);
 
 ### `sf_render_skybox`
 
-Fill the camera buffer with an equirectangular sky panorama using span interpolation.
-Exact UVs are computed every SF_SKYBOX_SPAN pixels and linearly interpolated between.
-
 ```c
 void sf_render_skybox (sf_ctx_t *ctx, sf_cam_t *cam);
 ```
 
 ### `sf_render_fog`
 
-Draw all active particles from every emitter as sprites into cam.
+Post-process depth fog: blend each geometry pixel toward fog_color based on
+linearised view-space depth.  Sky/unwritten pixels (z > 2.0) are skipped.
 
 ```c
 void sf_render_fog (sf_ctx_t *ctx, sf_cam_t *cam);
@@ -431,8 +497,6 @@ void sf_render_depth (sf_ctx_t *ctx, sf_cam_t *cam);
 ```
 
 ### `sf_update_emitrs`
-
-Advance particle lifetimes, move them by velocity, and spawn new particles according to rate.
 
 ```c
 void sf_update_emitrs (sf_ctx_t *ctx);
@@ -459,7 +523,7 @@ sf_arena_t sf_arena_init (sf_ctx_t *ctx, size_t size);
 
 ### `sf_arena_alloc`
 
-Add a clickable button with a label and optional click callback.
+Process mouse hover/click input for every UI element and fire their callbacks.
 
 ```c
 void* sf_arena_alloc (sf_ctx_t *ctx, sf_arena_t *arena, size_t size);
@@ -504,7 +568,7 @@ void sf_event_reg (sf_ctx_t *ctx, sf_event_type_t type, sf_event_cb cb, void *us
 
 ### `sf_event_trigger`
 
-Return true while the key is held down this frame.
+Feed a text-input string into the engine: fire SF_EVT_TEXT_INPUT and insert printable chars into the focused text-input element.
 
 ```c
 void sf_event_trigger (sf_ctx_t *ctx, const sf_event_t *event);
@@ -571,78 +635,10 @@ Load a 24-bit BMP file into the texture pool, applying gamma correction and trea
 sf_tex_t* sf_load_texture_bmp (sf_ctx_t *ctx, const char *filename, const char *texname);
 ```
 
-### `sf_get_texture_`
-
-```c
-sf_tex_t* sf_get_texture_ (sf_ctx_t *ctx, const char *texname, bool should_log_failure);
-```
-
-### `sf_add_emitr`
-
-```c
-sf_emitr_t* sf_add_emitr (sf_ctx_t *ctx, const char *emitrname, sf_emitr_type_t type, sf_sprite_2_t *sprite, int max_p);
-```
-
-### `sf_get_emitr_`
-
-```c
-sf_emitr_t* sf_get_emitr_ (sf_ctx_t *ctx, const char *emitrname, bool should_log_failure);
-```
-
 ### `sf_load_obj`
 
 ```c
 sf_obj_t* sf_load_obj (sf_ctx_t *ctx, const char *filename, const char *objname);
-```
-
-### `sf_get_obj_`
-
-Linear search for a mesh by name; use the sf_get_obj() macro instead.
-
-```c
-sf_obj_t* sf_get_obj_ (sf_ctx_t *ctx, const char *objname, bool should_log_failure);
-```
-
-### `sf_add_enti`
-
-```c
-sf_enti_t* sf_add_enti (sf_ctx_t *ctx, sf_obj_t *obj, const char *entiname);
-```
-
-### `sf_get_enti_`
-
-```c
-sf_enti_t* sf_get_enti_ (sf_ctx_t *ctx, const char *entiname, bool should_log_failure);
-```
-
-### `sf_add_cam`
-
-```c
-sf_cam_t* sf_add_cam (sf_ctx_t *ctx, const char *camname, int w, int h, float fov);
-```
-
-### `sf_get_cam_`
-
-```c
-sf_cam_t* sf_get_cam_ (sf_ctx_t *ctx, const char *camname, bool should_log_failure);
-```
-
-### `sf_add_light`
-
-```c
-sf_light_t* sf_add_light (sf_ctx_t *ctx, const char *lightname, sf_light_type_t type, sf_fvec3_t color, float intensity);
-```
-
-### `sf_get_light_`
-
-```c
-sf_light_t* sf_get_light_ (sf_ctx_t *ctx, const char *lightname, bool should_log_failure);
-```
-
-### `sf_set_fog`
-
-```c
-void sf_set_fog (sf_ctx_t *ctx, sf_fvec3_t color, float start, float end);
 ```
 
 ### `sf_load_skybox`
@@ -651,13 +647,131 @@ void sf_set_fog (sf_ctx_t *ctx, sf_fvec3_t color, float start, float end);
 sf_skybox_t* sf_load_skybox (sf_ctx_t *ctx, const char *filename, const char *skyboxname);
 ```
 
+### `sf_add_emitr`
+
+```c
+sf_emitr_t* sf_add_emitr (sf_ctx_t *ctx, const char *emitrname, sf_emitr_type_t type, sf_sprite_2_t *sprite, int max_p);
+```
+
+### `sf_add_enti`
+
+```c
+sf_enti_t* sf_add_enti (sf_ctx_t *ctx, sf_obj_t *obj, const char *entiname);
+```
+
+### `sf_add_cam`
+
+```c
+sf_cam_t* sf_add_cam (sf_ctx_t *ctx, const char *camname, int w, int h, float fov);
+```
+
+### `sf_add_light`
+
+```c
+sf_light_t* sf_add_light (sf_ctx_t *ctx, const char *lightname, sf_light_type_t type, sf_fvec3_t color, float intensity);
+```
+
+### `sf_get_texture_`
+
+```c
+sf_tex_t* sf_get_texture_ (sf_ctx_t *ctx, const char *texname, bool should_log_failure);
+```
+
+### `sf_get_emitr_`
+
+```c
+sf_emitr_t* sf_get_emitr_ (sf_ctx_t *ctx, const char *emitrname, bool should_log_failure);
+```
+
+### `sf_get_obj_`
+
+```c
+sf_obj_t* sf_get_obj_ (sf_ctx_t *ctx, const char *objname, bool should_log_failure);
+```
+
+### `sf_get_enti_`
+
+```c
+sf_enti_t* sf_get_enti_ (sf_ctx_t *ctx, const char *entiname, bool should_log_failure);
+```
+
+### `sf_get_cam_`
+
+```c
+sf_cam_t* sf_get_cam_ (sf_ctx_t *ctx, const char *camname, bool should_log_failure);
+```
+
+### `sf_get_light_`
+
+```c
+sf_light_t* sf_get_light_ (sf_ctx_t *ctx, const char *lightname, bool should_log_failure);
+```
+
 ### `sf_get_skybox_`
 
 ```c
 sf_skybox_t* sf_get_skybox_ (sf_ctx_t *ctx, const char *skyboxname, bool should_log_failure);
 ```
 
+### `sf_remove_enti`
+
+```c
+void sf_remove_enti (sf_ctx_t *ctx, sf_enti_t *enti);
+```
+
+### `sf_remove_light`
+
+```c
+void sf_remove_light (sf_ctx_t *ctx, sf_light_t *light);
+```
+
+### `sf_remove_cam`
+
+```c
+void sf_remove_cam (sf_ctx_t *ctx, sf_cam_t *cam);
+```
+
+### `sf_remove_emitr`
+
+```c
+void sf_remove_emitr (sf_ctx_t *ctx, sf_emitr_t *emitr);
+```
+
+### `sf_remove_obj`
+
+```c
+void sf_remove_obj (sf_ctx_t *ctx, sf_obj_t *obj);
+```
+
+### `sf_remove_tex`
+
+```c
+void sf_remove_tex (sf_ctx_t *ctx, sf_tex_t *tex);
+```
+
+### `sf_remove_sprite`
+
+```c
+void sf_remove_sprite (sf_ctx_t *ctx, sf_sprite_2_t *sprite);
+```
+
+### `sf_remove_skybox`
+
+```c
+void sf_remove_skybox (sf_ctx_t *ctx, sf_skybox_t *skybox);
+```
+
+### `sf_set_fog`
+
+Configure and enable fog.  Toggle off/on with ctx->fog_enabled = false/true.
+
+```c
+void sf_set_fog (sf_ctx_t *ctx, sf_fvec3_t color, float start, float end);
+```
+
 ### `sf_set_active_skybox`
+
+Set or clear the active skybox rendered behind all scene geometry. Pass NULL to disable.
 
 ```c
 void sf_set_active_skybox (sf_ctx_t *ctx, sf_skybox_t *skybox);
@@ -712,6 +826,8 @@ void sf_enti_set_tex (sf_ctx_t *ctx, const char *entiname, const char *texname);
 ```
 
 ### `sf_obj_recenter`
+
+Shift all vertices so the bounding-sphere center is at the origin.
 
 ```c
 void sf_obj_recenter (sf_obj_t *obj);
@@ -884,9 +1000,15 @@ Recursively unlink a frame and all its children, returning them to the free list
 void sf_remove_frame (sf_ctx_t *ctx, sf_frame_t *f);
 ```
 
-### `_sf_set_up_frames`
+### `sf_frame_walk`
 
-Create the three convention roots (DEFAULT, NED, FLU) with their fixed basis matrices.
+Depth-first walk of the frame tree, calling cb for each frame.
+
+```c
+void sf_frame_walk (sf_ctx_t *ctx, sf_frame_t *root, sf_frame_walk_fn cb, void *userdata);
+```
+
+### `_sf_set_up_frames`
 
 ```c
 void _sf_set_up_frames (sf_ctx_t *ctx);
@@ -904,6 +1026,12 @@ void _sf_calc_frame_tree (sf_frame_t *f, sf_fmat4_t parent_global_M, bool force_
 
 ```c
 void _sf_write_frame_ref (FILE *f, sf_frame_t *fr, sf_ctx_t *ctx);
+```
+
+### `_sf_frame_walk_r`
+
+```c
+bool _sf_frame_walk_r (sf_frame_t *f, int depth, sf_frame_walk_fn cb, void *ud);
 ```
 
 
@@ -1060,6 +1188,8 @@ void sf_ui_update (sf_ctx_t *ctx, sf_ui_t *ui);
 
 ### `sf_ui_render`
 
+Draw all visible UI elements; dropdown popups are drawn last to appear on top.
+
 ```c
 void sf_ui_render (sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_t *ui);
 ```
@@ -1072,15 +1202,11 @@ void sf_ui_render_popups (sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_t *ui);
 
 ### `sf_ui_clear`
 
-Remove all UI elements and clear focus without freeing arena memory.
-
 ```c
 void sf_ui_clear (sf_ctx_t *ctx);
 ```
 
 ### `sf_ui_get_by_name`
-
-Look up a UI element by its name string; returns NULL if not found.
 
 ```c
 sf_ui_lmn_t* sf_ui_get_by_name (sf_ui_t *ui, const char *name);
@@ -1093,6 +1219,8 @@ void sf_ui_set_callback (sf_ui_lmn_t *el, sf_ui_cb cb, void *userdata);
 ```
 
 ### `sf_ui_add_button`
+
+Add a clickable button with a label and optional click callback.
 
 ```c
 sf_ui_lmn_t* sf_ui_add_button (sf_ctx_t *ctx, const char *text, sf_ivec2_t v0, sf_ivec2_t v1, sf_ui_cb cb, void *userdata);
@@ -1144,6 +1272,108 @@ sf_ui_lmn_t* sf_ui_add_panel (sf_ctx_t *ctx, const char *title, sf_ivec2_t v0, s
 
 ```c
 sf_ui_lmn_t* sf_ui_add_image (sf_ctx_t *ctx, sf_tex_t *tex, sf_ivec2_t v0, sf_ivec2_t v1, bool keyed);
+```
+
+### `sf_ui_lay_begin_panel`
+
+```c
+sf_ui_lmn_t* sf_ui_lay_begin_panel(sf_ctx_t *ctx, const char *title, int x, int y, int width, uint32_t flags);
+```
+
+### `sf_ui_lay_end_panel`
+
+```c
+int sf_ui_lay_end_panel (sf_ctx_t *ctx);
+```
+
+### `sf_ui_lay_row`
+
+Advance to next row and set the row height.
+
+```c
+void sf_ui_lay_row (sf_ctx_t *ctx, int height);
+```
+
+### `sf_ui_lay_col`
+
+```c
+void sf_ui_lay_col (sf_ctx_t *ctx, int n, const float *widths);
+```
+
+### `sf_ui_lay_indent`
+
+Push horizontal indent.
+
+```c
+void sf_ui_lay_indent (sf_ctx_t *ctx, int px);
+```
+
+### `sf_ui_lay_unindent`
+
+```c
+void sf_ui_lay_unindent (sf_ctx_t *ctx);
+```
+
+### `sf_ui_lay_spacing`
+
+```c
+void sf_ui_lay_spacing (sf_ctx_t *ctx, int px);
+```
+
+### `sf_ui_lay_separator`
+
+```c
+void sf_ui_lay_separator (sf_ctx_t *ctx);
+```
+
+### `sf_ui_lay_button`
+
+Add a button at the current layout cursor position.
+
+```c
+sf_ui_lmn_t* sf_ui_lay_button (sf_ctx_t *ctx, const char *text, sf_ui_cb cb, void *ud);
+```
+
+### `sf_ui_lay_label`
+
+```c
+sf_ui_lmn_t* sf_ui_lay_label (sf_ctx_t *ctx, const char *text, sf_pkd_clr_t color);
+```
+
+### `sf_ui_lay_drag_float`
+
+```c
+sf_ui_lmn_t* sf_ui_lay_drag_float (sf_ctx_t *ctx, float *target, float step, sf_ui_cb cb, void *ud);
+```
+
+### `sf_ui_lay_checkbox`
+
+```c
+sf_ui_lmn_t* sf_ui_lay_checkbox (sf_ctx_t *ctx, const char *text, bool init, sf_ui_cb cb, void *ud);
+```
+
+### `sf_ui_lay_text_input`
+
+```c
+sf_ui_lmn_t* sf_ui_lay_text_input (sf_ctx_t *ctx, char *buf, int buflen, sf_ui_cb cb, void *ud);
+```
+
+### `sf_ui_lay_slider`
+
+```c
+sf_ui_lmn_t* sf_ui_lay_slider (sf_ctx_t *ctx, float min_val, float max_val, float init, sf_ui_cb cb, void *ud);
+```
+
+### `sf_ui_lay_dropdown`
+
+```c
+sf_ui_lmn_t* sf_ui_lay_dropdown (sf_ctx_t *ctx, const char **items, int n, int *selected, sf_ui_cb cb, void *ud);
+```
+
+### `sf_ui_lay_image`
+
+```c
+sf_ui_lmn_t* sf_ui_lay_image (sf_ctx_t *ctx, sf_tex_t *tex, bool keyed);
 ```
 
 ### `sf_save_sfui`
@@ -1225,15 +1455,21 @@ void _sf_draw_drpdwn_popup(sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_lmn_t *el);
 
 ### `_sf_draw_panel`
 
-Render a panel: dark background, header bar, and collapse indicator prefix.
+Render a panel: dark background, header bar, and indicators based on flags.
 
 ```c
 void _sf_draw_panel (sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_lmn_t *el);
 ```
 
-### `_sf_update_text_input`
+### `_sf_draw_image`
 
-Handle focus, character insertion/deletion, and caret movement for a text-input element.
+Scale-blit el->image.tex into el's rect; skip alpha=0 pixels when keyed.
+
+```c
+void _sf_draw_image (sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_lmn_t *el);
+```
+
+### `_sf_update_text_input`
 
 ```c
 void _sf_update_text_input(sf_ctx_t *ctx, sf_ui_lmn_t *el, bool m_pressed);
@@ -1287,10 +1523,20 @@ const char* _sf_ui_type_str (sf_ui_type_t t);
 int _sf_ui_type_from_str (const char *s);
 ```
 
+### `_sf_ui_lay_next_cell`
+
+Serialize all UI elements to a .sfui text file for later loading.
+
+```c
+void _sf_ui_lay_next_cell (sf_ctx_t *ctx, sf_ivec2_t *out_v0, sf_ivec2_t *out_v1);
+```
+
 
 ## Mesh Authoring
 
 ### `sf_obj_create_empty`
+
+Allocate a named mesh with pre-reserved vertex, UV, and face arrays in the arena.
 
 ```c
 sf_obj_t* sf_obj_create_empty (sf_ctx_t *ctx, const char *objname, int max_v, int max_vt, int max_f);
@@ -1374,6 +1620,18 @@ bool sf_obj_save_obj (sf_ctx_t *ctx, sf_obj_t *obj, const char *filepath);
 float sf_noise_fbm (float x, float z, int oct, float lac, float gain, uint32_t seed);
 ```
 
+### `sf_noise_3d`
+
+```c
+float sf_noise_3d (float x, float y, float z, uint32_t seed);
+```
+
+### `sf_noise_fbm_3d`
+
+```c
+float sf_noise_fbm_3d (float x, float y, float z, int oct, float persist, uint32_t seed);
+```
+
 
 ## Picking / Raycasting
 
@@ -1389,7 +1647,15 @@ sf_ray_t sf_ray_from_screen (sf_ctx_t *ctx, sf_cam_t *cam, int sx, int sy);
 sf_enti_t* sf_raycast_entities (sf_ctx_t *ctx, sf_ray_t ray, float *out_t);
 ```
 
+### `sf_raycast_all`
+
+```c
+int sf_raycast_all (sf_ctx_t *ctx, sf_ray_t ray, sf_hit_t *out_hits, int max_hits);
+```
+
 ### `sf_ray_triangle`
+
+Möller–Trumbore ray-triangle intersection; writes hit distance to out_t if non-NULL.
 
 ```c
 bool sf_ray_triangle (sf_ray_t r, sf_fvec3_t a, sf_fvec3_t b, sf_fvec3_t c, float *out_t);
@@ -1407,6 +1673,105 @@ Slab-method AABB intersection; writes nearest hit distance to out_t if non-NULL.
 
 ```c
 bool sf_ray_aabb (sf_ray_t r, sf_fvec3_t bmin, sf_fvec3_t bmax, float *out_t);
+```
+
+
+## SF_GIZMO_FUNCTIONS
+
+### `sf_gizmo_update`
+
+```c
+void sf_gizmo_update (sf_ctx_t *ctx, sf_cam_t *cam, sf_gizmo_t *gz, sf_frame_t *frame);
+```
+
+### `sf_gizmo_hit`
+
+```c
+sf_gz_axis_t sf_gizmo_hit (sf_gizmo_t *gz, int mx, int my);
+```
+
+### `sf_gizmo_begin_drag`
+
+Snapshot drag start state for the given axis.
+
+```c
+void sf_gizmo_begin_drag (sf_gizmo_t *gz, sf_gz_axis_t axis, int mx, int my);
+```
+
+### `sf_gizmo_drag`
+
+```c
+sf_fvec3_t sf_gizmo_drag (sf_gizmo_t *gz, int mx, int my);
+```
+
+### `sf_gizmo_end_drag`
+
+Reset drag state.
+
+```c
+void sf_gizmo_end_drag (sf_gizmo_t *gz);
+```
+
+### `sf_gizmo_render`
+
+Draw gizmo axis lines, arrowhead boxes, and labels.
+
+```c
+void sf_gizmo_render (sf_ctx_t *ctx, sf_cam_t *cam, sf_gizmo_t *gz);
+```
+
+
+## SF_ORBIT_CAM_FUNCTIONS
+
+### `sf_orbit_cam_apply`
+
+Compute camera position from orbit parameters and orient toward target.
+
+```c
+void sf_orbit_cam_apply (sf_ctx_t *ctx, sf_cam_t *cam, sf_orbit_cam_t *orbit);
+```
+
+### `sf_orbit_cam_rotate`
+
+```c
+void sf_orbit_cam_rotate (sf_orbit_cam_t *orbit, float dyaw, float dpitch);
+```
+
+### `sf_orbit_cam_zoom`
+
+```c
+void sf_orbit_cam_zoom (sf_orbit_cam_t *orbit, float delta);
+```
+
+### `sf_orbit_cam_pan`
+
+```c
+void sf_orbit_cam_pan (sf_orbit_cam_t *orbit, sf_cam_t *cam, float dx, float dy);
+```
+
+### `sf_orbit_cam_focus`
+
+Snap the orbit target to a world-space position.
+
+```c
+void sf_orbit_cam_focus (sf_orbit_cam_t *orbit, sf_fvec3_t pos);
+```
+
+
+## SF_THUMBNAIL_FUNCTIONS
+
+### `sf_render_thumb_enti`
+
+Render an entity to a newly allocated texture of size x size pixels.
+
+```c
+sf_tex_t* sf_render_thumb_enti (sf_ctx_t *ctx, sf_enti_t *enti, int size);
+```
+
+### `sf_render_thumb_sff`
+
+```c
+sf_tex_t* sf_render_thumb_sff (sf_ctx_t *ctx, const char *sff_path, int size);
 ```
 
 
@@ -1589,10 +1954,30 @@ float _sf_hash_2d (int x, int z, uint32_t seed);
 
 ### `_sf_smooth_noise`
 
-Unproject a screen pixel into a world-space ray origin and direction.
+3D value noise using trilinear interpolation of hashed lattice points.
 
 ```c
 float _sf_smooth_noise (float x, float z, uint32_t seed);
+```
+
+### `_sf_hash_3d`
+
+```c
+float _sf_hash_3d (int x, int y, int z, uint32_t seed);
+```
+
+### `_sf_smooth_noise_3d`
+
+Unproject a screen pixel into a world-space ray origin and direction.
+
+```c
+float _sf_smooth_noise_3d (float x, float y, float z, uint32_t seed);
+```
+
+### `_sf_seg_dist2`
+
+```c
+float _sf_seg_dist2 (sf_ivec2_t a, sf_ivec2_t b, int px, int py, float *out_t);
 ```
 
 
