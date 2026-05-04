@@ -1,4 +1,5 @@
 /* sf_studio - interactive editor for saffron files */
+#include <SDL_video.h>
 #define SAFFRON_IMPLEMENTATION
 #include "saffron.h"
 #undef SAFFRON_IMPLEMENTATION
@@ -408,10 +409,11 @@ static void scan_textures_dir(const char *root) {
 
 /* Resolve path via realpath(); return false if path was already visited */
 static bool _scan_dir_once(const char *path, char visited[][512], int *nv, int cap) {
-  char rp[512];
-  if (!realpath(path, rp)) return false; /* path doesn't exist */
-  for (int i = 0; i < *nv; i++) if (strcmp(visited[i], rp)==0) return false;
-  if (*nv < cap) { snprintf(visited[(*nv)++], 512, "%s", rp); }
+  char *rp = realpath(path, NULL); /* dynamic alloc avoids PATH_MAX vs fixed-size mismatch */
+  if (!rp) return false;
+  for (int i = 0; i < *nv; i++) if (strcmp(visited[i], rp)==0) { free(rp); return false; }
+  if (*nv < cap) snprintf(visited[(*nv)++], 512, "%s", rp);
+  free(rp);
   return true;
 }
 
@@ -4489,7 +4491,7 @@ int main(int argc, char *argv[]) {
   (void)argc; (void)argv;
 
   SDL_Init(SDL_INIT_VIDEO);
-  SDL_Window   *window   = SDL_CreateWindow("sf_studio", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, g_w, g_h, SDL_WINDOW_FULLSCREEN_DESKTOP);
+  SDL_Window   *window   = SDL_CreateWindow("sf_studio", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, g_w, g_h, SDL_WINDOW_RESIZABLE);
   SDL_Renderer *renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
   SDL_RenderSetLogicalSize(renderer, g_w, g_h);
   SDL_Texture  *texture  = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, g_w, g_h);
