@@ -44,10 +44,10 @@ extern "C" {
 #define SF_MAX_SKYBOXES               4
 #define SF_SKYBOX_SPAN                128
 #define SF_MAX_SPRITE_FRAMES          16
-#define SF_MAX_SPRITE_3DS                 8192
-#define SF_MAX_HITS                       32
-#define SF_MAX_UI_LAY_COLS                8
-#define SF_MAX_UI_LAY_STACK               16
+#define SF_MAX_SPRITE_3DS             8192
+#define SF_MAX_HITS                   32
+#define SF_MAX_UI_LAY_COLS            8
+#define SF_MAX_UI_LAY_STACK           16
 #define SF_PERF_HIST_SIZE             64
 #define SF_LOG_INDENT                 "            "
 #define SF_PI                         3.14159265359f
@@ -474,7 +474,7 @@ struct sf_ui_lmn_t_ {
     } panel;
     struct {
       sf_tex_t                     *tex;
-      bool                          keyed; /* true = treat magenta as transparent */
+      bool                          keyed;
     } image;
   };
 };
@@ -713,7 +713,7 @@ sf_ui_lmn_t*   sf_ui_add_text_input (sf_ctx_t *ctx, sf_ivec2_t v0, sf_ivec2_t v1
 sf_ui_lmn_t*   sf_ui_add_drag_float (sf_ctx_t *ctx, sf_ivec2_t v0, sf_ivec2_t v1, float *target, float step, sf_ui_cb cb, void *ud);
 sf_ui_lmn_t*   sf_ui_add_dropdown   (sf_ctx_t *ctx, sf_ivec2_t v0, sf_ivec2_t v1, const char **items, int n, int *selected, sf_ui_cb cb, void *ud);
 sf_ui_lmn_t*   sf_ui_add_panel      (sf_ctx_t *ctx, const char *title, sf_ivec2_t v0, sf_ivec2_t v1);
-sf_ui_lmn_t*   sf_ui_add_image     (sf_ctx_t *ctx, sf_tex_t *tex, sf_ivec2_t v0, sf_ivec2_t v1, bool keyed);
+sf_ui_lmn_t*   sf_ui_add_image      (sf_ctx_t *ctx, sf_tex_t *tex, sf_ivec2_t v0, sf_ivec2_t v1, bool keyed);
 sf_ui_lmn_t*   sf_ui_lay_begin_panel(sf_ctx_t *ctx, const char *title, int x, int y, int width, uint32_t flags);
 int            sf_ui_lay_end_panel  (sf_ctx_t *ctx);
 void           sf_ui_lay_row        (sf_ctx_t *ctx, int height);
