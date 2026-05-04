@@ -45,6 +45,9 @@ extern "C" {
 #define SF_SKYBOX_SPAN                128
 #define SF_MAX_SPRITE_FRAMES          16
 #define SF_MAX_SPRITE_3DS                 8192
+#define SF_MAX_HITS                       32
+#define SF_MAX_UI_LAY_COLS                8
+#define SF_MAX_UI_LAY_STACK               16
 #define SF_PERF_HIST_SIZE             64
 #define SF_LOG_INDENT                 "            "
 #define SF_PI                         3.14159265359f
@@ -267,6 +270,56 @@ typedef struct {
 typedef float (*sf_height_fn )(float x, float z, void *ud);
 
 typedef enum {
+  SF_GZ_AX_X = 0,
+  SF_GZ_AX_Y,
+  SF_GZ_AX_Z,
+  SF_GZ_AX_NONE
+} sf_gz_axis_t;
+
+typedef struct {
+  sf_frame_t                       *frame;
+  bool                              active;
+  sf_ivec2_t                        screen_origin;
+  sf_ivec2_t                        screen_tip[3];
+  float                             pixel_per_unit[3];
+  sf_gz_axis_t                      drag_axis;
+  sf_fvec3_t                        drag_start_pos;
+  int                               drag_start_mx;
+  int                               drag_start_my;
+  sf_gz_axis_t                      hover_axis;
+} sf_gizmo_t;
+
+typedef struct {
+  sf_fvec3_t                        target;
+  float                             yaw;
+  float                             pitch;
+  float                             dist;
+} sf_orbit_cam_t;
+
+typedef enum {
+  SF_HIT_NONE = 0,
+  SF_HIT_ENTI,
+  SF_HIT_LIGHT,
+  SF_HIT_CAM,
+  SF_HIT_EMITR
+} sf_hit_kind_t;
+
+typedef struct {
+  sf_hit_kind_t                     kind;
+  void                             *ptr;
+  float                             t;
+} sf_hit_t;
+
+typedef bool (*sf_frame_walk_fn)(sf_frame_t *frame, int depth, void *userdata);
+
+typedef enum {
+  SF_UI_PANEL_COLLAPSIBLE           = (1 << 0),
+  SF_UI_PANEL_CLOSABLE              = (1 << 1),
+  SF_UI_PANEL_FIXED                 = (1 << 2),
+  SF_UI_PANEL_DRAGGABLE             = (1 << 3)
+} sf_ui_panel_flags_t;
+
+typedef enum {
   SF_KEY_UNKNOWN = 0,
   SF_KEY_A, SF_KEY_B, SF_KEY_C, SF_KEY_D, SF_KEY_E, SF_KEY_F, SF_KEY_G, SF_KEY_H,
   SF_KEY_I, SF_KEY_J, SF_KEY_K, SF_KEY_L, SF_KEY_M, SF_KEY_N, SF_KEY_O, SF_KEY_P,
@@ -417,6 +470,7 @@ struct sf_ui_lmn_t_ {
       const char                   *title;
       bool                          collapsed;
       int                           content_h;
+      uint32_t                      flags;
     } panel;
     struct {
       sf_tex_t                     *tex;
@@ -425,12 +479,26 @@ struct sf_ui_lmn_t_ {
   };
 };
 
+typedef struct {
+  int                               x, y;
+  int                               width;
+  int                               row_h;
+  int                               pad;
+  int                               col_count;
+  int                               col_idx;
+  int                               col_widths[SF_MAX_UI_LAY_COLS];
+  sf_ui_lmn_t                      *panel;
+  uint32_t                          flags;
+} sf_ui_lay_t;
+
 typedef struct sf_ui_t_ {
   sf_ui_lmn_t                      *elements;
   int32_t                           count;
   sf_ui_style_t                     default_style;
   sf_ui_lmn_t                      *focused;
   sf_ui_lmn_t                      *active_panel;
+  sf_ui_lay_t                       lay_stack[SF_MAX_UI_LAY_STACK];
+  int                               lay_depth;
 } sf_ui_t;
 
 typedef enum {
@@ -538,22 +606,30 @@ bool           sf_key_pressed       (sf_ctx_t *ctx, sf_key_t key);
 
 /* SF_SCENE_FUNCTIONS */
 sf_tex_t*      sf_load_texture_bmp  (sf_ctx_t *ctx, const char *filename, const char *texname);
-sf_tex_t*      sf_get_texture_      (sf_ctx_t *ctx, const char *texname, bool should_log_failure);
 sf_sprite_2_t* sf_load_sprite       (sf_ctx_t *ctx, const char *spritename, float duration, float scale, int frame_count, ...);
-sf_sprite_2_t* sf_get_sprite_       (sf_ctx_t *ctx, const char *spritename, bool should_log_failure);
-sf_emitr_t*    sf_add_emitr         (sf_ctx_t *ctx, const char *emitrname, sf_emitr_type_t type, sf_sprite_2_t *sprite, int max_p);
-sf_emitr_t*    sf_get_emitr_        (sf_ctx_t *ctx, const char *emitrname, bool should_log_failure);
 sf_obj_t*      sf_load_obj          (sf_ctx_t *ctx, const char *filename, const char *objname);
-sf_obj_t*      sf_get_obj_          (sf_ctx_t *ctx, const char *objname, bool should_log_failure);
-sf_enti_t*     sf_add_enti          (sf_ctx_t *ctx, sf_obj_t *obj, const char *entiname);
-sf_enti_t*     sf_get_enti_         (sf_ctx_t *ctx, const char *entiname, bool should_log_failure);
-sf_cam_t*      sf_add_cam           (sf_ctx_t *ctx, const char *camname, int w, int h, float fov);
-sf_cam_t*      sf_get_cam_          (sf_ctx_t *ctx, const char *camname, bool should_log_failure);
-sf_light_t*    sf_add_light         (sf_ctx_t *ctx, const char *lightname, sf_light_type_t type, sf_fvec3_t color, float intensity);
-sf_light_t*    sf_get_light_        (sf_ctx_t *ctx, const char *lightname, bool should_log_failure);
-void           sf_set_fog           (sf_ctx_t *ctx, sf_fvec3_t color, float start, float end);
 sf_skybox_t*   sf_load_skybox       (sf_ctx_t *ctx, const char *filename, const char *skyboxname);
+sf_emitr_t*    sf_add_emitr         (sf_ctx_t *ctx, const char *emitrname, sf_emitr_type_t type, sf_sprite_2_t *sprite, int max_p);
+sf_enti_t*     sf_add_enti          (sf_ctx_t *ctx, sf_obj_t *obj, const char *entiname);
+sf_cam_t*      sf_add_cam           (sf_ctx_t *ctx, const char *camname, int w, int h, float fov);
+sf_light_t*    sf_add_light         (sf_ctx_t *ctx, const char *lightname, sf_light_type_t type, sf_fvec3_t color, float intensity);
+sf_tex_t*      sf_get_texture_      (sf_ctx_t *ctx, const char *texname, bool should_log_failure);
+sf_sprite_2_t* sf_get_sprite_       (sf_ctx_t *ctx, const char *spritename, bool should_log_failure);
+sf_emitr_t*    sf_get_emitr_        (sf_ctx_t *ctx, const char *emitrname, bool should_log_failure);
+sf_obj_t*      sf_get_obj_          (sf_ctx_t *ctx, const char *objname, bool should_log_failure);
+sf_enti_t*     sf_get_enti_         (sf_ctx_t *ctx, const char *entiname, bool should_log_failure);
+sf_cam_t*      sf_get_cam_          (sf_ctx_t *ctx, const char *camname, bool should_log_failure);
+sf_light_t*    sf_get_light_        (sf_ctx_t *ctx, const char *lightname, bool should_log_failure);
 sf_skybox_t*   sf_get_skybox_       (sf_ctx_t *ctx, const char *skyboxname, bool should_log_failure);
+void           sf_remove_enti       (sf_ctx_t *ctx, sf_enti_t *enti);
+void           sf_remove_light      (sf_ctx_t *ctx, sf_light_t *light);
+void           sf_remove_cam        (sf_ctx_t *ctx, sf_cam_t *cam);
+void           sf_remove_emitr      (sf_ctx_t *ctx, sf_emitr_t *emitr);
+void           sf_remove_obj        (sf_ctx_t *ctx, sf_obj_t *obj);
+void           sf_remove_tex        (sf_ctx_t *ctx, sf_tex_t *tex);
+void           sf_remove_sprite     (sf_ctx_t *ctx, sf_sprite_2_t *sprite);
+void           sf_remove_skybox     (sf_ctx_t *ctx, sf_skybox_t *skybox);
+void           sf_set_fog           (sf_ctx_t *ctx, sf_fvec3_t color, float start, float end);
 void           sf_set_active_skybox (sf_ctx_t *ctx, sf_skybox_t *skybox);
 void           sf_enti_set_pos      (sf_ctx_t *ctx, sf_enti_t *enti, float x, float y, float z);
 void           sf_enti_move         (sf_ctx_t *ctx, sf_enti_t *enti, float dx, float dy, float dz);
@@ -582,6 +658,10 @@ void           _sf_sff_prse_sprit   (sf_ctx_t *ctx, FILE *f, const char *name, i
 void           _sf_sff_prse_emitr   (sf_ctx_t *ctx, FILE *f, const char *name, int *emitr_count);
 void           _sf_sff_prse_sprit_3d(sf_ctx_t *ctx, FILE *f, const char *name, int *sprite_3d_count);
 
+/* SF_FILE_OPS */
+int            sf_scan_assets       (const char **dirs, int ndirs, const char *ext, char (*out_names)[256], char (*out_paths)[512], int max);
+bool           sf_copy_file         (const char *src, const char *dst);
+
 /* SF_FRAME_FUNCTIONS */
 sf_frame_t*    sf_get_root          (sf_ctx_t *ctx, sf_convention_t conv);
 sf_frame_t*    sf_add_frame         (sf_ctx_t *ctx, sf_frame_t *parent);
@@ -589,9 +669,11 @@ void           sf_update_frames     (sf_ctx_t *ctx);
 void           sf_frame_look_at     (sf_frame_t *f, sf_fvec3_t target);
 void           sf_frame_set_parent  (sf_frame_t *child, sf_frame_t *new_parent);
 void           sf_remove_frame      (sf_ctx_t *ctx, sf_frame_t *f);
+void           sf_frame_walk        (sf_ctx_t *ctx, sf_frame_t *root, sf_frame_walk_fn cb, void *userdata);
 void           _sf_set_up_frames    (sf_ctx_t *ctx);
 void           _sf_calc_frame_tree  (sf_frame_t *f, sf_fmat4_t parent_global_M, bool force_dirty);
 void           _sf_write_frame_ref  (FILE *f, sf_frame_t *fr, sf_ctx_t *ctx);
+bool           _sf_frame_walk_r     (sf_frame_t *f, int depth, sf_frame_walk_fn cb, void *ud);
 
 /* SF_DRAWING_FUNCTIONS */
 void           sf_fill              (sf_ctx_t *ctx, sf_cam_t *cam, sf_pkd_clr_t c);
@@ -632,6 +714,22 @@ sf_ui_lmn_t*   sf_ui_add_drag_float (sf_ctx_t *ctx, sf_ivec2_t v0, sf_ivec2_t v1
 sf_ui_lmn_t*   sf_ui_add_dropdown   (sf_ctx_t *ctx, sf_ivec2_t v0, sf_ivec2_t v1, const char **items, int n, int *selected, sf_ui_cb cb, void *ud);
 sf_ui_lmn_t*   sf_ui_add_panel      (sf_ctx_t *ctx, const char *title, sf_ivec2_t v0, sf_ivec2_t v1);
 sf_ui_lmn_t*   sf_ui_add_image     (sf_ctx_t *ctx, sf_tex_t *tex, sf_ivec2_t v0, sf_ivec2_t v1, bool keyed);
+sf_ui_lmn_t*   sf_ui_lay_begin_panel(sf_ctx_t *ctx, const char *title, int x, int y, int width, uint32_t flags);
+int            sf_ui_lay_end_panel  (sf_ctx_t *ctx);
+void           sf_ui_lay_row        (sf_ctx_t *ctx, int height);
+void           sf_ui_lay_col        (sf_ctx_t *ctx, int n, const float *widths);
+void           sf_ui_lay_indent     (sf_ctx_t *ctx, int px);
+void           sf_ui_lay_unindent   (sf_ctx_t *ctx);
+void           sf_ui_lay_spacing    (sf_ctx_t *ctx, int px);
+void           sf_ui_lay_separator  (sf_ctx_t *ctx);
+sf_ui_lmn_t*   sf_ui_lay_button     (sf_ctx_t *ctx, const char *text, sf_ui_cb cb, void *ud);
+sf_ui_lmn_t*   sf_ui_lay_label      (sf_ctx_t *ctx, const char *text, sf_pkd_clr_t color);
+sf_ui_lmn_t*   sf_ui_lay_drag_float (sf_ctx_t *ctx, float *target, float step, sf_ui_cb cb, void *ud);
+sf_ui_lmn_t*   sf_ui_lay_checkbox   (sf_ctx_t *ctx, const char *text, bool init, sf_ui_cb cb, void *ud);
+sf_ui_lmn_t*   sf_ui_lay_text_input (sf_ctx_t *ctx, char *buf, int buflen, sf_ui_cb cb, void *ud);
+sf_ui_lmn_t*   sf_ui_lay_slider     (sf_ctx_t *ctx, float min_val, float max_val, float init, sf_ui_cb cb, void *ud);
+sf_ui_lmn_t*   sf_ui_lay_dropdown   (sf_ctx_t *ctx, const char **items, int n, int *selected, sf_ui_cb cb, void *ud);
+sf_ui_lmn_t*   sf_ui_lay_image      (sf_ctx_t *ctx, sf_tex_t *tex, bool keyed);
 bool           sf_save_sfui         (sf_ctx_t *ctx, sf_ui_t *ui, const char *filepath);
 sf_ui_t*       sf_load_sfui         (sf_ctx_t *ctx, const char *filepath);
 sf_ui_lmn_t*   _sf_ui_find_prnt_pnl (sf_ctx_t *ctx, sf_ivec2_t v0, sf_ivec2_t v1);
@@ -654,6 +752,7 @@ void           _sf_update_checkbox  (sf_ctx_t *ctx, sf_ui_lmn_t *el, bool m_down
 void           _sf_update_slider    (sf_ctx_t *ctx, sf_ui_lmn_t *el, bool m_down, bool m_pressed, bool m_released);
 const char*    _sf_ui_type_str      (sf_ui_type_t t);
 int            _sf_ui_type_from_str (const char *s);
+void           _sf_ui_lay_next_cell (sf_ctx_t *ctx, sf_ivec2_t *out_v0, sf_ivec2_t *out_v1);
 
 /* SF_MESH_AUTHORING_FUNCTIONS */
 sf_obj_t*      sf_obj_create_empty  (sf_ctx_t *ctx, const char *objname, int max_v, int max_vt, int max_f);
@@ -669,13 +768,35 @@ sf_obj_t*      sf_obj_make_cyl      (sf_ctx_t *ctx, const char *objname, float r
 sf_obj_t*      sf_obj_make_heightmap(sf_ctx_t *ctx, const char *objname, float size_x, float size_z, int res, sf_height_fn fn, void *ud);
 bool           sf_obj_save_obj      (sf_ctx_t *ctx, sf_obj_t *obj, const char *filepath);
 float          sf_noise_fbm         (float x, float z, int oct, float lac, float gain, uint32_t seed);
+float          sf_noise_3d          (float x, float y, float z, uint32_t seed);
+float          sf_noise_fbm_3d      (float x, float y, float z, int oct, float persist, uint32_t seed);
 
 /* SF_PICKING_FUNCTIONS */
 sf_ray_t       sf_ray_from_screen   (sf_ctx_t *ctx, sf_cam_t *cam, int sx, int sy);
 sf_enti_t*     sf_raycast_entities  (sf_ctx_t *ctx, sf_ray_t ray, float *out_t);
+int            sf_raycast_all       (sf_ctx_t *ctx, sf_ray_t ray, sf_hit_t *out_hits, int max_hits);
 bool           sf_ray_triangle      (sf_ray_t r, sf_fvec3_t a, sf_fvec3_t b, sf_fvec3_t c, float *out_t);
 bool           sf_ray_plane_y       (sf_ray_t r, float y, sf_fvec3_t *out);
 bool           sf_ray_aabb          (sf_ray_t r, sf_fvec3_t bmin, sf_fvec3_t bmax, float *out_t);
+
+/* SF_GIZMO_FUNCTIONS */
+void           sf_gizmo_update      (sf_ctx_t *ctx, sf_cam_t *cam, sf_gizmo_t *gz, sf_frame_t *frame);
+sf_gz_axis_t   sf_gizmo_hit         (sf_gizmo_t *gz, int mx, int my);
+void           sf_gizmo_begin_drag  (sf_gizmo_t *gz, sf_gz_axis_t axis, int mx, int my);
+sf_fvec3_t     sf_gizmo_drag        (sf_gizmo_t *gz, int mx, int my);
+void           sf_gizmo_end_drag    (sf_gizmo_t *gz);
+void           sf_gizmo_render      (sf_ctx_t *ctx, sf_cam_t *cam, sf_gizmo_t *gz);
+
+/* SF_ORBIT_CAM_FUNCTIONS */
+void           sf_orbit_cam_apply   (sf_ctx_t *ctx, sf_cam_t *cam, sf_orbit_cam_t *orbit);
+void           sf_orbit_cam_rotate  (sf_orbit_cam_t *orbit, float dyaw, float dpitch);
+void           sf_orbit_cam_zoom    (sf_orbit_cam_t *orbit, float delta);
+void           sf_orbit_cam_pan     (sf_orbit_cam_t *orbit, sf_cam_t *cam, float dx, float dy);
+void           sf_orbit_cam_focus   (sf_orbit_cam_t *orbit, sf_fvec3_t pos);
+
+/* SF_THUMBNAIL_FUNCTIONS */
+sf_tex_t*      sf_render_thumb_enti (sf_ctx_t *ctx, sf_enti_t *enti, int size);
+sf_tex_t*      sf_render_thumb_sff  (sf_ctx_t *ctx, const char *sff_path, int size);
 
 /* SF_LOG_FUNCTIONS */
 void           sf_log_              (sf_ctx_t *ctx, sf_log_level_t level, const char* func, const char* fmt, ...);
@@ -706,6 +827,9 @@ sf_fvec3_t     _sf_intersect_near   (sf_fvec3_t v0, sf_fvec3_t v1, float near);
 sf_fvec3_t     _sf_project_vertex   (sf_ctx_t *ctx, sf_cam_t *cam, sf_fvec3_t v, sf_fmat4_t P);
 float          _sf_hash_2d          (int x, int z, uint32_t seed);
 float          _sf_smooth_noise     (float x, float z, uint32_t seed);
+float          _sf_hash_3d          (int x, int y, int z, uint32_t seed);
+float          _sf_smooth_noise_3d  (float x, float y, float z, uint32_t seed);
+float          _sf_seg_dist2        (sf_ivec2_t a, sf_ivec2_t b, int px, int py, float *out_t);
 
 /* SF_IMPLEMENTATION_HELPERS */
 bool           _sf_resolve_asset    (const char* filename, char* out_path, size_t max_len);
@@ -1174,14 +1298,6 @@ void sf_render_depth(sf_ctx_t *ctx, sf_cam_t *cam) {
     uint8_t b = (uint8_t)((kb[seg] + (kb[seg+1] - kb[seg]) * f) * 255.0f + 0.5f);
     cam->buffer[i] = 0xFF000000u | ((uint32_t)r << 16) | ((uint32_t)g << 8) | b;
   }
-}
-
-void sf_set_fog(sf_ctx_t *ctx, sf_fvec3_t color, float start, float end) {
-  /* Configure and enable fog.  Toggle off/on with ctx->fog_enabled = false/true. */
-  ctx->fog_color   = color;
-  ctx->fog_start   = start;
-  ctx->fog_end     = end;
-  ctx->fog_enabled = true;
 }
 
 void sf_render_skybox(sf_ctx_t *ctx, sf_cam_t *cam) {
@@ -2087,9 +2203,96 @@ sf_skybox_t* sf_get_skybox_(sf_ctx_t *ctx, const char *skyboxname, bool should_l
   return NULL;
 }
 
+void sf_set_fog(sf_ctx_t *ctx, sf_fvec3_t color, float start, float end) {
+  /* Configure and enable fog.  Toggle off/on with ctx->fog_enabled = false/true. */
+  ctx->fog_color   = color;
+  ctx->fog_start   = start;
+  ctx->fog_end     = end;
+  ctx->fog_enabled = true;
+}
+
 void sf_set_active_skybox(sf_ctx_t *ctx, sf_skybox_t *skybox) {
   /* Set or clear the active skybox rendered behind all scene geometry. Pass NULL to disable. */
   ctx->active_skybox = skybox;
+}
+
+void sf_remove_enti(sf_ctx_t *ctx, sf_enti_t *enti) {
+  /* Remove an entity and its frame from the scene. */
+  if (!ctx || !enti) return;
+  int idx = (int)(enti - ctx->entities);
+  if (idx < 0 || idx >= ctx->enti_count) return;
+  if (enti->frame) sf_remove_frame(ctx, enti->frame);
+  ctx->entities[idx] = ctx->entities[--ctx->enti_count];
+  SF_LOG(ctx, SF_LOG_INFO,
+              SF_LOG_INDENT "name   : %s\n"
+              SF_LOG_INDENT "remain : %d\n",
+              enti->name ? enti->name : "(null)", ctx->enti_count);
+}
+
+void sf_remove_light(sf_ctx_t *ctx, sf_light_t *light) {
+  /* Remove a light and its frame from the scene. */
+  if (!ctx || !light) return;
+  int idx = (int)(light - ctx->lights);
+  if (idx < 0 || idx >= ctx->light_count) return;
+  if (light->frame) sf_remove_frame(ctx, light->frame);
+  ctx->lights[idx] = ctx->lights[--ctx->light_count];
+}
+
+void sf_remove_cam(sf_ctx_t *ctx, sf_cam_t *cam) {
+  /* Remove a camera and its frame from the scene. */
+  if (!ctx || !cam || cam == &ctx->main_camera) return;
+  int idx = (int)(cam - ctx->cameras);
+  if (idx < 0 || idx >= ctx->cam_count) return;
+  if (cam->frame) sf_remove_frame(ctx, cam->frame);
+  ctx->cameras[idx] = ctx->cameras[--ctx->cam_count];
+}
+
+void sf_remove_emitr(sf_ctx_t *ctx, sf_emitr_t *emitr) {
+  /* Remove an emitter and its frame from the scene. */
+  if (!ctx || !emitr) return;
+  int idx = (int)(emitr - ctx->emitrs);
+  if (idx < 0 || idx >= ctx->emitr_count) return;
+  if (emitr->frame) sf_remove_frame(ctx, emitr->frame);
+  ctx->emitrs[idx] = ctx->emitrs[--ctx->emitr_count];
+}
+
+void sf_remove_obj(sf_ctx_t *ctx, sf_obj_t *obj) {
+  /* Remove a mesh object from the scene if no entities reference it. */
+  if (!ctx || !obj) return;
+  int idx = (int)(obj - ctx->objs);
+  if (idx < 0 || idx >= ctx->obj_count) return;
+  for (int i = 0; i < ctx->enti_count; i++) {
+    if (&ctx->entities[i].obj == obj) return;
+  }
+  ctx->objs[idx] = ctx->objs[--ctx->obj_count];
+}
+
+void sf_remove_tex(sf_ctx_t *ctx, sf_tex_t *tex) {
+  /* Remove a texture from the scene. */
+  if (!ctx || !tex) return;
+  int idx = (int)(tex - ctx->textures);
+  if (idx < 0 || idx >= ctx->tex_count) return;
+  ctx->textures[idx] = ctx->textures[--ctx->tex_count];
+}
+
+void sf_remove_sprite(sf_ctx_t *ctx, sf_sprite_2_t *sprite) {
+  /* Remove a sprite from the scene. */
+  if (!ctx || !sprite) return;
+  int idx = (int)(sprite - ctx->sprites);
+  if (idx < 0 || idx >= ctx->sprite_count) return;
+  ctx->sprites[idx] = ctx->sprites[--ctx->sprite_count];
+}
+
+void sf_remove_skybox(sf_ctx_t *ctx, sf_skybox_t *skybox) {
+  /* Remove a skybox from the scene; deactivates it if it was active. */
+  if (!ctx || !skybox) return;
+  int idx = (int)(skybox - ctx->skyboxes);
+  if (idx < 0 || idx >= ctx->skybox_count) return;
+  if (ctx->active_skybox == skybox) {
+    ctx->active_skybox = NULL;
+    ctx->skybox_enabled = false;
+  }
+  ctx->skyboxes[idx] = ctx->skyboxes[--ctx->skybox_count];
 }
 
 void sf_enti_set_pos(sf_ctx_t *ctx, sf_enti_t *enti, float x, float y, float z) {
@@ -2662,6 +2865,58 @@ void _sf_sff_prse_sprit_3d(sf_ctx_t *ctx, FILE *f, const char *name, int *sprite
   (*sprite_3d_count)++;
 }
 
+/* SF_FILE_OPS */
+int sf_scan_assets(const char **dirs, int ndirs, const char *ext, char (*out_names)[256], char (*out_paths)[512], int max) {
+  /* Scan directories for files matching extension, deduplicate by realpath. */
+  int count = 0;
+  char visited[64][512];
+  int visited_n = 0;
+  int ext_len = ext ? (int)strlen(ext) : 0;
+  for (int d = 0; d < ndirs && count < max; d++) {
+    if (!dirs[d]) continue;
+    char real[512];
+    if (!realpath(dirs[d], real)) continue;
+    bool dup = false;
+    for (int v = 0; v < visited_n; v++) {
+      if (strcmp(visited[v], real) == 0) { dup = true; break; }
+    }
+    if (dup) continue;
+    if (visited_n < 64) snprintf(visited[visited_n++], 512, "%s", real);
+    DIR *dir = opendir(dirs[d]);
+    if (!dir) continue;
+    struct dirent *e;
+    while ((e = readdir(dir)) != NULL && count < max) {
+      if (e->d_name[0] == '.') continue;
+      int nlen = (int)strlen(e->d_name);
+      if (ext_len > 0 && (nlen < ext_len || strcmp(e->d_name + nlen - ext_len, ext) != 0)) continue;
+      bool name_dup = false;
+      for (int i = 0; i < count; i++) {
+        if (strcmp(out_names[i], e->d_name) == 0) { name_dup = true; break; }
+      }
+      if (name_dup) continue;
+      snprintf(out_names[count], 256, "%s", e->d_name);
+      snprintf(out_paths[count], 512, "%s/%s", dirs[d], e->d_name);
+      count++;
+    }
+    closedir(dir);
+  }
+  return count;
+}
+
+bool sf_copy_file(const char *src, const char *dst) {
+  /* Buffered binary copy from src to dst. */
+  FILE *in = fopen(src, "rb");
+  if (!in) return false;
+  FILE *out = fopen(dst, "wb");
+  if (!out) { fclose(in); return false; }
+  char buf[4096];
+  size_t n;
+  while ((n = fread(buf, 1, sizeof(buf), in)) > 0) fwrite(buf, 1, n, out);
+  fclose(in);
+  fclose(out);
+  return true;
+}
+
 /* SF_FRAME_FUNCTIONS */
 sf_frame_t* sf_get_root(sf_ctx_t *ctx, sf_convention_t conv) {
   /* Return the root frame for the given coordinate convention (DEFAULT, NED, FLU). */
@@ -2757,6 +3012,23 @@ void sf_remove_frame(sf_ctx_t *ctx, sf_frame_t *f) {
   f->name = NULL;
   f->next_sibling = ctx->free_frames;
   ctx->free_frames = f;
+}
+
+void sf_frame_walk(sf_ctx_t *ctx, sf_frame_t *root, sf_frame_walk_fn cb, void *userdata) {
+  /* Depth-first walk of the frame tree, calling cb for each frame. */
+  if (!root || !cb) return;
+  (void)ctx;
+  _sf_frame_walk_r(root, 0, cb, userdata);
+}
+
+bool _sf_frame_walk_r(sf_frame_t *f, int depth, sf_frame_walk_fn cb, void *ud) {
+  /* Recursive helper for sf_frame_walk; returns false to stop traversal. */
+  if (!f) return true;
+  if (!cb(f, depth, ud)) return false;
+  for (sf_frame_t *c = f->first_child; c; c = c->next_sibling) {
+    if (!_sf_frame_walk_r(c, depth + 1, cb, ud)) return false;
+  }
+  return true;
 }
 
 void _sf_set_up_frames(sf_ctx_t *ctx) {
@@ -3551,10 +3823,8 @@ sf_ui_lmn_t* sf_ui_add_button(sf_ctx_t *ctx, const char *text, sf_ivec2_t v0, sf
   /* Add a clickable button with a label and optional click callback. */
   if (!ctx->ui || ctx->ui->count >= SF_MAX_UI_ELEMENTS) return NULL;
 
-  sf_ui_lmn_t *parent = _sf_ui_find_prnt_pnl(ctx, v0, v1);
   sf_ui_lmn_t *el = &ctx->ui->elements[ctx->ui->count++];
   memset(el, 0, sizeof(sf_ui_lmn_t));
-  el->parent_panel    = parent;
 
   el->type            = SF_UI_BUTTON;
   el->style           = ctx->ui->default_style;
@@ -3579,10 +3849,8 @@ sf_ui_lmn_t* sf_ui_add_slider(sf_ctx_t *ctx, sf_ivec2_t v0, sf_ivec2_t v1, float
   /* Add a horizontal slider with a float range and optional on-change callback. */
   if (!ctx->ui || ctx->ui->count >= SF_MAX_UI_ELEMENTS) return NULL;
 
-  sf_ui_lmn_t *parent = _sf_ui_find_prnt_pnl(ctx, v0, v1);
   sf_ui_lmn_t *el = &ctx->ui->elements[ctx->ui->count++];
   memset(el, 0, sizeof(sf_ui_lmn_t));
-  el->parent_panel    = parent;
 
   el->type            = SF_UI_SLIDER;
   el->style           = ctx->ui->default_style;
@@ -3609,10 +3877,8 @@ sf_ui_lmn_t* sf_ui_add_checkbox(sf_ctx_t *ctx, const char *text, sf_ivec2_t v0, 
   /* Add a checkbox with a label, initial checked state, and optional on-toggle callback. */
   if (!ctx->ui || ctx->ui->count >= SF_MAX_UI_ELEMENTS) return NULL;
 
-  sf_ui_lmn_t *parent = _sf_ui_find_prnt_pnl(ctx, v0, v1);
   sf_ui_lmn_t *el = &ctx->ui->elements[ctx->ui->count++];
   memset(el, 0, sizeof(sf_ui_lmn_t));
-  el->parent_panel        = parent;
 
   el->type                = SF_UI_CHECKBOX;
   el->style               = ctx->ui->default_style;
@@ -3790,10 +4056,8 @@ sf_ui_lmn_t* sf_ui_add_label(sf_ctx_t *ctx, const char *text, sf_ivec2_t pos, sf
   /* Add a non-interactive text label at a pixel position. */
   if (!ctx->ui || ctx->ui->count >= SF_MAX_UI_ELEMENTS) return NULL;
   sf_ivec2_t v1 = { pos.x + (int)strlen(text) * 8, pos.y + 8 };
-  sf_ui_lmn_t *parent = _sf_ui_find_prnt_pnl(ctx, pos, v1);
   sf_ui_lmn_t *el = &ctx->ui->elements[ctx->ui->count++];
   memset(el, 0, sizeof(sf_ui_lmn_t));
-  el->parent_panel = parent;
   el->type       = SF_UI_LABEL;
   el->style      = ctx->ui->default_style;
   el->v0         = pos;
@@ -3807,10 +4071,8 @@ sf_ui_lmn_t* sf_ui_add_label(sf_ctx_t *ctx, const char *text, sf_ivec2_t pos, sf
 sf_ui_lmn_t* sf_ui_add_text_input(sf_ctx_t *ctx, sf_ivec2_t v0, sf_ivec2_t v1, char *buf, int buflen, sf_ui_cb cb, void *ud) {
   /* Add a single-line text-input field backed by a caller-supplied buffer. */
   if (!ctx->ui || ctx->ui->count >= SF_MAX_UI_ELEMENTS) return NULL;
-  sf_ui_lmn_t *parent = _sf_ui_find_prnt_pnl(ctx, v0, v1);
   sf_ui_lmn_t *el = &ctx->ui->elements[ctx->ui->count++];
   memset(el, 0, sizeof(sf_ui_lmn_t));
-  el->parent_panel = parent;
   el->type       = SF_UI_TEXT_INPUT;
   el->style      = ctx->ui->default_style;
   el->v0         = v0;
@@ -3827,10 +4089,8 @@ sf_ui_lmn_t* sf_ui_add_text_input(sf_ctx_t *ctx, sf_ivec2_t v0, sf_ivec2_t v1, c
 sf_ui_lmn_t* sf_ui_add_drag_float(sf_ctx_t *ctx, sf_ivec2_t v0, sf_ivec2_t v1, float *target, float step, sf_ui_cb cb, void *ud) {
   /* Add a drag-to-change float widget that directly modifies a float pointer. */
   if (!ctx->ui || ctx->ui->count >= SF_MAX_UI_ELEMENTS) return NULL;
-  sf_ui_lmn_t *parent = _sf_ui_find_prnt_pnl(ctx, v0, v1);
   sf_ui_lmn_t *el = &ctx->ui->elements[ctx->ui->count++];
   memset(el, 0, sizeof(sf_ui_lmn_t));
-  el->parent_panel = parent;
   el->type       = SF_UI_DRAG_FLOAT;
   el->style      = ctx->ui->default_style;
   el->v0         = v0;
@@ -3846,10 +4106,8 @@ sf_ui_lmn_t* sf_ui_add_drag_float(sf_ctx_t *ctx, sf_ivec2_t v0, sf_ivec2_t v1, f
 sf_ui_lmn_t* sf_ui_add_dropdown(sf_ctx_t *ctx, sf_ivec2_t v0, sf_ivec2_t v1, const char **items, int n, int *selected, sf_ui_cb cb, void *ud) {
   /* Add a dropdown selector from a string array; writes the chosen index to *selected. */
   if (!ctx->ui || ctx->ui->count >= SF_MAX_UI_ELEMENTS) return NULL;
-  sf_ui_lmn_t *parent = _sf_ui_find_prnt_pnl(ctx, v0, v1);
   sf_ui_lmn_t *el = &ctx->ui->elements[ctx->ui->count++];
   memset(el, 0, sizeof(sf_ui_lmn_t));
-  el->parent_panel = parent;
   el->type       = SF_UI_DROPDOWN;
   el->style      = ctx->ui->default_style;
   el->v0         = v0;
@@ -3870,10 +4128,8 @@ sf_ui_lmn_t* sf_ui_add_dropdown(sf_ctx_t *ctx, sf_ivec2_t v0, sf_ivec2_t v1, con
 sf_ui_lmn_t* sf_ui_add_panel(sf_ctx_t *ctx, const char *title, sf_ivec2_t v0, sf_ivec2_t v1) {
   /* Add a collapsible panel container; child elements positioned within it are hidden when collapsed. */
   if (!ctx->ui || ctx->ui->count >= SF_MAX_UI_ELEMENTS) return NULL;
-  sf_ui_lmn_t *parent = _sf_ui_find_prnt_pnl(ctx, v0, v1);
   sf_ui_lmn_t *el = &ctx->ui->elements[ctx->ui->count++];
   memset(el, 0, sizeof(sf_ui_lmn_t));
-  el->parent_panel = parent;
   el->type       = SF_UI_PANEL;
   el->style      = ctx->ui->default_style;
   el->v0         = v0;
@@ -3888,16 +4144,191 @@ sf_ui_lmn_t* sf_ui_add_panel(sf_ctx_t *ctx, const char *title, sf_ivec2_t v0, sf
 sf_ui_lmn_t* sf_ui_add_image(sf_ctx_t *ctx, sf_tex_t *tex, sf_ivec2_t v0, sf_ivec2_t v1, bool keyed) {
   /* Add an image element; rendered as a scaled blit that hides when its parent panel collapses. */
   if (!ctx->ui || ctx->ui->count >= SF_MAX_UI_ELEMENTS) return NULL;
-  sf_ui_lmn_t *parent = _sf_ui_find_prnt_pnl(ctx, v0, v1);
   sf_ui_lmn_t *el = &ctx->ui->elements[ctx->ui->count++];
   memset(el, 0, sizeof(sf_ui_lmn_t));
-  el->parent_panel = parent;
   el->type       = SF_UI_IMAGE;
   el->v0         = v0;
   el->v1         = v1;
   el->is_visible = true;
   el->image.tex   = tex;
   el->image.keyed = keyed;
+  return el;
+}
+
+sf_ui_lmn_t* sf_ui_lay_begin_panel(sf_ctx_t *ctx, const char *title, int x, int y, int width, uint32_t flags) {
+  /* Begin a layout panel; pushes a layout cursor onto the stack. */
+  if (!ctx->ui || ctx->ui->lay_depth >= SF_MAX_UI_LAY_STACK) return NULL;
+  sf_ui_lmn_t *panel = sf_ui_add_panel(ctx, title, (sf_ivec2_t){x, y}, (sf_ivec2_t){x + width, y + 16});
+  if (!panel) return NULL;
+  panel->panel.flags = flags;
+  sf_ui_lay_t *lay = &ctx->ui->lay_stack[ctx->ui->lay_depth++];
+  lay->x         = x;
+  lay->y         = y + 16;
+  lay->width     = width;
+  lay->row_h     = 14;
+  lay->pad       = 4;
+  lay->col_count = 1;
+  lay->col_idx   = 0;
+  lay->col_widths[0] = width - lay->pad * 2;
+  lay->panel     = panel;
+  lay->flags     = flags;
+  return panel;
+}
+
+int sf_ui_lay_end_panel(sf_ctx_t *ctx) {
+  /* End the current layout panel; auto-sizes panel height. Returns bottom y. */
+  if (!ctx->ui || ctx->ui->lay_depth <= 0) return 0;
+  sf_ui_lay_t *lay = &ctx->ui->lay_stack[--ctx->ui->lay_depth];
+  int bottom_y = lay->y + lay->pad;
+  if (lay->panel) {
+    lay->panel->v1.y = bottom_y;
+    lay->panel->panel.content_h = bottom_y - lay->panel->v0.y - 16;
+  }
+  return bottom_y;
+}
+
+void sf_ui_lay_row(sf_ctx_t *ctx, int height) {
+  /* Advance to next row and set the row height. */
+  if (!ctx->ui || ctx->ui->lay_depth <= 0) return;
+  sf_ui_lay_t *lay = &ctx->ui->lay_stack[ctx->ui->lay_depth - 1];
+  lay->row_h = height;
+  lay->col_count = 1;
+  lay->col_idx = 0;
+  lay->col_widths[0] = lay->width - lay->pad * 2;
+}
+
+void sf_ui_lay_col(sf_ctx_t *ctx, int n, const float *widths) {
+  /* Split current row into n columns; widths are fractions or NULL for equal. */
+  if (!ctx->ui || ctx->ui->lay_depth <= 0) return;
+  sf_ui_lay_t *lay = &ctx->ui->lay_stack[ctx->ui->lay_depth - 1];
+  if (n > SF_MAX_UI_LAY_COLS) n = SF_MAX_UI_LAY_COLS;
+  lay->col_count = n;
+  lay->col_idx = 0;
+  int avail = lay->width - lay->pad * 2 - (n - 1) * 2;
+  for (int i = 0; i < n; i++) {
+    float frac = widths ? widths[i] : (1.0f / (float)n);
+    lay->col_widths[i] = (int)((float)avail * frac);
+  }
+}
+
+void sf_ui_lay_indent(sf_ctx_t *ctx, int px) {
+  /* Push horizontal indent. */
+  if (!ctx->ui || ctx->ui->lay_depth <= 0) return;
+  sf_ui_lay_t *lay = &ctx->ui->lay_stack[ctx->ui->lay_depth - 1];
+  lay->pad += px;
+}
+
+void sf_ui_lay_unindent(sf_ctx_t *ctx) {
+  /* Pop horizontal indent back to default. */
+  if (!ctx->ui || ctx->ui->lay_depth <= 0) return;
+  sf_ui_lay_t *lay = &ctx->ui->lay_stack[ctx->ui->lay_depth - 1];
+  lay->pad = 4;
+}
+
+void sf_ui_lay_spacing(sf_ctx_t *ctx, int px) {
+  /* Add vertical space. */
+  if (!ctx->ui || ctx->ui->lay_depth <= 0) return;
+  sf_ui_lay_t *lay = &ctx->ui->lay_stack[ctx->ui->lay_depth - 1];
+  lay->y += px;
+}
+
+void sf_ui_lay_separator(sf_ctx_t *ctx) {
+  /* Draw a horizontal line at the current cursor position. */
+  if (!ctx->ui || ctx->ui->lay_depth <= 0) return;
+  sf_ui_lay_t *lay = &ctx->ui->lay_stack[ctx->ui->lay_depth - 1];
+  sf_ivec2_t v0 = {lay->x + lay->pad, lay->y};
+  sf_ivec2_t v1 = {lay->x + lay->width - lay->pad, lay->y + 1};
+  sf_ui_lmn_t *el = sf_ui_add_label(ctx, "", v0, 0xFF666666);
+  if (el) { el->v0 = v0; el->v1 = v1; }
+  lay->y += 4;
+}
+
+void _sf_ui_lay_next_cell(sf_ctx_t *ctx, sf_ivec2_t *out_v0, sf_ivec2_t *out_v1) {
+  /* Compute the next cell rect and advance the layout cursor. */
+  if (!ctx->ui || ctx->ui->lay_depth <= 0) return;
+  sf_ui_lay_t *lay = &ctx->ui->lay_stack[ctx->ui->lay_depth - 1];
+  int cx = lay->x + lay->pad;
+  for (int i = 0; i < lay->col_idx; i++) cx += lay->col_widths[i] + 2;
+  out_v0->x = cx;
+  out_v0->y = lay->y;
+  out_v1->x = cx + lay->col_widths[lay->col_idx];
+  out_v1->y = lay->y + lay->row_h;
+  lay->col_idx++;
+  if (lay->col_idx >= lay->col_count) {
+    lay->y += lay->row_h + 2;
+    lay->col_idx = 0;
+  }
+}
+
+sf_ui_lmn_t* sf_ui_lay_button(sf_ctx_t *ctx, const char *text, sf_ui_cb cb, void *ud) {
+  /* Add a button at the current layout cursor position. */
+  sf_ivec2_t v0, v1;
+  _sf_ui_lay_next_cell(ctx, &v0, &v1);
+  sf_ui_lmn_t *el = sf_ui_add_button(ctx, text, v0, v1, cb, ud);
+  if (el && ctx->ui->lay_depth > 0) el->parent_panel = ctx->ui->lay_stack[ctx->ui->lay_depth - 1].panel;
+  return el;
+}
+
+sf_ui_lmn_t* sf_ui_lay_label(sf_ctx_t *ctx, const char *text, sf_pkd_clr_t color) {
+  /* Add a label at the current layout cursor position. */
+  sf_ivec2_t v0, v1;
+  _sf_ui_lay_next_cell(ctx, &v0, &v1);
+  sf_ui_lmn_t *el = sf_ui_add_label(ctx, text, v0, color);
+  if (el) { el->v1 = v1; if (ctx->ui->lay_depth > 0) el->parent_panel = ctx->ui->lay_stack[ctx->ui->lay_depth - 1].panel; }
+  return el;
+}
+
+sf_ui_lmn_t* sf_ui_lay_drag_float(sf_ctx_t *ctx, float *target, float step, sf_ui_cb cb, void *ud) {
+  /* Add a drag-float at the current layout cursor position. */
+  sf_ivec2_t v0, v1;
+  _sf_ui_lay_next_cell(ctx, &v0, &v1);
+  sf_ui_lmn_t *el = sf_ui_add_drag_float(ctx, v0, v1, target, step, cb, ud);
+  if (el && ctx->ui->lay_depth > 0) el->parent_panel = ctx->ui->lay_stack[ctx->ui->lay_depth - 1].panel;
+  return el;
+}
+
+sf_ui_lmn_t* sf_ui_lay_checkbox(sf_ctx_t *ctx, const char *text, bool init, sf_ui_cb cb, void *ud) {
+  /* Add a checkbox at the current layout cursor position. */
+  sf_ivec2_t v0, v1;
+  _sf_ui_lay_next_cell(ctx, &v0, &v1);
+  sf_ui_lmn_t *el = sf_ui_add_checkbox(ctx, text, v0, v1, init, cb, ud);
+  if (el && ctx->ui->lay_depth > 0) el->parent_panel = ctx->ui->lay_stack[ctx->ui->lay_depth - 1].panel;
+  return el;
+}
+
+sf_ui_lmn_t* sf_ui_lay_text_input(sf_ctx_t *ctx, char *buf, int buflen, sf_ui_cb cb, void *ud) {
+  /* Add a text input at the current layout cursor position. */
+  sf_ivec2_t v0, v1;
+  _sf_ui_lay_next_cell(ctx, &v0, &v1);
+  sf_ui_lmn_t *el = sf_ui_add_text_input(ctx, v0, v1, buf, buflen, cb, ud);
+  if (el && ctx->ui->lay_depth > 0) el->parent_panel = ctx->ui->lay_stack[ctx->ui->lay_depth - 1].panel;
+  return el;
+}
+
+sf_ui_lmn_t* sf_ui_lay_slider(sf_ctx_t *ctx, float min_val, float max_val, float init, sf_ui_cb cb, void *ud) {
+  /* Add a slider at the current layout cursor position. */
+  sf_ivec2_t v0, v1;
+  _sf_ui_lay_next_cell(ctx, &v0, &v1);
+  sf_ui_lmn_t *el = sf_ui_add_slider(ctx, v0, v1, min_val, max_val, init, cb, ud);
+  if (el && ctx->ui->lay_depth > 0) el->parent_panel = ctx->ui->lay_stack[ctx->ui->lay_depth - 1].panel;
+  return el;
+}
+
+sf_ui_lmn_t* sf_ui_lay_dropdown(sf_ctx_t *ctx, const char **items, int n, int *selected, sf_ui_cb cb, void *ud) {
+  /* Add a dropdown at the current layout cursor position. */
+  sf_ivec2_t v0, v1;
+  _sf_ui_lay_next_cell(ctx, &v0, &v1);
+  sf_ui_lmn_t *el = sf_ui_add_dropdown(ctx, v0, v1, items, n, selected, cb, ud);
+  if (el && ctx->ui->lay_depth > 0) el->parent_panel = ctx->ui->lay_stack[ctx->ui->lay_depth - 1].panel;
+  return el;
+}
+
+sf_ui_lmn_t* sf_ui_lay_image(sf_ctx_t *ctx, sf_tex_t *tex, bool keyed) {
+  /* Add an image at the current layout cursor position. */
+  sf_ivec2_t v0, v1;
+  _sf_ui_lay_next_cell(ctx, &v0, &v1);
+  sf_ui_lmn_t *el = sf_ui_add_image(ctx, tex, v0, v1, keyed);
+  if (el && ctx->ui->lay_depth > 0) el->parent_panel = ctx->ui->lay_stack[ctx->ui->lay_depth - 1].panel;
   return el;
 }
 
@@ -4282,16 +4713,21 @@ void _sf_draw_drpdwn_popup(sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_lmn_t *el) {
 }
 
 void _sf_draw_panel(sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_lmn_t *el) {
-  /* Render a panel: dark background, header bar, and collapse indicator prefix. */
+  /* Render a panel: dark background, header bar, and indicators based on flags. */
   if (!el->is_visible) return;
+  uint32_t flags = el->panel.flags;
   sf_ivec2_t full_v1 = el->panel.collapsed ? (sf_ivec2_t){ el->v1.x, el->v0.y + 16 } : el->v1;
   sf_rect(ctx, cam, (sf_pkd_clr_t)0xFF2A2A2A, el->v0, full_v1);
   sf_rect(ctx, cam, el->style.color_base, el->v0, (sf_ivec2_t){ el->v1.x, el->v0.y + 16 });
   if (el->panel.title) {
-    const char *pfx = el->panel.collapsed ? "+ " : "- ";
+    const char *pfx = "";
+    if (flags & SF_UI_PANEL_COLLAPSIBLE) pfx = el->panel.collapsed ? "+ " : "- ";
     char buf[96];
     snprintf(buf, sizeof(buf), "%s%s", pfx, el->panel.title);
     sf_put_text(ctx, cam, buf, (sf_ivec2_t){el->v0.x + 4, el->v0.y + 4}, el->style.color_text, 1);
+    if (flags & SF_UI_PANEL_CLOSABLE) {
+      sf_put_text(ctx, cam, "x", (sf_ivec2_t){el->v1.x - 12, el->v0.y + 4}, 0xFFAAAAAA, 1);
+    }
   }
 }
 
@@ -4386,9 +4822,14 @@ void _sf_update_dropdown(sf_ctx_t *ctx, sf_ui_lmn_t *el, bool m_pressed) {
 }
 
 void _sf_update_panel(sf_ctx_t *ctx, sf_ui_lmn_t *el, bool m_pressed) {
+  /* Handle panel header interactions based on flags. */
+  uint32_t flags = el->panel.flags;
+  if (flags & SF_UI_PANEL_FIXED) return;
   int mx = ctx->input.mouse_x, my = ctx->input.mouse_y;
   bool header = (mx >= el->v0.x && mx <= el->v1.x && my >= el->v0.y && my <= el->v0.y + 16);
-  if (header && m_pressed) el->panel.collapsed = !el->panel.collapsed;
+  if (!header || !m_pressed) return;
+  if (flags & SF_UI_PANEL_COLLAPSIBLE) el->panel.collapsed = !el->panel.collapsed;
+  if (flags & SF_UI_PANEL_CLOSABLE)    el->is_visible = false;
 }
 
 void _sf_update_checkbox(sf_ctx_t *ctx, sf_ui_lmn_t *el, bool m_down, bool m_pressed, bool m_released) {
@@ -4736,6 +5177,23 @@ float sf_noise_fbm(float x, float z, int oct, float lac, float gain, uint32_t se
   return (norm > 0.0f) ? (sum / norm) : 0.0f;
 }
 
+float sf_noise_3d(float x, float y, float z, uint32_t seed) {
+  /* 3D value noise using trilinear interpolation of hashed lattice points. */
+  return _sf_smooth_noise_3d(x, y, z, seed);
+}
+
+float sf_noise_fbm_3d(float x, float y, float z, int oct, float persist, uint32_t seed) {
+  /* 3D fractional Brownian motion: sum of 3D noise octaves. */
+  float sum = 0.0f, amp = 1.0f, freq = 1.0f, norm = 0.0f;
+  for (int i = 0; i < oct; i++) {
+    sum  += _sf_smooth_noise_3d(x * freq, y * freq, z * freq, seed + (uint32_t)i) * amp;
+    norm += amp;
+    amp  *= persist;
+    freq *= 2.0f;
+  }
+  return (norm > 0.0f) ? (sum / norm) : 0.0f;
+}
+
 /* SF_PICKING_FUNCTIONS */
 sf_ray_t sf_ray_from_screen(sf_ctx_t *ctx, sf_cam_t *cam, int sx, int sy) {
   /* Unproject a screen pixel into a world-space ray origin and direction. */
@@ -4832,6 +5290,293 @@ sf_enti_t* sf_raycast_entities(sf_ctx_t *ctx, sf_ray_t ray, float *out_t) {
   }
   if (hit && out_t) *out_t = best;
   return hit;
+}
+
+int sf_raycast_all(sf_ctx_t *ctx, sf_ray_t ray, sf_hit_t *out_hits, int max_hits) {
+  /* Test ray against all entities, lights, cameras, and emitters; return sorted hits. */
+  int count = 0;
+  float t;
+  for (int i = 0; i < ctx->enti_count && count < max_hits; i++) {
+    sf_enti_t *e = &ctx->entities[i];
+    if (!e->frame) continue;
+    sf_fmat4_t M = e->frame->global_M;
+    float best_t = 1e30f;
+    bool hit = false;
+    for (int fi = 0; fi < e->obj.f_cnt; fi++) {
+      sf_face_t *fc = &e->obj.f[fi];
+      sf_fvec3_t a = sf_fmat4_mul_vec3(M, e->obj.v[fc->idx[0].v]);
+      sf_fvec3_t b = sf_fmat4_mul_vec3(M, e->obj.v[fc->idx[1].v]);
+      sf_fvec3_t c = sf_fmat4_mul_vec3(M, e->obj.v[fc->idx[2].v]);
+      if (sf_ray_triangle(ray, a, b, c, &t) && t < best_t) { best_t = t; hit = true; }
+    }
+    if (hit) { out_hits[count++] = (sf_hit_t){SF_HIT_ENTI, e, best_t}; }
+  }
+  const float aabb_r[3] = { 0.3f, 0.4f, 0.5f };
+  for (int i = 0; i < ctx->light_count && count < max_hits; i++) {
+    sf_light_t *l = &ctx->lights[i];
+    if (!l->frame) continue;
+    sf_fvec3_t p = {l->frame->global_M.m[3][0], l->frame->global_M.m[3][1], l->frame->global_M.m[3][2]};
+    sf_fvec3_t mn = {p.x - aabb_r[0], p.y - aabb_r[0], p.z - aabb_r[0]};
+    sf_fvec3_t mx = {p.x + aabb_r[0], p.y + aabb_r[0], p.z + aabb_r[0]};
+    if (sf_ray_aabb(ray, mn, mx, &t)) { out_hits[count++] = (sf_hit_t){SF_HIT_LIGHT, l, t}; }
+  }
+  for (int i = 0; i < ctx->emitr_count && count < max_hits; i++) {
+    sf_emitr_t *em = &ctx->emitrs[i];
+    if (!em->frame) continue;
+    sf_fvec3_t p = {em->frame->global_M.m[3][0], em->frame->global_M.m[3][1], em->frame->global_M.m[3][2]};
+    sf_fvec3_t mn = {p.x - aabb_r[1], p.y - aabb_r[1], p.z - aabb_r[1]};
+    sf_fvec3_t mx = {p.x + aabb_r[1], p.y + aabb_r[1], p.z + aabb_r[1]};
+    if (sf_ray_aabb(ray, mn, mx, &t)) { out_hits[count++] = (sf_hit_t){SF_HIT_EMITR, em, t}; }
+  }
+  for (int i = 0; i < ctx->cam_count && count < max_hits; i++) {
+    sf_cam_t *c = &ctx->cameras[i];
+    if (!c->frame || c == &ctx->main_camera) continue;
+    sf_fvec3_t p = {c->frame->global_M.m[3][0], c->frame->global_M.m[3][1], c->frame->global_M.m[3][2]};
+    sf_fvec3_t mn = {p.x - aabb_r[2], p.y - aabb_r[2], p.z - aabb_r[2]};
+    sf_fvec3_t mx = {p.x + aabb_r[2], p.y + aabb_r[2], p.z + aabb_r[2]};
+    if (sf_ray_aabb(ray, mn, mx, &t)) { out_hits[count++] = (sf_hit_t){SF_HIT_CAM, c, t}; }
+  }
+  /* insertion sort by distance */
+  for (int i = 1; i < count; i++) {
+    sf_hit_t tmp = out_hits[i];
+    int j = i - 1;
+    while (j >= 0 && out_hits[j].t > tmp.t) { out_hits[j + 1] = out_hits[j]; j--; }
+    out_hits[j + 1] = tmp;
+  }
+  return count;
+}
+
+/* SF_GIZMO_FUNCTIONS */
+void sf_gizmo_update(sf_ctx_t *ctx, sf_cam_t *cam, sf_gizmo_t *gz, sf_frame_t *frame) {
+  /* Recompute screen-space projections of the gizmo axes for the given frame. */
+  gz->active = false;
+  gz->frame = frame;
+  if (!frame || !cam || !cam->frame) return;
+  sf_fvec3_t origin_w = {frame->global_M.m[3][0], frame->global_M.m[3][1], frame->global_M.m[3][2]};
+  sf_fvec3_t v = sf_fmat4_mul_vec3(cam->V, origin_w);
+  float dist = -v.z;
+  if (dist < 0.5f) dist = 0.5f;
+  float L = dist * 0.12f;
+  sf_fvec3_t tips_w[3] = {
+    {origin_w.x + L, origin_w.y,     origin_w.z    },
+    {origin_w.x,     origin_w.y + L, origin_w.z    },
+    {origin_w.x,     origin_w.y,     origin_w.z + L},
+  };
+  sf_fvec3_t vo = sf_fmat4_mul_vec3(cam->V, origin_w);
+  if (vo.z > -cam->near_plane) return;
+  sf_fvec3_t so = _sf_project_vertex(ctx, cam, vo, cam->P);
+  gz->screen_origin = (sf_ivec2_t){(int)so.x, (int)so.y};
+  for (int i = 0; i < 3; i++) {
+    sf_fvec3_t vt = sf_fmat4_mul_vec3(cam->V, tips_w[i]);
+    if (vt.z > -cam->near_plane) return;
+    sf_fvec3_t st = _sf_project_vertex(ctx, cam, vt, cam->P);
+    gz->screen_tip[i] = (sf_ivec2_t){(int)st.x, (int)st.y};
+    float dx = (float)(gz->screen_tip[i].x - gz->screen_origin.x);
+    float dy = (float)(gz->screen_tip[i].y - gz->screen_origin.y);
+    float len = sqrtf(dx * dx + dy * dy);
+    gz->pixel_per_unit[i] = len / L;
+  }
+  gz->active = true;
+}
+
+sf_gz_axis_t sf_gizmo_hit(sf_gizmo_t *gz, int mx, int my) {
+  /* Test which gizmo axis the mouse is closest to; returns SF_GZ_AX_NONE if too far. */
+  if (!gz->active) return SF_GZ_AX_NONE;
+  const float R2 = 8.0f * 8.0f;
+  float best = R2;
+  sf_gz_axis_t hit = SF_GZ_AX_NONE;
+  for (int i = 0; i < 3; i++) {
+    float d2 = _sf_seg_dist2(gz->screen_origin, gz->screen_tip[i], mx, my, NULL);
+    if (d2 < best) { best = d2; hit = (sf_gz_axis_t)i; }
+  }
+  return hit;
+}
+
+void sf_gizmo_begin_drag(sf_gizmo_t *gz, sf_gz_axis_t axis, int mx, int my) {
+  /* Snapshot drag start state for the given axis. */
+  if (!gz->frame) return;
+  gz->drag_axis = axis;
+  gz->drag_start_pos = gz->frame->pos;
+  gz->drag_start_mx = mx;
+  gz->drag_start_my = my;
+}
+
+sf_fvec3_t sf_gizmo_drag(sf_gizmo_t *gz, int mx, int my) {
+  /* Compute world-space delta from drag; caller should apply to frame->pos. */
+  sf_fvec3_t delta = {0, 0, 0};
+  if (gz->drag_axis == SF_GZ_AX_NONE || !gz->active || !gz->frame) return delta;
+  int axis = (int)gz->drag_axis;
+  float dx = (float)(gz->screen_tip[axis].x - gz->screen_origin.x);
+  float dy = (float)(gz->screen_tip[axis].y - gz->screen_origin.y);
+  float len = sqrtf(dx * dx + dy * dy);
+  if (len < 1.0f) return delta;
+  float ux = dx / len, uy = dy / len;
+  float mdx = (float)(mx - gz->drag_start_mx);
+  float mdy = (float)(my - gz->drag_start_my);
+  float projected_px = mdx * ux + mdy * uy;
+  float ppu = gz->pixel_per_unit[axis];
+  if (ppu < 0.001f) return delta;
+  float world_delta = projected_px / ppu;
+  sf_fvec3_t ax_w[3] = {{1,0,0},{0,1,0},{0,0,1}};
+  delta.x = ax_w[axis].x * world_delta;
+  delta.y = ax_w[axis].y * world_delta;
+  delta.z = ax_w[axis].z * world_delta;
+  gz->frame->pos.x = gz->drag_start_pos.x + delta.x;
+  gz->frame->pos.y = gz->drag_start_pos.y + delta.y;
+  gz->frame->pos.z = gz->drag_start_pos.z + delta.z;
+  gz->frame->is_dirty = true;
+  return delta;
+}
+
+void sf_gizmo_end_drag(sf_gizmo_t *gz) {
+  /* Reset drag state. */
+  gz->drag_axis = SF_GZ_AX_NONE;
+}
+
+void sf_gizmo_render(sf_ctx_t *ctx, sf_cam_t *cam, sf_gizmo_t *gz) {
+  /* Draw gizmo axis lines, arrowhead boxes, and labels. */
+  if (!gz->active) return;
+  sf_pkd_clr_t base[3] = {0xFFFF4040, 0xFF40FF40, 0xFF4080FF};
+  sf_pkd_clr_t hi[3]   = {0xFFFFFF80, 0xFFFFFF80, 0xFFFFFF80};
+  const char  *lbl[3]   = {"X", "Y", "Z"};
+  for (int i = 0; i < 3; i++) {
+    bool active = (gz->drag_axis == (sf_gz_axis_t)i) ||
+                  (gz->drag_axis == SF_GZ_AX_NONE && gz->hover_axis == (sf_gz_axis_t)i);
+    sf_pkd_clr_t c = active ? hi[i] : base[i];
+    sf_line(ctx, cam, c, gz->screen_origin, gz->screen_tip[i]);
+    sf_ivec2_t t = gz->screen_tip[i];
+    sf_rect(ctx, cam, c, (sf_ivec2_t){t.x - 3, t.y - 3}, (sf_ivec2_t){t.x + 3, t.y + 3});
+    sf_put_text(ctx, cam, lbl[i], (sf_ivec2_t){t.x + 5, t.y - 4}, c, 1);
+  }
+}
+
+/* SF_ORBIT_CAM_FUNCTIONS */
+void sf_orbit_cam_apply(sf_ctx_t *ctx, sf_cam_t *cam, sf_orbit_cam_t *orbit) {
+  /* Compute camera position from orbit parameters and orient toward target. */
+  float cy = cosf(orbit->yaw),   sy = sinf(orbit->yaw);
+  float cp = cosf(orbit->pitch), sp = sinf(orbit->pitch);
+  sf_fvec3_t off = {orbit->dist * cp * cy, orbit->dist * sp, orbit->dist * cp * sy};
+  sf_fvec3_t p = sf_fvec3_add(orbit->target, off);
+  sf_camera_set_pos(ctx, cam, p.x, p.y, p.z);
+  sf_camera_look_at(ctx, cam, orbit->target);
+}
+
+void sf_orbit_cam_rotate(sf_orbit_cam_t *orbit, float dyaw, float dpitch) {
+  /* Add yaw and pitch to the orbit; clamps pitch to avoid gimbal lock. */
+  orbit->yaw += dyaw;
+  orbit->pitch += dpitch;
+  if (orbit->pitch >  SF_DEG2RAD(89.0f)) orbit->pitch =  SF_DEG2RAD(89.0f);
+  if (orbit->pitch < -SF_DEG2RAD(89.0f)) orbit->pitch = -SF_DEG2RAD(89.0f);
+}
+
+void sf_orbit_cam_zoom(sf_orbit_cam_t *orbit, float delta) {
+  /* Adjust orbit distance; clamps to avoid crossing the target. */
+  orbit->dist += delta;
+  if (orbit->dist < 0.5f) orbit->dist = 0.5f;
+}
+
+void sf_orbit_cam_pan(sf_orbit_cam_t *orbit, sf_cam_t *cam, float dx, float dy) {
+  /* Move the orbit target in the camera's local right/up plane. */
+  if (!cam || !cam->frame) return;
+  sf_fmat4_t M = cam->frame->global_M;
+  sf_fvec3_t right = {M.m[0][0], M.m[0][1], M.m[0][2]};
+  sf_fvec3_t up    = {M.m[1][0], M.m[1][1], M.m[1][2]};
+  orbit->target.x += right.x * dx + up.x * dy;
+  orbit->target.y += right.y * dx + up.y * dy;
+  orbit->target.z += right.z * dx + up.z * dy;
+}
+
+void sf_orbit_cam_focus(sf_orbit_cam_t *orbit, sf_fvec3_t pos) {
+  /* Snap the orbit target to a world-space position. */
+  orbit->target = pos;
+}
+
+/* SF_THUMBNAIL_FUNCTIONS */
+sf_tex_t* sf_render_thumb_enti(sf_ctx_t *ctx, sf_enti_t *enti, int size) {
+  /* Render an entity to a newly allocated texture of size x size pixels. */
+  if (!ctx || !enti || size <= 0) return NULL;
+  sf_pkd_clr_t *px = (sf_pkd_clr_t*)malloc((size_t)(size * size) * sizeof(sf_pkd_clr_t));
+  float *zb = (float*)malloc((size_t)(size * size) * sizeof(float));
+  if (!px || !zb) { free(px); free(zb); return NULL; }
+  sf_cam_t thumb_cam;
+  memset(&thumb_cam, 0, sizeof(thumb_cam));
+  thumb_cam.w = size;
+  thumb_cam.h = size;
+  thumb_cam.buffer_size = size * size;
+  thumb_cam.buffer = px;
+  thumb_cam.z_buffer = zb;
+  thumb_cam.fov = 45.0f;
+  thumb_cam.near_plane = 0.1f;
+  thumb_cam.far_plane = 100.0f;
+  thumb_cam.P = sf_make_psp_fmat4(45.0f, 1.0f, 0.1f, 100.0f);
+  sf_frame_t cam_frame;
+  memset(&cam_frame, 0, sizeof(cam_frame));
+  cam_frame.scale = (sf_fvec3_t){1, 1, 1};
+  cam_frame.local_M = sf_make_idn_fmat4();
+  cam_frame.global_M = sf_make_idn_fmat4();
+  thumb_cam.frame = &cam_frame;
+  float r = enti->obj.bs_radius;
+  if (r < 0.01f) r = 1.0f;
+  float d = r * 2.5f;
+  sf_fvec3_t ctr = enti->obj.bs_center;
+  sf_fvec3_t eye = {ctr.x + d * 0.5f, ctr.y + d * 0.4f, ctr.z + d * 0.7f};
+  thumb_cam.V = sf_make_view_fmat4(eye, ctr, (sf_fvec3_t){0, 1, 0});
+  cam_frame.pos = eye;
+  cam_frame.global_M = sf_make_view_fmat4(eye, ctr, (sf_fvec3_t){0, 1, 0});
+  /* clear buffers */
+  for (int i = 0; i < size * size; i++) { px[i] = 0xFF303030; zb[i] = 1e30f; }
+  /* temp light */
+  sf_light_t tmp_light;
+  memset(&tmp_light, 0, sizeof(tmp_light));
+  tmp_light.type = SF_LIGHT_DIR;
+  tmp_light.color = (sf_fvec3_t){1.0f, 1.0f, 1.0f};
+  tmp_light.intensity = 1.2f;
+  sf_frame_t light_frame;
+  memset(&light_frame, 0, sizeof(light_frame));
+  light_frame.pos = (sf_fvec3_t){2.0f, 4.0f, 2.0f};
+  light_frame.scale = (sf_fvec3_t){1, 1, 1};
+  light_frame.local_M = sf_make_idn_fmat4();
+  light_frame.global_M = sf_make_idn_fmat4();
+  tmp_light.frame = &light_frame;
+  /* temporarily inject light */
+  int saved_lc = ctx->light_count;
+  sf_light_t saved_light;
+  bool had_light = (ctx->light_count > 0);
+  if (had_light) saved_light = ctx->lights[0];
+  ctx->lights[0] = tmp_light;
+  if (ctx->light_count == 0) ctx->light_count = 1;
+  sf_render_enti(ctx, &thumb_cam, enti);
+  ctx->light_count = saved_lc;
+  if (had_light) ctx->lights[0] = saved_light;
+  /* allocate result texture */
+  sf_tex_t *tex = NULL;
+  if (ctx->tex_count < SF_MAX_TEXTURES) {
+    tex = &ctx->textures[ctx->tex_count++];
+    tex->id = ctx->tex_count;
+    tex->w = size;
+    tex->h = size;
+    tex->px = px;
+    tex->name = enti->name;
+  } else {
+    free(px);
+  }
+  free(zb);
+  return tex;
+}
+
+sf_tex_t* sf_render_thumb_sff(sf_ctx_t *ctx, const char *sff_path, int size) {
+  /* Load an SFF into a temporary context and render a thumbnail. */
+  if (!ctx || !sff_path || size <= 0) return NULL;
+  sf_ctx_t tmp_ctx;
+  sf_init(&tmp_ctx, size, size);
+  sf_load_sff(&tmp_ctx, sff_path, "thumb_scene");
+  sf_tex_t *result = NULL;
+  if (tmp_ctx.enti_count > 0) {
+    /* render first entity as thumbnail */
+    result = sf_render_thumb_enti(ctx, &tmp_ctx.entities[0], size);
+  }
+  sf_destroy(&tmp_ctx);
+  return result;
 }
 
 /* SF_LOG_FUNCTIONS */
@@ -5093,6 +5838,52 @@ float _sf_smooth_noise(float x, float z, uint32_t seed) {
   float ab = a + (b - a) * u;
   float cd = c + (d - c) * u;
   return ab + (cd - ab) * v;
+}
+
+float _sf_hash_3d(int x, int y, int z, uint32_t seed) {
+  /* Hash 3D integer coords to a float in [0,1). */
+  uint32_t h = (uint32_t)x * 374761393u + (uint32_t)y * 668265263u + (uint32_t)z * 1274126177u + seed * 362437u;
+  h = (h ^ (h >> 13)) * 1274126177u;
+  h = h ^ (h >> 16);
+  return (float)h / (float)0xFFFFFFFFu;
+}
+
+float _sf_smooth_noise_3d(float x, float y, float z, uint32_t seed) {
+  /* Trilinear interpolation of 3D hashed lattice points. */
+  int ix = (int)floorf(x), iy = (int)floorf(y), iz = (int)floorf(z);
+  float fx = x - (float)ix, fy = y - (float)iy, fz = z - (float)iz;
+  float u = fx * fx * (3.0f - 2.0f * fx);
+  float v = fy * fy * (3.0f - 2.0f * fy);
+  float w = fz * fz * (3.0f - 2.0f * fz);
+  float c000 = _sf_hash_3d(ix,     iy,     iz,     seed);
+  float c100 = _sf_hash_3d(ix + 1, iy,     iz,     seed);
+  float c010 = _sf_hash_3d(ix,     iy + 1, iz,     seed);
+  float c110 = _sf_hash_3d(ix + 1, iy + 1, iz,     seed);
+  float c001 = _sf_hash_3d(ix,     iy,     iz + 1, seed);
+  float c101 = _sf_hash_3d(ix + 1, iy,     iz + 1, seed);
+  float c011 = _sf_hash_3d(ix,     iy + 1, iz + 1, seed);
+  float c111 = _sf_hash_3d(ix + 1, iy + 1, iz + 1, seed);
+  float x00 = c000 + (c100 - c000) * u;
+  float x10 = c010 + (c110 - c010) * u;
+  float x01 = c001 + (c101 - c001) * u;
+  float x11 = c011 + (c111 - c011) * u;
+  float xy0 = x00 + (x10 - x00) * v;
+  float xy1 = x01 + (x11 - x01) * v;
+  return xy0 + (xy1 - xy0) * w;
+}
+
+float _sf_seg_dist2(sf_ivec2_t a, sf_ivec2_t b, int px, int py, float *out_t) {
+  /* Squared distance from point (px,py) to segment a..b; writes parametric t if non-NULL. */
+  float ax = (float)a.x, ay = (float)a.y;
+  float bx = (float)b.x, by = (float)b.y;
+  float dx = bx - ax, dy = by - ay;
+  float len2 = dx * dx + dy * dy;
+  float t = len2 > 0.0f ? (((float)px - ax) * dx + ((float)py - ay) * dy) / len2 : 0.0f;
+  if (t < 0.0f) t = 0.0f; else if (t > 1.0f) t = 1.0f;
+  float cx = ax + dx * t, cy = ay + dy * t;
+  float ex = (float)px - cx, ey = (float)py - cy;
+  if (out_t) *out_t = t;
+  return ex * ex + ey * ey;
 }
 
 /* SF_IMPLEMENTATION_HELPERS */
