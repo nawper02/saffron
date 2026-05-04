@@ -61,7 +61,7 @@ if(Python3_FOUND)
     set(SF_REORGANIZE_SCRIPT "${CMAKE_CURRENT_SOURCE_DIR}/sf_utils/sf_reorganize.py")
     set(SAFFRON_HEADER       "${CMAKE_CURRENT_SOURCE_DIR}/saffron.h")
 
-    add_custom_target(reorganize_saffron
+    add_custom_target(reorganize_saffron ALL
         COMMAND ${Python3_EXECUTABLE}
                 "${SF_REORGANIZE_SCRIPT}"
                 "${SAFFRON_HEADER}"

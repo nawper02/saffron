@@ -3,3 +3,4 @@ build/*
 .clangd
 sf_docs/__pycache__
 CMakeFiles
+saffron.h.bak
