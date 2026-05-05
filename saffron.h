@@ -31,7 +31,7 @@ extern "C" {
 #define SF_MAX_OBJS                   128
 #define SF_MAX_ENTITIES               1024
 #define SF_MAX_LIGHTS                 32
-#define SF_MAX_TEXTURES               64
+#define SF_MAX_TEXTURES               256
 #define SF_MAX_CAMS                   8
 #define SF_MAX_CB_PER_EVT             4
 #define SF_MAX_UI_ELEMENTS            512
@@ -661,6 +661,8 @@ void           _sf_sff_prse_sprit_3d(sf_ctx_t *ctx, FILE *f, const char *name, i
 /* SF_FILE_OPS */
 int            sf_scan_assets       (const char **dirs, int ndirs, const char *ext, char (*out_names)[256], char (*out_paths)[512], int max);
 bool           sf_copy_file         (const char *src, const char *dst);
+void           sf_gen_asset_id      (char *out, size_t outsz);
+bool           sf_gen_save_obj      (sf_ctx_t *ctx, sf_obj_t *obj, const char *gen_id);
 
 /* SF_FRAME_FUNCTIONS */
 sf_frame_t*    sf_get_root          (sf_ctx_t *ctx, sf_convention_t conv);
@@ -686,6 +688,7 @@ void           sf_tri_tex           (sf_ctx_t *ctx, sf_cam_t *cam, sf_tex_t *tex
 void           sf_put_text          (sf_ctx_t *ctx, sf_cam_t *cam, const char *text, sf_ivec2_t p, sf_pkd_clr_t c, int scale);
 void           sf_clear_depth       (sf_ctx_t *ctx, sf_cam_t *cam);
 void           sf_draw_cam_pip      (sf_ctx_t *ctx, sf_cam_t *dest, sf_cam_t *src, sf_ivec2_t pos);
+void           sf_draw_cam_pip_scaled(sf_ctx_t *ctx, sf_cam_t *dest, sf_cam_t *src, sf_ivec2_t pos, int w, int h);
 void           sf_draw_debug_ovrlay (sf_ctx_t *ctx, sf_cam_t *cam);
 void           sf_draw_debug_axes   (sf_ctx_t *ctx, sf_cam_t *cam);
 void           sf_draw_debug_frames (sf_ctx_t *ctx, sf_cam_t *cam, float axis_size);
@@ -2495,8 +2498,10 @@ bool sf_save_sff(sf_ctx_t *ctx, const char *filepath) {
     const char *path = o->src_path;
     char gen_path[512];
     if (!path) {
-      snprintf(gen_path, sizeof(gen_path), "%s/%s.obj", dir, o->name);
-      sf_obj_save_obj(ctx, o, gen_path);
+      char gen_id[64];
+      sf_gen_asset_id(gen_id, sizeof(gen_id));
+      sf_gen_save_obj(ctx, o, gen_id);
+      snprintf(gen_path, sizeof(gen_path), "sf_generated/%s/%s.obj", gen_id, o->name);
       size_t plen = strlen(gen_path) + 1;
       o->src_path = (const char*)sf_arena_alloc(ctx, &ctx->arena, plen);
       if (o->src_path) memcpy((void*)o->src_path, gen_path, plen);
@@ -2916,6 +2921,41 @@ bool sf_copy_file(const char *src, const char *dst) {
   fclose(in);
   fclose(out);
   return true;
+}
+
+void sf_gen_asset_id(char *out, size_t outsz) {
+  /* Generate a unique asset ID from the current timestamp and a counter. */
+  static int _sf_gen_counter = 0;
+  struct timespec ts;
+  clock_gettime(CLOCK_MONOTONIC, &ts);
+  snprintf(out, outsz, "gen_%lx_%04x",
+           (unsigned long)(ts.tv_sec * 1000 + ts.tv_nsec / 1000000),
+           (unsigned)(_sf_gen_counter++ & 0xFFFF));
+}
+
+bool sf_gen_save_obj(sf_ctx_t *ctx, sf_obj_t *obj, const char *gen_id) {
+  /* Save an obj to sf_generated/<gen_id>/<obj_name>.obj, creating dirs as needed. */
+  if (!ctx || !obj || !gen_id || !obj->name) return false;
+  char dir[512], path[512];
+  const char *base =
+#ifdef SF_SRC_ASSET_PATH
+    SF_SRC_ASSET_PATH;
+#else
+    SF_ASSET_PATH;
+#endif
+  snprintf(dir, sizeof(dir), "%s/sf_generated", base);
+  mkdir(dir, 0755);
+  snprintf(dir, sizeof(dir), "%s/sf_generated/%s", base, gen_id);
+  mkdir(dir, 0755);
+  snprintf(path, sizeof(path), "%s/%s.obj", dir, obj->name);
+  bool ok = sf_obj_save_obj(ctx, obj, path);
+  if (ok) {
+    SF_LOG(ctx, SF_LOG_INFO,
+                SF_LOG_INDENT "gen_id : %s\n"
+                SF_LOG_INDENT "path   : %s\n",
+                gen_id, path);
+  }
+  return ok;
 }
 
 /* SF_FRAME_FUNCTIONS */
@@ -3392,6 +3432,23 @@ void sf_draw_cam_pip(sf_ctx_t *ctx, sf_cam_t *dest, sf_cam_t *src, sf_ivec2_t po
     sf_pkd_clr_t *src_row = &src->buffer[(sy0 + y) * src->w + sx0];
     sf_pkd_clr_t *dst_row = &dest->buffer[(dy0 + y) * dest->w + dx0];
     memcpy(dst_row, src_row, copy_w * sizeof(sf_pkd_clr_t));
+  }
+}
+
+void sf_draw_cam_pip_scaled(sf_ctx_t *ctx, sf_cam_t *dest, sf_cam_t *src, sf_ivec2_t pos, int w, int h) {
+  /* Blit a secondary camera's buffer into dest at pos, scaled to w x h pixels. */
+  (void)ctx;
+  if (!dest || !dest->buffer || !src || !src->buffer || w <= 0 || h <= 0) return;
+  for (int y = 0; y < h; y++) {
+    int py = pos.y + y;
+    if (py < 0 || py >= dest->h) continue;
+    int sy = (y * src->h) / h;
+    for (int x = 0; x < w; x++) {
+      int px = pos.x + x;
+      if (px < 0 || px >= dest->w) continue;
+      int sx = (x * src->w) / w;
+      dest->buffer[py * dest->w + px] = src->buffer[sy * src->w + sx];
+    }
   }
 }
 
@@ -4142,7 +4199,7 @@ sf_ui_lmn_t* sf_ui_lay_begin_panel(sf_ctx_t *ctx, const char *title, int x, int 
   panel->panel.flags = flags;
   sf_ui_lay_t *lay = &ctx->ui->lay_stack[ctx->ui->lay_depth++];
   lay->x         = x;
-  lay->y         = y + 16;
+  lay->y         = y + 16 + 4;
   lay->width     = width;
   lay->row_h     = 14;
   lay->pad       = 4;
@@ -4173,9 +4230,10 @@ int sf_ui_lay_end_panel(sf_ctx_t *ctx) {
 }
 
 void sf_ui_lay_row(sf_ctx_t *ctx, int height) {
-  /* Advance to next row and set the row height. */
+  /* Flush any partial row, then start a new row with the given height. */
   if (!ctx->ui || ctx->ui->lay_depth <= 0) return;
   sf_ui_lay_t *lay = &ctx->ui->lay_stack[ctx->ui->lay_depth - 1];
+  if (lay->col_idx > 0) lay->y += lay->row_h + 2;
   lay->row_h = height;
   lay->col_count = 1;
   lay->col_idx = 0;
@@ -4183,9 +4241,10 @@ void sf_ui_lay_row(sf_ctx_t *ctx, int height) {
 }
 
 void sf_ui_lay_col(sf_ctx_t *ctx, int n, const float *widths) {
-  /* Split current row into n columns; widths are fractions or NULL for equal. */
+  /* Flush any partial row, then split into n columns. */
   if (!ctx->ui || ctx->ui->lay_depth <= 0) return;
   sf_ui_lay_t *lay = &ctx->ui->lay_stack[ctx->ui->lay_depth - 1];
+  if (lay->col_idx > 0) { lay->y += lay->row_h + 2; lay->col_idx = 0; }
   if (n > SF_MAX_UI_LAY_COLS) n = SF_MAX_UI_LAY_COLS;
   lay->col_count = n;
   lay->col_idx = 0;
@@ -4593,9 +4652,11 @@ void _sf_draw_checkbox(sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_lmn_t *el) {
 }
 
 void _sf_draw_label(sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_lmn_t *el) {
-  /* Render a static text label at its position with its assigned color. */
+  /* Render a static text label vertically centered in its cell. */
   if (!el->is_visible || !el->label.text) return;
-  sf_put_text(ctx, cam, el->label.text, el->v0, el->label.color, 1);
+  int h = el->v1.y - el->v0.y;
+  sf_ivec2_t p = { el->v0.x, el->v0.y + (h - 8) / 2 };
+  sf_put_text(ctx, cam, el->label.text, p, el->label.color, 1);
 }
 
 void _sf_draw_text_input(sf_ctx_t *ctx, sf_cam_t *cam, sf_ui_lmn_t *el) {
@@ -4808,8 +4869,11 @@ void _sf_update_panel(sf_ctx_t *ctx, sf_ui_lmn_t *el, bool m_pressed) {
   int mx = ctx->input.mouse_x, my = ctx->input.mouse_y;
   bool header = (mx >= el->v0.x && mx <= el->v1.x && my >= el->v0.y && my <= el->v0.y + 16);
   if (!header || !m_pressed) return;
+  if ((flags & SF_UI_PANEL_CLOSABLE) && mx >= el->v1.x - 16) {
+    el->is_visible = false;
+    return;
+  }
   if (flags & SF_UI_PANEL_COLLAPSIBLE) el->panel.collapsed = !el->panel.collapsed;
-  if (flags & SF_UI_PANEL_CLOSABLE)    el->is_visible = false;
 }
 
 void _sf_update_button(sf_ctx_t *ctx, sf_ui_lmn_t *el, bool m_down, bool m_pressed, bool m_released) {
@@ -5554,11 +5618,10 @@ sf_tex_t* sf_render_thumb_enti(sf_ctx_t *ctx, sf_enti_t *enti, int size) {
   sf_render_enti(ctx, &thumb_cam, enti);
   ctx->light_count = saved_lc;
   if (had_light) ctx->lights[0] = saved_light;
-  /* allocate result texture */
-  sf_tex_t *tex = NULL;
-  if (ctx->tex_count < SF_MAX_TEXTURES) {
-    tex = &ctx->textures[ctx->tex_count++];
-    tex->id = ctx->tex_count;
+  /* allocate standalone texture (not in ctx pool — caller owns it) */
+  sf_tex_t *tex = (sf_tex_t*)malloc(sizeof(sf_tex_t));
+  if (tex) {
+    memset(tex, 0, sizeof(sf_tex_t));
     tex->w = size;
     tex->h = size;
     tex->px = px;

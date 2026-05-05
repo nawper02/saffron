@@ -128,6 +128,7 @@
 | `sf_put_text` | Drawing |
 | `sf_clear_depth` | Drawing |
 | `sf_draw_cam_pip` | Drawing |
+| `sf_draw_cam_pip_scaled` | Drawing |
 | `sf_draw_debug_ovrlay` | Drawing |
 | `sf_draw_debug_axes` | Drawing |
 | `sf_draw_debug_frames` | Drawing |
@@ -270,7 +271,7 @@
 | `SF_MAX_OBJS` | `128` |
 | `SF_MAX_ENTITIES` | `1024` |
 | `SF_MAX_LIGHTS` | `32` |
-| `SF_MAX_TEXTURES` | `64` |
+| `SF_MAX_TEXTURES` | `256` |
 | `SF_MAX_CAMS` | `8` |
 | `SF_MAX_CB_PER_EVT` | `4` |
 | `SF_MAX_UI_ELEMENTS` | `512` |
@@ -1105,6 +1106,12 @@ void sf_clear_depth (sf_ctx_t *ctx, sf_cam_t *cam);
 void sf_draw_cam_pip (sf_ctx_t *ctx, sf_cam_t *dest, sf_cam_t *src, sf_ivec2_t pos);
 ```
 
+### `sf_draw_cam_pip_scaled`
+
+```c
+void sf_draw_cam_pip_scaled(sf_ctx_t *ctx, sf_cam_t *dest, sf_cam_t *src, sf_ivec2_t pos, int w, int h);
+```
+
 ### `sf_draw_debug_ovrlay`
 
 ```c
@@ -1288,7 +1295,7 @@ int sf_ui_lay_end_panel (sf_ctx_t *ctx);
 
 ### `sf_ui_lay_row`
 
-Advance to next row and set the row height.
+Flush any partial row, then start a new row with the given height.
 
 ```c
 void sf_ui_lay_row (sf_ctx_t *ctx, int height);

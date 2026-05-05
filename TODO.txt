@@ -1,14 +1,14 @@
-Before PR
-  Refatcor (before bugs, in case they go away/come back)
-    !!Totally refactor / simplify / clean up sf_studio implementation -- its clearly too long and messy for claude
-    blit pip cam could just use sf_draw_pip_cam
-  Bugs
-    Cant add multiple of the same sff /tree (at least the leaves dont show up)
-    Collapsing texture collapses texture and parenting
-    Collapsing parameters colapses everything below it
-    Remove random dropdown in file menu
-    FRAMES STILL NOT DELETED WHEN THING DELETED
-    manual not catching a bunch of the function doc comments
+Todo soon
+  ~nothing appears when opening a generated .sff (and its thumbnail isnt rendering)
+  ~Cant add multiple of the same sff /tree (at least the leaves dont show up)
+  ~Cant pick/select frames
+  ~rot and pos and scale, etc labels should be closer to their sliders (big gap currently, almost like labels arent centerd in their layout cell)
+  figure out how to show long filenames in asset browser
+  leaf sprite not changing until updated by slider and sprites in sf_sprites not showing in explorer
+  logger isnt logging after window opens -- maybe we should add a log panel to the gui and use the builtin logger types
+  building twice / building every time even if nothing changed?
+  manual not catching a bunch of the function doc comments
+  not all functions have doc comments
 
 TODO
   Make it so you can duplicate selection in sf_studio

@@ -22,14 +22,8 @@ static sf_cam_t    *g_sel_cam       = NULL;
 static sf_emitr_t  *g_sel_emitr     = NULL;
 static sf_frame_t  *g_sel_frame     = NULL; /* selected orphan frame (SEL_NONE) */
 static int          g_new_prim      = 0;
-static float        g_orbit_yaw     = 0.8f;
-static float        g_orbit_pitch   = 0.5f;
-static float        g_orbit_dist    = 12.0f;
-static sf_fvec3_t   g_orbit_target  = {0.0f, 0.0f, 0.0f};
+static sf_orbit_cam_t g_orbit       = {{0.0f, 0.0f, 0.0f}, 0.8f, 0.5f, 12.0f};
 static bool         g_ui_dirty      = true;
-typedef struct { const char *name; bool collapsed; } pnl_state_t;
-static pnl_state_t  g_pnl_states[32];
-static int          g_pnl_state_n   = 0;
 static bool         g_dbg_axes      = true;
 static bool         g_dbg_frames    = true;
 static bool         g_dbg_lights    = true;
@@ -47,9 +41,7 @@ typedef enum { SFGEN_TREE = 0, SFGEN_ROCK, SFGEN_BLDG } sfgen_type_t;
 static sfgen_type_t  g_sfgen_type    = SFGEN_TREE;
 static sf_ctx_t     g_sfgen_ctx;
 static bool         g_sfgen_ready   = false;
-static float        g_sfgen_yaw     = 0.5f;
-static float        g_sfgen_pitch   = 0.35f;
-static float        g_sfgen_dist    = 12.0f;
+static sf_orbit_cam_t g_sfgen_orbit = {{0.0f, 0.0f, 0.0f}, 0.5f, 0.35f, 12.0f};
 static bool         g_sfgen_drag    = false;
 static int          g_sfgen_lmx, g_sfgen_lmy;
 
@@ -132,17 +124,8 @@ static int        g_sfgen_mid_val[SFGEN_MID_SZ];
 /* Tree RNG */
 static uint32_t g_sfgen_rng;
 
-/* Translate gizmo state (SFF tab, selected entity/light/cam/emitter) */
-typedef enum { GZ_AX_NONE = -1, GZ_AX_X = 0, GZ_AX_Y = 1, GZ_AX_Z = 2 } gz_axis_t;
-static gz_axis_t  g_gz_hover          = GZ_AX_NONE;
-static gz_axis_t  g_gz_drag           = GZ_AX_NONE;
-static bool       g_gz_active         = false;           /* geometry valid this frame */
-static sf_ivec2_t g_gz_screen_origin  = {0, 0};
-static sf_ivec2_t g_gz_screen_tip[3];                    /* tip per axis */
-static float      g_gz_pixel_per_unit[3] = {0, 0, 0};    /* projected px per world unit */
-static sf_fvec3_t g_gz_drag_start_pos;                   /* pos at mouse-down */
-static int        g_gz_drag_start_mx  = 0;
-static int        g_gz_drag_start_my  = 0;
+/* Translate gizmo state */
+static sf_gizmo_t g_gizmo = {0};
 
 /* Outliner scroll state */
 static int          g_outl_scroll = 0;
@@ -193,19 +176,19 @@ static float g_ter_seed    = 1337.0f;
 
 #define STUDIO_MAX_MODELS 64
 static int          g_model_sel     = 0;
-static char         g_model_files[STUDIO_MAX_MODELS][64];
+static char         g_model_files[STUDIO_MAX_MODELS][256];
 static const char  *g_model_items[STUDIO_MAX_MODELS];
 static int          g_model_count   = 0;
 
 #define STUDIO_MAX_TEXS 128
 static int          g_tex_sel       = 0;
-static char         g_tex_files[STUDIO_MAX_TEXS][64];
+static char         g_tex_files[STUDIO_MAX_TEXS][256];
 static const char  *g_tex_items[STUDIO_MAX_TEXS];
 static int          g_tex_count     = 0;
 
 #define STUDIO_MAX_SFFS 64
 static int          g_sff_sel       = 0;
-static char         g_sff_files[STUDIO_MAX_SFFS][128];
+static char         g_sff_files[STUDIO_MAX_SFFS][256];
 static const char  *g_sff_items[STUDIO_MAX_SFFS];
 static int          g_sff_count     = 0;
 
@@ -269,6 +252,7 @@ typedef enum { PICK_APPLY_ENTI_TEX=0, PICK_APPLY_EMITR_SPRITE, PICK_APPLY_MODEL,
                PICK_APPLY_SFGEN_STONE, PICK_APPLY_SFGEN_BWALL, PICK_APPLY_SFGEN_BROOF,
                PICK_APPLY_SFGEN_BWIN, PICK_APPLY_SFGEN_BLEDGE } picker_apply_t;
 static picker_kind_t  g_picker_open      = PICK_NONE;
+static sf_ui_lmn_t   *g_picker_panel    = NULL;
 static picker_apply_t g_picker_apply     = PICK_APPLY_ENTI_TEX;
 static int            g_picker_scroll    = 0;
 static int            g_picker_rows_vis  = 1;  /* updated each frame by build_browser_panel */
@@ -330,48 +314,15 @@ static void sel_clear(void) {
   g_sel = NULL; g_sel_light = NULL; g_sel_cam = NULL; g_sel_emitr = NULL; g_sel_frame = NULL;
 }
 
-static bool _scan_dir_once(const char *path, char visited[][512], int *nv, int cap);
-
 static void scan_models(void) {
+  static char paths[STUDIO_MAX_MODELS][512];
   g_model_count = 0;
-  char vis[6][512]; int nv = 0;
-  const char *obj_paths[] = { SF_ASSET_PATH "/sf_objs", SF_SRC_ASSET_PATH "/sf_objs", NULL };
-  for (int p = 0; obj_paths[p] && g_model_count < STUDIO_MAX_MODELS; p++) {
-    if (!_scan_dir_once(obj_paths[p], vis, &nv, 6)) continue;
-    DIR *d = opendir(obj_paths[p]);
-    if (!d) continue;
-    struct dirent *e;
-    while ((e = readdir(d)) != NULL && g_model_count < STUDIO_MAX_MODELS) {
-      const char *dot = strrchr(e->d_name, '.');
-      if (!dot || strcmp(dot, ".obj") != 0) continue;
-      bool dup = false;
-      for (int i = 0; i < g_model_count; i++) if (strcmp(g_model_files[i], e->d_name) == 0) { dup = true; break; }
-      if (dup) continue;
-      snprintf(g_model_files[g_model_count], sizeof(g_model_files[0]), "%s", e->d_name);
-      g_model_items[g_model_count] = g_model_files[g_model_count];
-      g_model_count++;
-    }
-    closedir(d);
-  }
-  /* also add .sff files from sf_sff directories */
-  const char *sff_paths[] = { SF_ASSET_PATH "/sf_sff", SF_SRC_ASSET_PATH "/sf_sff", NULL };
-  for (int p = 0; sff_paths[p] && g_model_count < STUDIO_MAX_MODELS; p++) {
-    if (!_scan_dir_once(sff_paths[p], vis, &nv, 6)) continue;
-    DIR *d = opendir(sff_paths[p]);
-    if (!d) continue;
-    struct dirent *e;
-    while ((e = readdir(d)) != NULL && g_model_count < STUDIO_MAX_MODELS) {
-      const char *dot = strrchr(e->d_name, '.');
-      if (!dot || strcmp(dot, ".sff") != 0) continue;
-      bool dup = false;
-      for (int i = 0; i < g_model_count; i++) if (strcmp(g_model_files[i], e->d_name) == 0) { dup = true; break; }
-      if (dup) continue;
-      snprintf(g_model_files[g_model_count], sizeof(g_model_files[0]), "%s", e->d_name);
-      g_model_items[g_model_count] = g_model_files[g_model_count];
-      g_model_count++;
-    }
-    closedir(d);
-  }
+  const char *obj_dirs[] = { SF_ASSET_PATH "/sf_objs", SF_SRC_ASSET_PATH "/sf_objs" };
+  g_model_count = sf_scan_assets(obj_dirs, 2, ".obj", g_model_files, paths, STUDIO_MAX_MODELS);
+  const char *sff_dirs[] = { SF_ASSET_PATH "/sf_sff", SF_SRC_ASSET_PATH "/sf_sff" };
+  int n = sf_scan_assets(sff_dirs, 2, ".sff", g_model_files + g_model_count, paths + g_model_count, STUDIO_MAX_MODELS - g_model_count);
+  g_model_count += n;
+  for (int i = 0; i < g_model_count; i++) g_model_items[i] = g_model_files[i];
 }
 
 static void scan_textures_dir(const char *root) {
@@ -426,41 +377,16 @@ static void scan_textures(void) {
 }
 
 static void scan_sffs(void) {
-  g_sff_count = 0;
-  const char *paths[2] = { SF_ASSET_PATH "/sf_sff", SF_SRC_ASSET_PATH "/sf_sff" };
-  for (int p = 0; p < 2 && g_sff_count < STUDIO_MAX_SFFS; p++) {
-    DIR *d = opendir(paths[p]);
-    if (!d) continue;
-    struct dirent *e;
-    while ((e = readdir(d)) != NULL && g_sff_count < STUDIO_MAX_SFFS) {
-      const char *dot = strrchr(e->d_name, '.');
-      if (!dot || strcmp(dot, ".sff") != 0) continue;
-      bool dup = false;
-      for (int i = 0; i < g_sff_count; i++) if (strcmp(g_sff_files[i], e->d_name) == 0) { dup = true; break; }
-      if (dup) continue;
-      snprintf(g_sff_files[g_sff_count], sizeof(g_sff_files[0]), "%s", e->d_name);
-      g_sff_items[g_sff_count] = g_sff_files[g_sff_count];
-      g_sff_count++;
-    }
-    closedir(d);
-  }
+  static char paths[STUDIO_MAX_SFFS][512];
+  const char *dirs[] = { SF_ASSET_PATH "/sf_sff", SF_SRC_ASSET_PATH "/sf_sff" };
+  g_sff_count = sf_scan_assets(dirs, 2, ".sff", g_sff_files, paths, STUDIO_MAX_SFFS);
+  for (int i = 0; i < g_sff_count; i++) g_sff_items[i] = g_sff_files[i];
 }
 
-static bool _studio_copy_file(const char *src, const char *dst) {
-  FILE *in = fopen(src, "rb"); if (!in) return false;
-  FILE *out = fopen(dst, "wb"); if (!out) { fclose(in); return false; }
-  char buf[4096]; size_t n;
-  while ((n = fread(buf, 1, sizeof(buf), in)) > 0) fwrite(buf, 1, n, out);
-  fclose(in); fclose(out); return true;
-}
+/* _studio_copy_file replaced by sf_copy_file in saffron.h */
 
 static void orbit_apply(sf_cam_t *cam) {
-  float cy = cosf(g_orbit_yaw), sy = sinf(g_orbit_yaw);
-  float cp = cosf(g_orbit_pitch), sp = sinf(g_orbit_pitch);
-  sf_fvec3_t off = { g_orbit_dist * cp * cy, g_orbit_dist * sp, g_orbit_dist * cp * sy };
-  sf_fvec3_t p   = sf_fvec3_add(g_orbit_target, off);
-  sf_camera_set_pos(&sf_ctx, cam, p.x, p.y, p.z);
-  sf_camera_look_at(&sf_ctx, cam, g_orbit_target);
+  sf_orbit_cam_apply(&sf_ctx, cam, &g_orbit);
 }
 
 /* --- ENTITY SPAWNING --- */
@@ -568,7 +494,7 @@ static void spawn_primitive(int kind) {
       char ln[32];
       snprintf(ln, sizeof(ln), "light_%d", sf_ctx.light_count);
       sf_light_t *l = sf_add_light(&sf_ctx, ln, SF_LIGHT_POINT, (sf_fvec3_t){1.0f, 1.0f, 1.0f}, 2.0f);
-      if (l && l->frame) { l->frame->pos = g_orbit_target; l->frame->is_dirty = true; }
+      if (l && l->frame) { l->frame->pos = g_orbit.target; l->frame->is_dirty = true; }
       sel_clear();
       if (l) { g_sel_kind = SEL_LIGHT; g_sel_light = l; }
       g_ui_dirty = true;
@@ -630,7 +556,7 @@ static void spawn_primitive(int kind) {
   if (!o) return;
   sf_enti_t *e = sf_add_enti(&sf_ctx, o, entiname);
   if (!e) return;
-  if (e->frame) { e->frame->pos = g_orbit_target; e->frame->is_dirty = true; }
+  if (e->frame) { e->frame->pos = g_orbit.target; e->frame->is_dirty = true; }
   int idx = (int)(e - sf_ctx.entities);
   if (idx >= 0 && idx < SF_MAX_ENTITIES) g_enti_meta[idx] = tmp;
   sel_clear();
@@ -672,7 +598,7 @@ static void spawn_emitter(void) {
   em->spread        = 0.2f;
   em->volume_size   = (sf_fvec3_t){5.0f, 5.0f, 5.0f};
   if (em->frame) {
-    em->frame->pos = g_orbit_target;
+    em->frame->pos = g_orbit.target;
     em->frame->is_dirty = true;
   }
   sel_clear();
@@ -687,7 +613,7 @@ static void spawn_camera(void) {
   sf_cam_t *c = sf_add_cam(&sf_ctx, name, 240, 160, 60.0f);
   if (!c) return;
   if (c->frame) {
-    c->frame->pos = g_orbit_target;
+    c->frame->pos = g_orbit.target;
     c->frame->is_dirty = true;
   }
   sel_clear();
@@ -704,41 +630,53 @@ static void cb_spawn_kind(sf_ctx_t *ctx, void *ud) {
 }
 
 /* Compact sprite_3ds, removing any whose frame is in the subtree rooted at df */
-static bool _frame_in_subtree(sf_frame_t *f, sf_frame_t *root) {
-  for (sf_frame_t *p = f; p; p = p->parent) if (p == root) return true;
+/* Collect frames in a subtree via sf_frame_walk */
+typedef struct { sf_frame_t *frames[SF_MAX_FRAMES]; int count; } _subtree_set_t;
+static bool _subtree_collect_cb(sf_frame_t *f, int depth, void *ud) {
+  (void)depth;
+  _subtree_set_t *s = (_subtree_set_t*)ud;
+  if (s->count < SF_MAX_FRAMES) s->frames[s->count++] = f;
+  return true;
+}
+static bool _frame_in_set(sf_frame_t *f, _subtree_set_t *s) {
+  for (int i = 0; i < s->count; i++) if (s->frames[i] == f) return true;
   return false;
 }
 static void _purge_sprites_under(sf_frame_t *df) {
+  _subtree_set_t set = {.count = 0};
+  sf_frame_walk(&sf_ctx, df, _subtree_collect_cb, &set);
   int nc = 0;
   for (int bi = 0; bi < sf_ctx.sprite_3d_count; bi++)
-    if (!sf_ctx.sprite_3ds[bi].frame || !_frame_in_subtree(sf_ctx.sprite_3ds[bi].frame, df))
+    if (!sf_ctx.sprite_3ds[bi].frame || !_frame_in_set(sf_ctx.sprite_3ds[bi].frame, &set))
       sf_ctx.sprite_3ds[nc++] = sf_ctx.sprite_3ds[bi];
   sf_ctx.sprite_3d_count = nc;
 }
-/* Remove entities/lights/cameras/emitters whose frame is a child of parent_frame */
+/* Remove entities/lights/cameras/emitters whose frame is in the subtree of df */
 static void _purge_entities_under(sf_frame_t *df) {
+  _subtree_set_t set = {.count = 0};
+  sf_frame_walk(&sf_ctx, df, _subtree_collect_cb, &set);
   for (int i = sf_ctx.enti_count - 1; i >= 0; i--) {
     if (sf_ctx.entities[i].frame && sf_ctx.entities[i].frame != df &&
-        _frame_in_subtree(sf_ctx.entities[i].frame, df)) {
+        _frame_in_set(sf_ctx.entities[i].frame, &set)) {
       for (int j = i; j < sf_ctx.enti_count - 1; j++) sf_ctx.entities[j] = sf_ctx.entities[j + 1];
       if (sf_ctx.enti_count - 1 < SF_MAX_ENTITIES) memset(&g_enti_meta[sf_ctx.enti_count - 1], 0, sizeof(prim_meta_t));
       sf_ctx.enti_count--;
     }
   }
   for (int i = sf_ctx.light_count - 1; i >= 0; i--) {
-    if (sf_ctx.lights[i].frame && _frame_in_subtree(sf_ctx.lights[i].frame, df)) {
+    if (sf_ctx.lights[i].frame && _frame_in_set(sf_ctx.lights[i].frame, &set)) {
       for (int j = i; j < sf_ctx.light_count - 1; j++) sf_ctx.lights[j] = sf_ctx.lights[j + 1];
       sf_ctx.light_count--;
     }
   }
   for (int i = sf_ctx.cam_count - 1; i >= 0; i--) {
-    if (sf_ctx.cameras[i].frame && _frame_in_subtree(sf_ctx.cameras[i].frame, df)) {
+    if (sf_ctx.cameras[i].frame && _frame_in_set(sf_ctx.cameras[i].frame, &set)) {
       for (int j = i; j < sf_ctx.cam_count - 1; j++) sf_ctx.cameras[j] = sf_ctx.cameras[j + 1];
       sf_ctx.cam_count--;
     }
   }
   for (int i = sf_ctx.emitr_count - 1; i >= 0; i--) {
-    if (sf_ctx.emitrs[i].frame && _frame_in_subtree(sf_ctx.emitrs[i].frame, df)) {
+    if (sf_ctx.emitrs[i].frame && _frame_in_set(sf_ctx.emitrs[i].frame, &set)) {
       for (int j = i; j < sf_ctx.emitr_count - 1; j++) sf_ctx.emitrs[j] = sf_ctx.emitrs[j + 1];
       sf_ctx.emitr_count--;
     }
@@ -768,23 +706,11 @@ static void cb_delete(sf_ctx_t *ctx, void *ud) {
     }
     sf_ctx.enti_count--;
   } else if (g_sel_kind == SEL_LIGHT && g_sel_light) {
-    int idx = (int)(g_sel_light - sf_ctx.lights);
-    if (idx < 0 || idx >= sf_ctx.light_count) return;
-    sf_remove_frame(&sf_ctx, g_sel_light->frame);
-    for (int i = idx; i < sf_ctx.light_count - 1; i++) sf_ctx.lights[i] = sf_ctx.lights[i + 1];
-    sf_ctx.light_count--;
+    sf_remove_light(&sf_ctx, g_sel_light);
   } else if (g_sel_kind == SEL_CAM && g_sel_cam) {
-    int idx = (int)(g_sel_cam - sf_ctx.cameras);
-    if (idx < 0 || idx >= sf_ctx.cam_count) return;
-    sf_remove_frame(&sf_ctx, g_sel_cam->frame);
-    for (int i = idx; i < sf_ctx.cam_count - 1; i++) sf_ctx.cameras[i] = sf_ctx.cameras[i + 1];
-    sf_ctx.cam_count--;
+    sf_remove_cam(&sf_ctx, g_sel_cam);
   } else if (g_sel_kind == SEL_EMITR && g_sel_emitr) {
-    int idx = (int)(g_sel_emitr - sf_ctx.emitrs);
-    if (idx < 0 || idx >= sf_ctx.emitr_count) return;
-    sf_remove_frame(&sf_ctx, g_sel_emitr->frame);
-    for (int i = idx; i < sf_ctx.emitr_count - 1; i++) sf_ctx.emitrs[i] = sf_ctx.emitrs[i + 1];
-    sf_ctx.emitr_count--;
+    sf_remove_emitr(&sf_ctx, g_sel_emitr);
   } else if (g_sel_kind == SEL_NONE && g_sel_frame) {
     sf_remove_frame(&sf_ctx, g_sel_frame);
   } else {
@@ -811,52 +737,15 @@ static void cb_load_sff(sf_ctx_t *ctx, void *ud) {
   g_ui_dirty = true;
 }
 
-static void cb_load_sff_from_list(sf_ctx_t *ctx, void *ud) {
-  (void)ctx; (void)ud;
-  if (g_sff_sel < 0 || g_sff_sel >= g_sff_count) return;
-  /* build full path using the same two search dirs */
-  const char *dirs[2] = { SF_ASSET_PATH "/sf_sff", SF_SRC_ASSET_PATH "/sf_sff" };
-  for (int p = 0; p < 2; p++) {
-    char path[512];
-    snprintf(path, sizeof(path), "%s/%s", dirs[p], g_sff_files[g_sff_sel]);
-    FILE *f = fopen(path, "r");
-    if (!f) continue;
-    fclose(f);
-    snprintf(g_save_path, sizeof(g_save_path), "%s", path);
-    g_sel = NULL; g_sel_light = NULL; g_sel_cam = NULL; g_sel_emitr = NULL;
-    g_sel_kind = SEL_NONE;
-    sf_load_sff(&sf_ctx, g_save_path, "Loaded World");
-    g_ui_dirty = true;
-    return;
-  }
-  SF_LOG(&sf_ctx, SF_LOG_WARN, "SFF not found: %s\n", g_sff_files[g_sff_sel]);
-}
-
 static void cb_install_sff(sf_ctx_t *ctx, void *ud) {
   (void)ctx; (void)ud;
-  /* Save first */
   sf_save_sff(&sf_ctx, g_save_path);
   const char *sl = strrchr(g_save_path, '/');
   const char *fname = sl ? sl + 1 : g_save_path;
   char dst[512];
   snprintf(dst, sizeof(dst), SF_SRC_ASSET_PATH "/sf_sff/%s", fname);
-  if (_studio_copy_file(g_save_path, dst)) {
+  if (sf_copy_file(g_save_path, dst)) {
     SF_LOG(&sf_ctx, SF_LOG_INFO, "Installed %s\n", dst);
-    /* Also copy any generated mesh (.obj) files that were saved next to the .sff */
-    char sff_src_dir[512] = ".";
-    { const char *s = strrchr(g_save_path, '/'); if (s) snprintf(sff_src_dir, (size_t)(s - g_save_path + 1), "%s", g_save_path); }
-    for (int i = 0; i < sf_ctx.obj_count; i++) {
-      const char *sp = sf_ctx.objs[i].src_path;
-      if (!sp) continue;
-      char obj_dir[512] = ".";
-      const char *os = strrchr(sp, '/');
-      if (os) snprintf(obj_dir, (size_t)(os - sp + 1), "%s", sp);
-      if (strcmp(obj_dir, sff_src_dir) != 0) continue;
-      const char *obj_bn = os ? os + 1 : sp;
-      char obj_dst[512];
-      snprintf(obj_dst, sizeof(obj_dst), SF_SRC_ASSET_PATH "/sf_sff/%s", obj_bn);
-      _studio_copy_file(sp, obj_dst);
-    }
     scan_sffs();
     g_ui_dirty = true;
   } else {
@@ -1225,10 +1114,6 @@ static const char *picker_item_label(int i) {
 
 /* Thumbnail cam + buffers for model preview rendering */
 #define THUMB_CAM_SZ BROWSER_THUMB_SZ
-static sf_pkd_clr_t s_thumb_buf[THUMB_CAM_SZ * THUMB_CAM_SZ];
-static float        s_thumb_zbuf[THUMB_CAM_SZ * THUMB_CAM_SZ];
-static sf_cam_t     s_thumb_cam;
-static bool         s_thumb_cam_init = false;
 
 /* Load a BMP from a full path into a malloc'd sf_tex_t (caller frees px + struct).
    Returns NULL on failure. */
@@ -1272,82 +1157,19 @@ static sf_tex_t *picker_load_bmp_private(const char *path) {
 /* Render a loaded sf_obj_t into the thumb cam and store a malloc'd sf_tex_t at g_picker_thumbs[i].
    tex_path is the full path to a BMP to apply, or NULL for untextured. */
 static void picker_render_obj_thumb(sf_obj_t *obj, const char *tex_path, int i) {
-  /* Optionally load a temporary texture for this render */
-  sf_tex_t *tmp_tex = tex_path ? picker_load_bmp_private(tex_path) : NULL;
-
   /* Set up a temporary entity on the stack */
   sf_enti_t tmp_enti; memset(&tmp_enti, 0, sizeof(tmp_enti));
   sf_frame_t tmp_frame; memset(&tmp_frame, 0, sizeof(tmp_frame));
   tmp_frame.global_M = sf_make_idn_fmat4();
   tmp_enti.frame = &tmp_frame;
   tmp_enti.obj = *obj;
-  tmp_enti.tex = tmp_tex;
-
-  /* Aim camera at the bounding sphere from upper-right-front */
-  sf_fvec3_t ctr = obj->bs_center;
-  float r = (obj->bs_radius > 0.001f) ? obj->bs_radius : 1.0f;
-  float dist = r * 3.0f;
-  sf_fvec3_t eye = { ctr.x + dist*0.55f, ctr.y + dist*0.5f, ctr.z + dist*0.85f };
-  s_thumb_cam.V          = sf_make_view_fmat4(eye, ctr, (sf_fvec3_t){0,1,0});
-  s_thumb_cam.P          = sf_make_psp_fmat4(45.0f, 1.0f, r*0.05f, dist*5.0f);
-  s_thumb_cam.near_plane = r*0.05f;
-  s_thumb_cam.far_plane  = dist*5.0f;
-  s_thumb_cam.is_proj_dirty = false;
-
-  /* Clear buffer */
-  sf_pkd_clr_t bg = 0xFF303030;
-  for (int k = 0; k < THUMB_CAM_SZ*THUMB_CAM_SZ; k++) {
-    s_thumb_buf[k]  = bg;
-    s_thumb_zbuf[k] = 1e30f;
-  }
-
-  /* Inject a temporary key light */
-  sf_frame_t tmp_lf; memset(&tmp_lf, 0, sizeof(tmp_lf));
-  tmp_lf.global_M = sf_make_idn_fmat4();
-  tmp_lf.global_M.m[2][0] = 0.577f;
-  tmp_lf.global_M.m[2][1] = 0.577f;
-  tmp_lf.global_M.m[2][2] = 0.577f;
-  int saved_lc = sf_ctx.light_count;
-  if (sf_ctx.light_count < SF_MAX_LIGHTS) {
-    sf_light_t *tl = &sf_ctx.lights[sf_ctx.light_count++];
-    memset(tl, 0, sizeof(sf_light_t));
-    tl->frame     = &tmp_lf;
-    tl->type      = SF_LIGHT_DIR;
-    tl->color     = (sf_fvec3_t){1.0f, 0.98f, 0.94f};
-    tl->intensity = 0.9f;
-  }
-
-  sf_render_enti(&sf_ctx, &s_thumb_cam, &tmp_enti);
-  sf_ctx.light_count = saved_lc;
-
-  /* Release the temporary render texture */
-  if (tmp_tex) { free((void*)tmp_tex->px); free(tmp_tex); }
-
-  /* Copy buffer into a malloc'd sf_tex_t */
-  sf_tex_t *t = (sf_tex_t*)malloc(sizeof(sf_tex_t));
-  sf_pkd_clr_t *px = (sf_pkd_clr_t*)malloc(THUMB_CAM_SZ * THUMB_CAM_SZ * sizeof(sf_pkd_clr_t));
-  if (!t || !px) { free(t); free(px); return; }
-  memcpy(px, s_thumb_buf, THUMB_CAM_SZ * THUMB_CAM_SZ * sizeof(sf_pkd_clr_t));
-  memset(t, 0, sizeof(sf_tex_t));
-  t->px = px; t->w = THUMB_CAM_SZ; t->h = THUMB_CAM_SZ;
-  t->w_mask = THUMB_CAM_SZ - 1; t->h_mask = THUMB_CAM_SZ - 1;
+  tmp_enti.tex = tex_path ? picker_load_bmp_private(tex_path) : NULL;
+  sf_tex_t *t = sf_render_thumb_enti(&sf_ctx, &tmp_enti, THUMB_CAM_SZ);
+  if (tmp_enti.tex) { free((void*)tmp_enti.tex->px); free(tmp_enti.tex); }
   g_picker_thumbs[i] = t;
 }
 
 static void picker_render_model_thumb(int i) {
-  if (!s_thumb_cam_init) {
-    memset(&s_thumb_cam, 0, sizeof(s_thumb_cam));
-    s_thumb_cam.w           = THUMB_CAM_SZ;
-    s_thumb_cam.h           = THUMB_CAM_SZ;
-    s_thumb_cam.buffer_size = THUMB_CAM_SZ * THUMB_CAM_SZ;
-    s_thumb_cam.buffer      = s_thumb_buf;
-    s_thumb_cam.z_buffer    = s_thumb_zbuf;
-    s_thumb_cam.fov         = 45.0f;
-    s_thumb_cam.near_plane  = 0.01f;
-    s_thumb_cam.far_plane   = 1000.0f;
-    s_thumb_cam_init = true;
-  }
-
   const char *fname = g_model_files[i];
   const char *dot = strrchr(fname, '.');
   if (!dot) return;
@@ -1367,62 +1189,9 @@ static void picker_render_model_thumb(int i) {
     const char *tex_full = _sf_resolve_asset(tex_bmp, tex_path, sizeof(tex_path)) ? tex_path : NULL;
     picker_render_obj_thumb(obj, tex_full, i);
   } else if (strcmp(dot, ".sff") == 0) {
-    /* Parse .sff to find the first entity's mesh and texture */
     char r_path[512];
     if (!_sf_resolve_asset(fname, r_path, sizeof(r_path))) return;
-    FILE *sf = fopen(r_path, "r");
-    if (!sf) return;
-
-    /* Maps: mesh_name -> obj_file, tex_name -> bmp_file */
-    char mesh_names[8][64]={}, mesh_files[8][128]={};
-    char tex_names [8][64]={}, tex_files [8][128]={};
-    int  n_mesh=0, n_tex=0;
-    char ent_obj_file[128]={}, ent_tex_file[128]={};
-    bool in_entity=false;
-    char line[512], cur_mesh_name[64]={};
-
-    while (fgets(line, sizeof(line), sf)) {
-      char a[128], b[128];
-      if (!in_entity) {
-        if (sscanf(line," mesh %63s \"%127[^\"]\"",a,b)==2 && n_mesh<8) {
-          snprintf(mesh_names[n_mesh],64,"%s",a);
-          snprintf(mesh_files[n_mesh],128,"%s",b); n_mesh++;
-        } else if (sscanf(line," texture %63s \"%127[^\"]\"",a,b)==2 && n_tex<8) {
-          snprintf(tex_names[n_tex],64,"%s",a);
-          snprintf(tex_files[n_tex],128,"%s",b); n_tex++;
-        } else if (strstr(line,"entity ") && strstr(line,"{")) {
-          in_entity=true; cur_mesh_name[0]=0;
-        }
-      } else {
-        if (strstr(line,"}")) { in_entity=false; }
-        else if (sscanf(line," mesh=%63s",a)==1 && !ent_obj_file[0]) {
-          for(int m=0;m<n_mesh;m++) if(strcmp(mesh_names[m],a)==0){
-            snprintf(ent_obj_file,128,"%s",mesh_files[m]); break;}
-        } else if (sscanf(line," texture=%63s",a)==1 && !ent_tex_file[0]) {
-          for(int t=0;t<n_tex;t++) if(strcmp(tex_names[t],a)==0){
-            snprintf(ent_tex_file,128,"%s",tex_files[t]); break;}
-        }
-        if (ent_obj_file[0] && ent_tex_file[0]) break; /* got both */
-      }
-    }
-    fclose(sf);
-    if (!ent_obj_file[0]) return;
-
-    char obj_path[512];
-    if (!_sf_resolve_asset(ent_obj_file, obj_path, sizeof(obj_path))) return;
-    const char *odot = strrchr(ent_obj_file, '.');
-    char nm[64];
-    int stem = odot ? (int)(odot - ent_obj_file) : (int)strlen(ent_obj_file);
-    if (stem > 60) stem = 60;
-    snprintf(nm, sizeof(nm), "%.*s", stem, ent_obj_file);
-    sf_obj_t *obj = sf_get_obj_(&sf_ctx, nm, false);
-    if (!obj) obj = sf_load_obj(&sf_ctx, obj_path, nm);
-    if (!obj) return;
-
-    char tex_path[512];
-    const char *tex_full = (ent_tex_file[0] && _sf_resolve_asset(ent_tex_file, tex_path, sizeof(tex_path)))
-                           ? tex_path : NULL;
-    picker_render_obj_thumb(obj, tex_full, i);
+    g_picker_thumbs[i] = sf_render_thumb_sff(&sf_ctx, r_path, THUMB_CAM_SZ);
   }
 }
 
@@ -1851,30 +1620,6 @@ static void sfgen_generate_tree(void) {
 /* ============================================================
    SFGEN — rock noise
    ============================================================ */
-static uint32_t sfgen_h3(int32_t x, int32_t y, int32_t z, uint32_t s) {
-    uint32_t h = s ^ ((uint32_t)x*374761393u) ^ ((uint32_t)y*668265263u) ^ ((uint32_t)z*3266489917u);
-    h = (h^(h>>13))*1274126177u; return h^(h>>16);
-}
-static float sfgen_smooth(float t) { return t*t*(3.f-2.f*t); }
-static float sfgen_vn3(float x, float y, float z, uint32_t seed) {
-    int32_t ix=(int32_t)floorf(x), iy=(int32_t)floorf(y), iz=(int32_t)floorf(z);
-    float fx=x-ix, fy=y-iy, fz=z-iz;
-    float ux=sfgen_smooth(fx), uy=sfgen_smooth(fy), uz=sfgen_smooth(fz);
-#define SFGEN_NV(a,b,c) ((float)(sfgen_h3(ix+(a),iy+(b),iz+(c),seed)&0xFFFFu)/65535.f)
-    return (1.f-uz)*((1.f-uy)*((1.f-ux)*SFGEN_NV(0,0,0)+ux*SFGEN_NV(1,0,0))
-                        +uy  *((1.f-ux)*SFGEN_NV(0,1,0)+ux*SFGEN_NV(1,1,0)))
-              +uz  *((1.f-uy)*((1.f-ux)*SFGEN_NV(0,0,1)+ux*SFGEN_NV(1,0,1))
-                        +uy  *((1.f-ux)*SFGEN_NV(0,1,1)+ux*SFGEN_NV(1,1,1)));
-#undef SFGEN_NV
-}
-static float sfgen_fn3(float x, float y, float z, uint32_t seed, int oct, float persist) {
-    float val=0.f, amp=1.f, max_amp=0.f, freq=1.f;
-    for (int i=0; i<oct; i++) {
-        val+=sfgen_vn3(x*freq,y*freq,z*freq,seed+(uint32_t)i)*amp;
-        max_amp+=amp; amp*=persist; freq*=2.f;
-    }
-    return val/max_amp;
-}
 
 /* ============================================================
    SFGEN — icosphere for rock
@@ -1951,8 +1696,8 @@ static void sfgen_generate_rock(void) {
     static sf_fvec3_t dv[SFGEN_ISO_V];
     for (int i=0;i<g_sfgen_iso_vi;i++){
         sf_fvec3_t v=g_sfgen_iso_v[i];
-        float n  = sfgen_fn3(v.x*cr_freq,          v.y*cr_freq,          v.z*cr_freq,          seed,     oct, cr_persist);
-        float nb = sfgen_fn3(v.x*cr_freq*4.f+7.3f, v.y*cr_freq*4.f+3.1f, v.z*cr_freq*4.f+5.7f, seed+99u, 2,   0.5f);
+        float n  = sf_noise_fbm_3d(v.x*cr_freq,          v.y*cr_freq,          v.z*cr_freq,          oct, cr_persist, seed);
+        float nb = sf_noise_fbm_3d(v.x*cr_freq*4.f+7.3f, v.y*cr_freq*4.f+3.1f, v.z*cr_freq*4.f+5.7f, 2,   0.5f,       seed+99u);
         float disp=(n*2.f-1.f)*cr_rough + (nb*2.f-1.f)*cr_rough*cr_bump*0.25f;
         float r=1.f+disp;
         v.x*=r; v.y*=r; v.z*=r;
@@ -2625,14 +2370,6 @@ static void sfgen_load_sprites(void) {
 /* ============================================================
    SFGEN — copy file helper
    ============================================================ */
-static bool sfgen_copy_file(const char *src, const char *dst) {
-    FILE *in=fopen(src,"rb"); if(!in) return false;
-    FILE *out=fopen(dst,"wb"); if(!out){fclose(in);return false;}
-    char buf[4096]; size_t n;
-    while ((n=fread(buf,1,sizeof(buf),in))>0) fwrite(buf,1,n,out);
-    fclose(in); fclose(out); return true;
-}
-
 /* ============================================================
    SFGEN — save / install
    ============================================================ */
@@ -2641,13 +2378,12 @@ static void sfgen_save_tree(void) {
     const char *sl=strrchr(g_sfgen_tree_sff,'/');
     char base[256]; snprintf(base,sizeof(base),"%s",sl?sl+1:g_sfgen_tree_sff);
     char *bdot=strrchr(base,'.'); if(bdot)*bdot='\0';
-    char dir[512]; snprintf(dir,sizeof(dir),"%s",g_sfgen_tree_sff);
-    char *sl2=strrchr(dir,'/'); if(sl2)*sl2='\0'; else{dir[0]='.';dir[1]='\0';}
-    char obj_path[512]; snprintf(obj_path,sizeof(obj_path),"%s/%s.obj",dir,base);
-    sf_obj_save_obj(&g_sfgen_ctx,g_ct_obj,obj_path);
+    char gen_id[64];
+    sf_gen_asset_id(gen_id, sizeof(gen_id));
+    sf_gen_save_obj(&g_sfgen_ctx, g_ct_obj, gen_id);
     FILE *f=fopen(g_sfgen_tree_sff,"w");
     if (!f) return;
-    fprintf(f,"# Saffron Tree Model\n\nmesh %s \"%s.obj\"\n\n",g_ct_obj->name,base);
+    fprintf(f,"# Saffron Tree Model\n\nmesh %s \"%s.obj\"\n\n",g_ct_obj->name,g_ct_obj->name);
     if (g_ct_enti&&g_ct_enti->tex&&g_ct_enti->tex->name)
         fprintf(f,"texture %s \"%s.bmp\"\n",g_ct_enti->tex->name,g_ct_enti->tex->name);
     if (g_sfgen_leaf&&g_sfgen_leaf->frame_count>0&&g_sfgen_leaf->frames[0]&&g_sfgen_leaf->frames[0]->name)
@@ -2684,13 +2420,12 @@ static void sfgen_save_rock(void) {
     const char *sl=strrchr(g_sfgen_rock_sff,'/');
     char base[256]; snprintf(base,sizeof(base),"%s",sl?sl+1:g_sfgen_rock_sff);
     char *bdot=strrchr(base,'.'); if(bdot)*bdot='\0';
-    char dir[512]; snprintf(dir,sizeof(dir),"%s",g_sfgen_rock_sff);
-    char *sl2=strrchr(dir,'/'); if(sl2)*sl2='\0'; else{dir[0]='.';dir[1]='\0';}
-    char obj_path[512]; snprintf(obj_path,sizeof(obj_path),"%s/%s.obj",dir,base);
-    sf_obj_save_obj(&g_sfgen_ctx,g_cr_obj,obj_path);
+    char gen_id[64];
+    sf_gen_asset_id(gen_id, sizeof(gen_id));
+    sf_gen_save_obj(&g_sfgen_ctx, g_cr_obj, gen_id);
     FILE *f=fopen(g_sfgen_rock_sff,"w");
     if (!f) return;
-    fprintf(f,"# Saffron Rock Model\n\nmesh %s \"%s.obj\"\n\n",g_cr_obj->name,base);
+    fprintf(f,"# Saffron Rock Model\n\nmesh %s \"%s.obj\"\n\n",g_cr_obj->name,g_cr_obj->name);
     if (g_cr_enti&&g_cr_enti->tex&&g_cr_enti->tex->name)
         fprintf(f,"texture %s \"%s.bmp\"\n\n",g_cr_enti->tex->name,g_cr_enti->tex->name);
     if (g_cr_enti&&g_cr_enti->name){
@@ -2707,39 +2442,19 @@ static void sfgen_save_rock(void) {
 static void sfgen_install_tree(void) {
     sfgen_save_tree();
     const char *sl=strrchr(g_sfgen_tree_sff,'/');
-    char base[256]; snprintf(base,sizeof(base),"%s",sl?sl+1:g_sfgen_tree_sff);
-    char *bdot=strrchr(base,'.'); if(bdot)*bdot='\0';
-    char dir[512]; snprintf(dir,sizeof(dir),"%s",g_sfgen_tree_sff);
-    char *sl2=strrchr(dir,'/'); if(sl2)*sl2='\0'; else{dir[0]='.';dir[1]='\0';}
-    char obj_src[512],sff_src[512]; snprintf(obj_src,sizeof(obj_src),"%s/%s.obj",dir,base); snprintf(sff_src,sizeof(sff_src),"%s",g_sfgen_tree_sff);
-    char obj_dst[512],sff_dst[512]; snprintf(obj_dst,sizeof(obj_dst),SF_SRC_ASSET_PATH"/sf_objs/%s.obj",base); snprintf(sff_dst,sizeof(sff_dst),SF_SRC_ASSET_PATH"/sf_sff/%s.sff",base);
-    sfgen_copy_file(obj_src,obj_dst); sfgen_copy_file(sff_src,sff_dst);
-    /* Copy bark texture */
-    if (g_ct_enti&&g_ct_enti->tex&&g_ct_enti->tex->name) {
-        char tex_src[512],tex_dst[512];
-        snprintf(tex_src,sizeof(tex_src),"%s/%s.bmp",dir,g_ct_enti->tex->name);
-        snprintf(tex_dst,sizeof(tex_dst),SF_SRC_ASSET_PATH"/sf_textures/%s.bmp",g_ct_enti->tex->name);
-        sfgen_copy_file(tex_src,tex_dst);
-    }
+    const char *fname = sl ? sl + 1 : g_sfgen_tree_sff;
+    char sff_dst[512];
+    snprintf(sff_dst, sizeof(sff_dst), SF_SRC_ASSET_PATH "/sf_sff/%s", fname);
+    sf_copy_file(g_sfgen_tree_sff, sff_dst);
 }
 
 static void sfgen_install_rock(void) {
     sfgen_save_rock();
     const char *sl=strrchr(g_sfgen_rock_sff,'/');
-    char base[256]; snprintf(base,sizeof(base),"%s",sl?sl+1:g_sfgen_rock_sff);
-    char *bdot=strrchr(base,'.'); if(bdot)*bdot='\0';
-    char dir[512]; snprintf(dir,sizeof(dir),"%s",g_sfgen_rock_sff);
-    char *sl2=strrchr(dir,'/'); if(sl2)*sl2='\0'; else{dir[0]='.';dir[1]='\0';}
-    char obj_src[512],sff_src[512]; snprintf(obj_src,sizeof(obj_src),"%s/%s.obj",dir,base); snprintf(sff_src,sizeof(sff_src),"%s",g_sfgen_rock_sff);
-    char obj_dst[512],sff_dst[512]; snprintf(obj_dst,sizeof(obj_dst),SF_SRC_ASSET_PATH"/sf_objs/%s.obj",base); snprintf(sff_dst,sizeof(sff_dst),SF_SRC_ASSET_PATH"/sf_sff/%s.sff",base);
-    sfgen_copy_file(obj_src,obj_dst); sfgen_copy_file(sff_src,sff_dst);
-    /* Copy stone texture */
-    if (g_cr_enti&&g_cr_enti->tex&&g_cr_enti->tex->name) {
-        char tex_src[512],tex_dst[512];
-        snprintf(tex_src,sizeof(tex_src),"%s/%s.bmp",dir,g_cr_enti->tex->name);
-        snprintf(tex_dst,sizeof(tex_dst),SF_SRC_ASSET_PATH"/sf_textures/%s.bmp",g_cr_enti->tex->name);
-        sfgen_copy_file(tex_src,tex_dst);
-    }
+    const char *fname = sl ? sl + 1 : g_sfgen_rock_sff;
+    char sff_dst[512];
+    snprintf(sff_dst, sizeof(sff_dst), SF_SRC_ASSET_PATH "/sf_sff/%s", fname);
+    sf_copy_file(g_sfgen_rock_sff, sff_dst);
 }
 
 /* Helper: write a texture declaration if this entity has a texture not yet written */
@@ -2769,10 +2484,10 @@ static void sfgen_save_building(void) {
     const char *sl=strrchr(g_sfgen_bldg_sff,'/');
     char base[256]; snprintf(base,sizeof(base),"%s",sl?sl+1:g_sfgen_bldg_sff);
     char *bdot=strrchr(base,'.'); if(bdot)*bdot='\0';
-    char dir[512]; snprintf(dir,sizeof(dir),"%s",g_sfgen_bldg_sff);
-    char *sl2=strrchr(dir,'/'); if(sl2)*sl2='\0'; else{dir[0]='.';dir[1]='\0';}
+    char gen_id[64];
+    sf_gen_asset_id(gen_id, sizeof(gen_id));
 
-    /* Save each non-empty obj file */
+    /* Save each non-empty obj file to sf_generated */
     struct { sf_obj_t *o; const char *suf; } parts[] = {
         {g_ck_obj,       ""},
         {g_ck_obj_win,   "_win"},
@@ -2781,8 +2496,7 @@ static void sfgen_save_building(void) {
     };
     for (int i = 0; i < 4; i++) {
         if (!parts[i].o || parts[i].o->f_cnt == 0) continue;
-        char path[512]; snprintf(path, sizeof(path), "%s/%s%s.obj", dir, base, parts[i].suf);
-        sf_obj_save_obj(&g_sfgen_ctx, parts[i].o, path);
+        sf_gen_save_obj(&g_sfgen_ctx, parts[i].o, gen_id);
     }
 
     FILE *f=fopen(g_sfgen_bldg_sff,"w");
@@ -2790,7 +2504,7 @@ static void sfgen_save_building(void) {
     fprintf(f,"# Saffron Building Model\n\n");
     for (int i = 0; i < 4; i++) {
         if (!parts[i].o || parts[i].o->f_cnt == 0) continue;
-        fprintf(f,"mesh %s%s \"%s%s.obj\"\n", base, parts[i].suf, base, parts[i].suf);
+        fprintf(f,"mesh %s \"%s.obj\"\n", parts[i].o->name, parts[i].o->name);
     }
     fprintf(f,"\n");
 
@@ -2820,56 +2534,21 @@ static void sfgen_save_building(void) {
 static void sfgen_install_building(void) {
     sfgen_save_building();
     const char *sl=strrchr(g_sfgen_bldg_sff,'/');
-    char base[256]; snprintf(base,sizeof(base),"%s",sl?sl+1:g_sfgen_bldg_sff);
-    char *bdot=strrchr(base,'.'); if(bdot)*bdot='\0';
-    char dir[512]; snprintf(dir,sizeof(dir),"%s",g_sfgen_bldg_sff);
-    char *sl2=strrchr(dir,'/'); if(sl2)*sl2='\0'; else{dir[0]='.';dir[1]='\0';}
-
-    /* Copy SFF */
-    char sff_dst[512]; snprintf(sff_dst,sizeof(sff_dst),SF_SRC_ASSET_PATH"/sf_sff/%s.sff",base);
-    sfgen_copy_file(g_sfgen_bldg_sff, sff_dst);
-
-    /* Copy each obj part */
-    const char *sufs[] = {"", "_win", "_ledge", "_roof"};
-    sf_obj_t *objs[] = {g_ck_obj, g_ck_obj_win, g_ck_obj_ledge, g_ck_obj_roof};
-    for (int i = 0; i < 4; i++) {
-        if (!objs[i] || objs[i]->f_cnt == 0) continue;
-        char src[512], dst[512];
-        snprintf(src, sizeof(src), "%s/%s%s.obj", dir, base, sufs[i]);
-        snprintf(dst, sizeof(dst), SF_SRC_ASSET_PATH"/sf_objs/%s%s.obj", base, sufs[i]);
-        sfgen_copy_file(src, dst);
-    }
-
-    /* Copy textures (deduplicated) */
-    sf_enti_t *ents[] = {g_ck_enti, g_ck_enti_win, g_ck_enti_ledge, g_ck_enti_roof};
-    const char *copied[8]; int n_copied = 0;
-    for (int i = 0; i < 4; i++) {
-        if (!ents[i] || !ents[i]->tex || !ents[i]->tex->name) continue;
-        const char *tn = ents[i]->tex->name;
-        bool already = false;
-        for (int j = 0; j < n_copied; j++) if (strcmp(copied[j], tn)==0) { already=true; break; }
-        if (already) continue;
-        copied[n_copied++] = tn;
-        char src[512], dst[512];
-        snprintf(src, sizeof(src), "%s/%s.bmp", dir, tn);
-        snprintf(dst, sizeof(dst), SF_SRC_ASSET_PATH"/sf_textures/%s.bmp", tn);
-        sfgen_copy_file(src, dst);
-    }
+    const char *fname = sl ? sl + 1 : g_sfgen_bldg_sff;
+    char sff_dst[512];
+    snprintf(sff_dst, sizeof(sff_dst), SF_SRC_ASSET_PATH "/sf_sff/%s", fname);
+    sf_copy_file(g_sfgen_bldg_sff, sff_dst);
 }
 
 /* ============================================================
    SFGEN — update craft camera
    ============================================================ */
 static void sfgen_update_camera(void) {
-    float cx = (float)(g_w - 220) * 0.5f + 220.f;   /* center of open area */
-    float x = sinf(g_sfgen_yaw)*cosf(g_sfgen_pitch)*g_sfgen_dist;
     float bldg_h = (g_sfgen_type==SFGEN_BLDG) ? bk_floors * bk_floor_h * 0.5f : 0.f;
-    float y_val = sinf(g_sfgen_pitch)*g_sfgen_dist + (g_sfgen_type==SFGEN_TREE ? 3.5f : bldg_h);
-    float z = cosf(g_sfgen_yaw)*cosf(g_sfgen_pitch)*g_sfgen_dist;
-    sf_camera_set_pos(&g_sfgen_ctx, &g_sfgen_ctx.main_camera, x, y_val, z);
-    sf_fvec3_t look_at = {0.f, g_sfgen_type==SFGEN_TREE ? 3.5f : bldg_h, 0.f};
-    sf_camera_look_at(&g_sfgen_ctx, &g_sfgen_ctx.main_camera, look_at);
+    g_sfgen_orbit.target = (sf_fvec3_t){0.f, g_sfgen_type==SFGEN_TREE ? 3.5f : bldg_h, 0.f};
+    sf_orbit_cam_apply(&g_sfgen_ctx, &g_sfgen_ctx.main_camera, &g_sfgen_orbit);
     /* Shift projection center to open area */
+    float cx = (float)(g_w - 220) * 0.5f + 220.f;
     g_sfgen_ctx.main_camera.P = sf_make_psp_fmat4(60.f, (float)g_w/(float)g_h, 0.1f, 200.f);
     g_sfgen_ctx.main_camera.P.m[2][0] = 1.f - 2.f*cx/(float)g_w;
     g_sfgen_ctx.main_camera.is_proj_dirty = false;
@@ -2880,15 +2559,15 @@ static void sfgen_update_camera(void) {
    ============================================================ */
 static void cb_sfgen_type_tree(sf_ctx_t *c, void *u) {
     (void)c;(void)u; g_sfgen_type=SFGEN_TREE; g_ui_dirty=true;
-    g_sfgen_dist=12.f; g_sfgen_pitch=0.35f;
+    g_sfgen_orbit.dist=12.f; g_sfgen_orbit.pitch=0.35f;
 }
 static void cb_sfgen_type_rock(sf_ctx_t *c, void *u) {
     (void)c;(void)u; g_sfgen_type=SFGEN_ROCK; g_ui_dirty=true;
-    g_sfgen_dist=5.f; g_sfgen_pitch=0.35f;
+    g_sfgen_orbit.dist=5.f; g_sfgen_orbit.pitch=0.35f;
 }
 static void cb_sfgen_type_bldg(sf_ctx_t *c, void *u) {
     (void)c;(void)u; g_sfgen_type=SFGEN_BLDG; g_ui_dirty=true;
-    g_sfgen_dist=18.f; g_sfgen_pitch=0.30f;
+    g_sfgen_orbit.dist=18.f; g_sfgen_orbit.pitch=0.30f;
 }
 static void cb_sfgen_save(sf_ctx_t *c, void *u) {
     (void)c;(void)u;
@@ -3125,232 +2804,189 @@ static void build_browser_panel(void); /* forward decl */
    SFGEN — build tab UI
    ============================================================ */
 /* panel collapse state helpers */
-static bool panel_collapsed(const char *nm) {
-  for (int i = 0; i < g_pnl_state_n; i++)
-    if (g_pnl_states[i].name && strcmp(g_pnl_states[i].name, nm) == 0)
-      return g_pnl_states[i].collapsed;
-  return false;
-}
-static sf_ui_lmn_t* add_panel_s(const char *title, sf_ivec2_t v0, sf_ivec2_t v1) {
-  sf_ui_lmn_t *p = sf_ui_add_panel(&sf_ctx, title, v0, v1);
-  if (p) p->panel.collapsed = panel_collapsed(title);
+/* Layout-aware collapsible panel helper */
+static sf_ui_lmn_t* lay_panel_s(const char *title, int x, int y, int width) {
+  sf_ui_lmn_t *p = sf_ui_lay_begin_panel(&sf_ctx, title, x, y, width, SF_UI_PANEL_FIXED);
   return p;
-}
-static int panel_h(const char *nm, int full_h) {
-  return panel_collapsed(nm) ? 16 : full_h;
 }
 
 static void build_sfgen_tab(void) {
-    const int PNL_X0=10, PNL_X1=218, TOP=30;
-    const int LX=14, LX_TXT=LX+SFGEN_ICON_SZ+2, IX=100, IX1=206, RH=16;
+    const int PNL_X0=10, PNL_W=208, TOP=30;
 
-/* SFGEN_DF uses block-local variable `py` (params panel content start) */
-#define SFGEN_DF(n, lbl, tgt, step) do { \
-    int _ry = py + (n)*RH; \
-    sf_ui_add_label(&sf_ctx, lbl, (sf_ivec2_t){LX_TXT, _ry+2}, 0); \
-    sf_ui_add_drag_float(&sf_ctx, (sf_ivec2_t){IX,_ry}, (sf_ivec2_t){IX1,_ry+12}, \
-        &tgt, step, NULL, NULL); \
+/* Layout-based SFGEN_DF: icon + label + drag_float in 3 columns */
+#define SFGEN_DF(lbl, tgt, step, icons, idx) do { \
+    sf_ui_lay_col(&sf_ctx, 3, (float[]){0.08f, 0.37f, 0.55f}); \
+    sf_tex_t **_ic = (sf_tex_t**)(icons); \
+    if (_ic && _ic[idx]) sf_ui_lay_image(&sf_ctx, _ic[idx], true); \
+    else sf_ui_lay_label(&sf_ctx, "", 0); \
+    sf_ui_lay_label(&sf_ctx, lbl, 0); \
+    sf_ui_lay_drag_float(&sf_ctx, &(tgt), step, NULL, NULL); \
 } while(0)
 
     char *sff_path = (g_sfgen_type==SFGEN_TREE) ? g_sfgen_tree_sff :
                      (g_sfgen_type==SFGEN_ROCK) ? g_sfgen_rock_sff : g_sfgen_bldg_sff;
 
     /* ----- Type selector panel ----- */
-    const int TYPE_H = 44;
-    g_sfgen_panel = add_panel_s("SFGEN",
-        (sf_ivec2_t){PNL_X0, TOP}, (sf_ivec2_t){PNL_X1, TOP+TYPE_H});
-    { int ty=TOP+20, bw3=(PNL_X1-PNL_X0-8)/3;
-      sf_pkd_clr_t sel_clr=0xFF88AAFF, nrm_clr=0xFFAAAAAA;
-      sf_ui_lmn_t *bt=sf_ui_add_button(&sf_ctx,"Tree",
-          (sf_ivec2_t){PNL_X0+2,ty},(sf_ivec2_t){PNL_X0+2+bw3,ty+14},cb_sfgen_type_tree,NULL);
-      sf_ui_lmn_t *br=sf_ui_add_button(&sf_ctx,"Rock",
-          (sf_ivec2_t){PNL_X0+4+bw3,ty},(sf_ivec2_t){PNL_X0+4+bw3*2,ty+14},cb_sfgen_type_rock,NULL);
-      sf_ui_lmn_t *bb=sf_ui_add_button(&sf_ctx,"Bldg",
-          (sf_ivec2_t){PNL_X0+6+bw3*2,ty},(sf_ivec2_t){PNL_X1-2,ty+14},cb_sfgen_type_bldg,NULL);
+    g_sfgen_panel = lay_panel_s("SFGEN", PNL_X0, TOP, PNL_W);
+    { sf_pkd_clr_t sel_clr=0xFF88AAFF, nrm_clr=0xFFAAAAAA;
+      sf_ui_lay_col(&sf_ctx, 3, NULL);
+      sf_ui_lmn_t *bt=sf_ui_lay_button(&sf_ctx,"Tree",cb_sfgen_type_tree,NULL);
+      sf_ui_lmn_t *br=sf_ui_lay_button(&sf_ctx,"Rock",cb_sfgen_type_rock,NULL);
+      sf_ui_lmn_t *bb=sf_ui_lay_button(&sf_ctx,"Bldg",cb_sfgen_type_bldg,NULL);
       if (bt) bt->style.color_text=(g_sfgen_type==SFGEN_TREE)?sel_clr:nrm_clr;
       if (br) br->style.color_text=(g_sfgen_type==SFGEN_ROCK)?sel_clr:nrm_clr;
       if (bb) bb->style.color_text=(g_sfgen_type==SFGEN_BLDG)?sel_clr:nrm_clr; }
-
-    int y = TOP + panel_h("SFGEN", TYPE_H);
+    int y = sf_ui_lay_end_panel(&sf_ctx);
 
     if (g_sfgen_type == SFGEN_TREE) {
         /* Presets panel */
-        const int PRE_H = 62;  /* 20 + 2*RH + 10 */
-        add_panel_s("Presets",(sf_ivec2_t){PNL_X0,y},(sf_ivec2_t){PNL_X1,y+PRE_H});
-        { int py=y+20, pw=(IX1-LX-4)/3;
-          sf_ui_add_label(&sf_ctx,"Presets",(sf_ivec2_t){LX,py+2},0);
-          sf_ui_add_button(&sf_ctx,"Rnd",(sf_ivec2_t){IX1-36,py},(sf_ivec2_t){IX1,py+14},
-              cb_sfgen_rand_tree,NULL);
-          static void(*cbs[3])(sf_ctx_t*,void*)={cb_ctpre0,cb_ctpre1,cb_ctpre2};
-          for (int i=0;i<N_TREE_PRESETS;i++) {
-              int bx0=LX+i*(pw+2);
-              sf_ui_add_button(&sf_ctx,k_tree_presets[i].name,
-                  (sf_ivec2_t){bx0,py+RH},(sf_ivec2_t){bx0+pw,py+RH+14},cbs[i],NULL); } }
-        y += panel_h("Presets", PRE_H);
+        lay_panel_s("Presets", PNL_X0, y, PNL_W);
+        sf_ui_lay_col(&sf_ctx, 2, (float[]){0.7f, 0.3f});
+        sf_ui_lay_label(&sf_ctx, "Presets", 0);
+        sf_ui_lay_button(&sf_ctx, "Rnd", cb_sfgen_rand_tree, NULL);
+        { static void(*cbs[3])(sf_ctx_t*,void*)={cb_ctpre0,cb_ctpre1,cb_ctpre2};
+          sf_ui_lay_col(&sf_ctx, N_TREE_PRESETS, NULL);
+          for (int i=0;i<N_TREE_PRESETS;i++)
+              sf_ui_lay_button(&sf_ctx, k_tree_presets[i].name, cbs[i], NULL); }
+        y = sf_ui_lay_end_panel(&sf_ctx);
 
         /* Parameters panel */
-        const int PAR_H = 20+14*RH+4;
-        add_panel_s("Parameters",(sf_ivec2_t){PNL_X0,y},(sf_ivec2_t){PNL_X1,y+PAR_H});
-        { int py=y+20;
-          SFGEN_DF( 0,"Seed",    ct_seed,   1.f);
-          SFGEN_DF( 1,"Depth",   ct_depth,  0.5f);
-          SFGEN_DF( 2,"Branches",ct_branch, 1.f);
-          SFGEN_DF( 3,"Angle",   ct_angle,  1.f);
-          SFGEN_DF( 4,"Length",  ct_len,    0.01f);
-          SFGEN_DF( 5,"Taper",   ct_taper,  0.01f);
-          SFGEN_DF( 6,"Gravity", ct_grav,   0.01f);
-          SFGEN_DF( 7,"Wiggle",  ct_wiggle, 0.01f);
-          SFGEN_DF( 8,"Twist",   ct_twist,  1.f);
-          SFGEN_DF( 9,"Trunk R", ct_tr,     0.01f);
-          SFGEN_DF(10,"Trunk L", ct_tl,     0.1f);
-          SFGEN_DF(11,"Leaf Scl",ct_ls,     0.05f);
-          SFGEN_DF(12,"Leaf Cnt",ct_ld,     1.f);
-          SFGEN_DF(13,"Leaf Opa",ct_lo,     0.01f);
-          for (int i=0;i<14;i++)
-              if (g_sfgen_tree_icons[i])
-                  sf_ui_add_image(&sf_ctx, g_sfgen_tree_icons[i],
-                      (sf_ivec2_t){LX,py+i*RH},
-                      (sf_ivec2_t){LX+SFGEN_ICON_SZ,py+i*RH+SFGEN_ICON_SZ}, true); }
-        y += panel_h("Parameters", PAR_H);
+        lay_panel_s("Parameters", PNL_X0, y, PNL_W);
+        sf_ui_lay_row(&sf_ctx, 14);
+        SFGEN_DF("Seed",    ct_seed,   1.f,   g_sfgen_tree_icons, 0);
+        SFGEN_DF("Depth",   ct_depth,  0.5f,  g_sfgen_tree_icons, 1);
+        SFGEN_DF("Branches",ct_branch, 1.f,   g_sfgen_tree_icons, 2);
+        SFGEN_DF("Angle",   ct_angle,  1.f,   g_sfgen_tree_icons, 3);
+        SFGEN_DF("Length",  ct_len,    0.01f,  g_sfgen_tree_icons, 4);
+        SFGEN_DF("Taper",   ct_taper,  0.01f,  g_sfgen_tree_icons, 5);
+        SFGEN_DF("Gravity", ct_grav,   0.01f,  g_sfgen_tree_icons, 6);
+        SFGEN_DF("Wiggle",  ct_wiggle, 0.01f,  g_sfgen_tree_icons, 7);
+        SFGEN_DF("Twist",   ct_twist,  1.f,   g_sfgen_tree_icons, 8);
+        SFGEN_DF("Trunk R", ct_tr,     0.01f,  g_sfgen_tree_icons, 9);
+        SFGEN_DF("Trunk L", ct_tl,     0.1f,  g_sfgen_tree_icons, 10);
+        SFGEN_DF("Leaf Scl",ct_ls,     0.05f, g_sfgen_tree_icons, 11);
+        SFGEN_DF("Leaf Cnt",ct_ld,     1.f,   g_sfgen_tree_icons, 12);
+        SFGEN_DF("Leaf Opa",ct_lo,     0.01f,  g_sfgen_tree_icons, 13);
+        y = sf_ui_lay_end_panel(&sf_ctx);
 
         /* Textures panel */
-        const int TEX_H = 20+6*RH+4;
-        add_panel_s("Textures",(sf_ivec2_t){PNL_X0,y},(sf_ivec2_t){PNL_X1,y+TEX_H});
-        { int ty=y+20;
-          const char *bn=(g_ct_enti&&g_ct_enti->tex&&g_ct_enti->tex->name)?g_ct_enti->tex->name:"(none)";
-          sf_ui_add_label(&sf_ctx,"Bark Tex",(sf_ivec2_t){LX,ty+2},0);
-          sf_ui_add_label(&sf_ctx,bn,(sf_ivec2_t){LX,ty+RH+2},0xFFAAAAAA);
-          icon_btn(ICN_OPEN,"  Browse",(sf_ivec2_t){LX,ty+2*RH},(sf_ivec2_t){IX1,ty+2*RH+12},
-              cb_browse_sfgen_bark,NULL);
+        lay_panel_s("Textures", PNL_X0, y, PNL_W);
+        { const char *bn=(g_ct_enti&&g_ct_enti->tex&&g_ct_enti->tex->name)?g_ct_enti->tex->name:"(none)";
+          sf_ui_lay_label(&sf_ctx, "Bark Tex", 0);
+          sf_ui_lay_label(&sf_ctx, bn, 0xFFAAAAAA);
+          sf_ui_lay_button(&sf_ctx, "Browse", cb_browse_sfgen_bark, NULL);
           const char *sn=(g_sfgen_leaf&&g_sfgen_leaf->name)?g_sfgen_leaf->name:"(none)";
-          sf_ui_add_label(&sf_ctx,"Leaf Spr",(sf_ivec2_t){LX,ty+3*RH+2},0);
-          sf_ui_add_label(&sf_ctx,sn,(sf_ivec2_t){LX,ty+4*RH+2},0xFFAAAAAA);
-          icon_btn(ICN_OPEN,"  Browse",(sf_ivec2_t){LX,ty+5*RH},(sf_ivec2_t){IX1,ty+5*RH+12},
-              cb_browse_sfgen_leaf,NULL); }
-        y += panel_h("Textures", TEX_H);
+          sf_ui_lay_label(&sf_ctx, "Leaf Spr", 0);
+          sf_ui_lay_label(&sf_ctx, sn, 0xFFAAAAAA);
+          sf_ui_lay_button(&sf_ctx, "Browse", cb_browse_sfgen_leaf, NULL); }
+        y = sf_ui_lay_end_panel(&sf_ctx);
 
     } else if (g_sfgen_type == SFGEN_ROCK) {
         /* Presets panel */
-        const int PRE_H = 78;  /* 20 + 3*RH + 10 */
-        add_panel_s("Presets",(sf_ivec2_t){PNL_X0,y},(sf_ivec2_t){PNL_X1,y+PRE_H});
-        { int py=y+20, pw=(IX1-LX-4)/3;
-          sf_ui_add_label(&sf_ctx,"Presets",(sf_ivec2_t){LX,py+2},0);
-          sf_ui_add_button(&sf_ctx,"Rnd",(sf_ivec2_t){IX1-36,py},(sf_ivec2_t){IX1,py+14},
-              cb_sfgen_rand_rock,NULL);
-          static void(*cbs[5])(sf_ctx_t*,void*)={cb_crpre0,cb_crpre1,cb_crpre2,cb_crpre3,cb_crpre4};
-          for (int i=0;i<N_ROCK_PRESETS;i++) {
-              int row=1+i/3, col=i%3, bx0=LX+col*(pw+2);
-              sf_ui_add_button(&sf_ctx,k_rock_presets[i].name,
-                  (sf_ivec2_t){bx0,py+row*RH},(sf_ivec2_t){bx0+pw,py+row*RH+14},cbs[i],NULL); } }
-        y += panel_h("Presets", PRE_H);
+        lay_panel_s("Presets", PNL_X0, y, PNL_W);
+        sf_ui_lay_col(&sf_ctx, 2, (float[]){0.7f, 0.3f});
+        sf_ui_lay_label(&sf_ctx, "Presets", 0);
+        sf_ui_lay_button(&sf_ctx, "Rnd", cb_sfgen_rand_rock, NULL);
+        { static void(*cbs[5])(sf_ctx_t*,void*)={cb_crpre0,cb_crpre1,cb_crpre2,cb_crpre3,cb_crpre4};
+          sf_ui_lay_col(&sf_ctx, 3, NULL);
+          for (int i=0;i<3;i++)
+              sf_ui_lay_button(&sf_ctx, k_rock_presets[i].name, cbs[i], NULL);
+          sf_ui_lay_col(&sf_ctx, 3, NULL);
+          for (int i=3;i<N_ROCK_PRESETS;i++)
+              sf_ui_lay_button(&sf_ctx, k_rock_presets[i].name, cbs[i], NULL);
+          for (int i=N_ROCK_PRESETS;i<6;i++)
+              sf_ui_lay_label(&sf_ctx, "", 0); }
+        y = sf_ui_lay_end_panel(&sf_ctx);
 
         /* Parameters panel */
-        const int PAR_H = 20+11*RH+4;
-        add_panel_s("Parameters",(sf_ivec2_t){PNL_X0,y},(sf_ivec2_t){PNL_X1,y+PAR_H});
-        { int py=y+20;
-          SFGEN_DF( 0,"Seed",     cr_seed,    1.f);
-          SFGEN_DF( 1,"Subdiv",   cr_subdiv,  1.f);
-          SFGEN_DF( 2,"Roughness",cr_rough,   0.01f);
-          SFGEN_DF( 3,"Frequency",cr_freq,    0.05f);
-          SFGEN_DF( 4,"Octaves",  cr_octaves, 1.f);
-          SFGEN_DF( 5,"Persist",  cr_persist, 0.01f);
-          SFGEN_DF( 6,"Flatness", cr_flat,    0.01f);
-          SFGEN_DF( 7,"Elong X",  cr_elongx,  0.02f);
-          SFGEN_DF( 8,"Elong Z",  cr_elongz,  0.02f);
-          SFGEN_DF( 9,"Pointy",   cr_pointy,  0.05f);
-          SFGEN_DF(10,"Bump",     cr_bump,    0.02f);
-          for (int i=0;i<11;i++)
-              if (g_sfgen_rock_icons[i])
-                  sf_ui_add_image(&sf_ctx, g_sfgen_rock_icons[i],
-                      (sf_ivec2_t){LX,py+i*RH},
-                      (sf_ivec2_t){LX+SFGEN_ICON_SZ,py+i*RH+SFGEN_ICON_SZ}, true); }
-        y += panel_h("Parameters", PAR_H);
+        lay_panel_s("Parameters", PNL_X0, y, PNL_W);
+        sf_ui_lay_row(&sf_ctx, 14);
+        SFGEN_DF("Seed",     cr_seed,    1.f,   g_sfgen_rock_icons, 0);
+        SFGEN_DF("Subdiv",   cr_subdiv,  1.f,   g_sfgen_rock_icons, 1);
+        SFGEN_DF("Roughness",cr_rough,   0.01f, g_sfgen_rock_icons, 2);
+        SFGEN_DF("Frequency",cr_freq,    0.05f, g_sfgen_rock_icons, 3);
+        SFGEN_DF("Octaves",  cr_octaves, 1.f,   g_sfgen_rock_icons, 4);
+        SFGEN_DF("Persist",  cr_persist, 0.01f, g_sfgen_rock_icons, 5);
+        SFGEN_DF("Flatness", cr_flat,    0.01f, g_sfgen_rock_icons, 6);
+        SFGEN_DF("Elong X",  cr_elongx,  0.02f, g_sfgen_rock_icons, 7);
+        SFGEN_DF("Elong Z",  cr_elongz,  0.02f, g_sfgen_rock_icons, 8);
+        SFGEN_DF("Pointy",   cr_pointy,  0.05f, g_sfgen_rock_icons, 9);
+        SFGEN_DF("Bump",     cr_bump,    0.02f, g_sfgen_rock_icons, 10);
+        y = sf_ui_lay_end_panel(&sf_ctx);
 
         /* Textures panel */
-        const int TEX_H = 20+3*RH+4;
-        add_panel_s("Textures",(sf_ivec2_t){PNL_X0,y},(sf_ivec2_t){PNL_X1,y+TEX_H});
-        { int ty=y+20;
-          const char *stn=(g_cr_enti&&g_cr_enti->tex&&g_cr_enti->tex->name)?g_cr_enti->tex->name:"(none)";
-          sf_ui_add_label(&sf_ctx,"Stone Tex",(sf_ivec2_t){LX,ty+2},0);
-          sf_ui_add_label(&sf_ctx,stn,(sf_ivec2_t){LX,ty+RH+2},0xFFAAAAAA);
-          icon_btn(ICN_OPEN,"  Browse",(sf_ivec2_t){LX,ty+2*RH},(sf_ivec2_t){IX1,ty+2*RH+12},
-              cb_browse_sfgen_stone,NULL); }
-        y += panel_h("Textures", TEX_H);
+        lay_panel_s("Textures", PNL_X0, y, PNL_W);
+        { const char *stn=(g_cr_enti&&g_cr_enti->tex&&g_cr_enti->tex->name)?g_cr_enti->tex->name:"(none)";
+          sf_ui_lay_label(&sf_ctx, "Stone Tex", 0);
+          sf_ui_lay_label(&sf_ctx, stn, 0xFFAAAAAA);
+          sf_ui_lay_button(&sf_ctx, "Browse", cb_browse_sfgen_stone, NULL); }
+        y = sf_ui_lay_end_panel(&sf_ctx);
 
     } else { /* SFGEN_BLDG */
         /* Presets panel */
-        const int PRE_H = 78;
-        add_panel_s("Presets",(sf_ivec2_t){PNL_X0,y},(sf_ivec2_t){PNL_X1,y+PRE_H});
-        { int py=y+20, pw=(IX1-LX-4)/3;
-          sf_ui_add_label(&sf_ctx,"Presets",(sf_ivec2_t){LX,py+2},0);
-          sf_ui_add_button(&sf_ctx,"Rnd",(sf_ivec2_t){IX1-36,py},(sf_ivec2_t){IX1,py+14},
-              cb_sfgen_rand_bldg,NULL);
-          static void(*cbs[5])(sf_ctx_t*,void*)={cb_bkpre0,cb_bkpre1,cb_bkpre2,cb_bkpre3,cb_bkpre4};
-          for (int i=0;i<N_BLDG_PRESETS;i++) {
-              int row=1+i/3, col=i%3, bx0=LX+col*(pw+2);
-              sf_ui_add_button(&sf_ctx,k_bldg_presets[i].name,
-                  (sf_ivec2_t){bx0,py+row*RH},(sf_ivec2_t){bx0+pw,py+row*RH+14},cbs[i],NULL); } }
-        y += panel_h("Presets", PRE_H);
+        lay_panel_s("Presets", PNL_X0, y, PNL_W);
+        sf_ui_lay_col(&sf_ctx, 2, (float[]){0.7f, 0.3f});
+        sf_ui_lay_label(&sf_ctx, "Presets", 0);
+        sf_ui_lay_button(&sf_ctx, "Rnd", cb_sfgen_rand_bldg, NULL);
+        { static void(*cbs[5])(sf_ctx_t*,void*)={cb_bkpre0,cb_bkpre1,cb_bkpre2,cb_bkpre3,cb_bkpre4};
+          sf_ui_lay_col(&sf_ctx, 3, NULL);
+          for (int i=0;i<3;i++)
+              sf_ui_lay_button(&sf_ctx, k_bldg_presets[i].name, cbs[i], NULL);
+          sf_ui_lay_col(&sf_ctx, 3, NULL);
+          for (int i=3;i<N_BLDG_PRESETS;i++)
+              sf_ui_lay_button(&sf_ctx, k_bldg_presets[i].name, cbs[i], NULL);
+          for (int i=N_BLDG_PRESETS;i<6;i++)
+              sf_ui_lay_label(&sf_ctx, "", 0); }
+        y = sf_ui_lay_end_panel(&sf_ctx);
 
         /* Parameters panel */
-        const int PAR_H = 20+15*RH+4;
-        add_panel_s("Parameters",(sf_ivec2_t){PNL_X0,y},(sf_ivec2_t){PNL_X1,y+PAR_H});
-        { int py=y+20;
-          SFGEN_DF( 0,"Seed",     bk_seed,       1.f);
-          SFGEN_DF( 1,"Floors",   bk_floors,     1.f);
-          SFGEN_DF( 2,"Floor H",  bk_floor_h,    0.1f);
-          SFGEN_DF( 3,"Width",    bk_width,      0.1f);
-          SFGEN_DF( 4,"Depth",    bk_depth,      0.1f);
-          SFGEN_DF( 5,"Taper",    bk_taper,      0.02f);
-          SFGEN_DF( 6,"Jitter",   bk_jitter,     0.02f);
-          SFGEN_DF( 7,"Ledge",    bk_ledge,      0.02f);
-          SFGEN_DF( 8,"Win Cols", bk_win_cols,   1.f);
-          SFGEN_DF( 9,"Win Size", bk_win_size,   0.02f);
-          SFGEN_DF(10,"Win Inset",bk_win_inset,  0.02f);
-          SFGEN_DF(11,"Roof Type",bk_roof_type,  1.f);
-          SFGEN_DF(12,"Roof H",   bk_roof_h,     0.05f);
-          SFGEN_DF(13,"Roof Scl", bk_roof_scale, 0.05f);
-          SFGEN_DF(14,"Asym",     bk_asym,       0.05f);
-          for (int i=0;i<14;i++)
-              if (g_sfgen_bldg_icons[i])
-                  sf_ui_add_image(&sf_ctx, g_sfgen_bldg_icons[i],
-                      (sf_ivec2_t){LX,py+i*RH},
-                      (sf_ivec2_t){LX+SFGEN_ICON_SZ,py+i*RH+SFGEN_ICON_SZ}, true); }
-        y += panel_h("Parameters", PAR_H);
+        lay_panel_s("Parameters", PNL_X0, y, PNL_W);
+        sf_ui_lay_row(&sf_ctx, 14);
+        SFGEN_DF("Seed",     bk_seed,       1.f,   g_sfgen_bldg_icons, 0);
+        SFGEN_DF("Floors",   bk_floors,     1.f,   g_sfgen_bldg_icons, 1);
+        SFGEN_DF("Floor H",  bk_floor_h,    0.1f,  g_sfgen_bldg_icons, 2);
+        SFGEN_DF("Width",    bk_width,      0.1f,  g_sfgen_bldg_icons, 3);
+        SFGEN_DF("Depth",    bk_depth,      0.1f,  g_sfgen_bldg_icons, 4);
+        SFGEN_DF("Taper",    bk_taper,      0.02f, g_sfgen_bldg_icons, 5);
+        SFGEN_DF("Jitter",   bk_jitter,     0.02f, g_sfgen_bldg_icons, 6);
+        SFGEN_DF("Ledge",    bk_ledge,      0.02f, g_sfgen_bldg_icons, 7);
+        SFGEN_DF("Win Cols", bk_win_cols,   1.f,   g_sfgen_bldg_icons, 8);
+        SFGEN_DF("Win Size", bk_win_size,   0.02f, g_sfgen_bldg_icons, 9);
+        SFGEN_DF("Win Inset",bk_win_inset,  0.02f, g_sfgen_bldg_icons, 10);
+        SFGEN_DF("Roof Type",bk_roof_type,  1.f,   g_sfgen_bldg_icons, 11);
+        SFGEN_DF("Roof H",   bk_roof_h,     0.05f, g_sfgen_bldg_icons, 12);
+        SFGEN_DF("Roof Scl", bk_roof_scale, 0.05f, g_sfgen_bldg_icons, 13);
+        SFGEN_DF("Asym",     bk_asym,       0.05f, NULL, 0);
+        y = sf_ui_lay_end_panel(&sf_ctx);
 
         /* Textures panel */
-        const int TEX_H = 20+12*RH+4;
-        add_panel_s("Textures",(sf_ivec2_t){PNL_X0,y},(sf_ivec2_t){PNL_X1,y+TEX_H});
-        { int ty=y+20;
-          const char *wn2=(g_ck_enti&&g_ck_enti->tex&&g_ck_enti->tex->name)?g_ck_enti->tex->name:"(none)";
-          sf_ui_add_label(&sf_ctx,"Wall Tex",(sf_ivec2_t){LX,ty+2},0);
-          sf_ui_add_label(&sf_ctx,wn2,(sf_ivec2_t){LX,ty+RH+2},0xFFAAAAAA);
-          icon_btn(ICN_OPEN,"  Browse",(sf_ivec2_t){LX,ty+2*RH},(sf_ivec2_t){IX1,ty+2*RH+12},
-              cb_browse_sfgen_bwall,NULL);
+        lay_panel_s("Textures", PNL_X0, y, PNL_W);
+        { const char *wn2=(g_ck_enti&&g_ck_enti->tex&&g_ck_enti->tex->name)?g_ck_enti->tex->name:"(none)";
+          sf_ui_lay_label(&sf_ctx, "Wall Tex", 0);
+          sf_ui_lay_label(&sf_ctx, wn2, 0xFFAAAAAA);
+          sf_ui_lay_button(&sf_ctx, "Browse", cb_browse_sfgen_bwall, NULL);
           const char *rn2=(g_ck_enti_roof&&g_ck_enti_roof->tex&&g_ck_enti_roof->tex->name)?g_ck_enti_roof->tex->name:"(none)";
-          sf_ui_add_label(&sf_ctx,"Roof Tex",(sf_ivec2_t){LX,ty+3*RH+2},0);
-          sf_ui_add_label(&sf_ctx,rn2,(sf_ivec2_t){LX,ty+4*RH+2},0xFFAAAAAA);
-          icon_btn(ICN_OPEN,"  Browse",(sf_ivec2_t){LX,ty+5*RH},(sf_ivec2_t){IX1,ty+5*RH+12},
-              cb_browse_sfgen_broof,NULL);
+          sf_ui_lay_label(&sf_ctx, "Roof Tex", 0);
+          sf_ui_lay_label(&sf_ctx, rn2, 0xFFAAAAAA);
+          sf_ui_lay_button(&sf_ctx, "Browse", cb_browse_sfgen_broof, NULL);
           const char *wn3=(g_ck_enti_win&&g_ck_enti_win->tex&&g_ck_enti_win->tex->name)?g_ck_enti_win->tex->name:"(none)";
-          sf_ui_add_label(&sf_ctx,"Win Tex",(sf_ivec2_t){LX,ty+6*RH+2},0);
-          sf_ui_add_label(&sf_ctx,wn3,(sf_ivec2_t){LX,ty+7*RH+2},0xFFAAAAAA);
-          icon_btn(ICN_OPEN,"  Browse",(sf_ivec2_t){LX,ty+8*RH},(sf_ivec2_t){IX1,ty+8*RH+12},
-              cb_browse_sfgen_bwin,NULL);
+          sf_ui_lay_label(&sf_ctx, "Win Tex", 0);
+          sf_ui_lay_label(&sf_ctx, wn3, 0xFFAAAAAA);
+          sf_ui_lay_button(&sf_ctx, "Browse", cb_browse_sfgen_bwin, NULL);
           const char *ln2=(g_ck_enti_ledge&&g_ck_enti_ledge->tex&&g_ck_enti_ledge->tex->name)?g_ck_enti_ledge->tex->name:"(none)";
-          sf_ui_add_label(&sf_ctx,"Ledge Tex",(sf_ivec2_t){LX,ty+9*RH+2},0);
-          sf_ui_add_label(&sf_ctx,ln2,(sf_ivec2_t){LX,ty+10*RH+2},0xFFAAAAAA);
-          icon_btn(ICN_OPEN,"  Browse",(sf_ivec2_t){LX,ty+11*RH},(sf_ivec2_t){IX1,ty+11*RH+12},
-              cb_browse_sfgen_bledge,NULL); }
-        y += TEX_H;
+          sf_ui_lay_label(&sf_ctx, "Ledge Tex", 0);
+          sf_ui_lay_label(&sf_ctx, ln2, 0xFFAAAAAA);
+          sf_ui_lay_button(&sf_ctx, "Browse", cb_browse_sfgen_bledge, NULL); }
+        y = sf_ui_lay_end_panel(&sf_ctx);
     }
 
-    /* File panel — follows Textures panel */
-    { add_panel_s("File",(sf_ivec2_t){PNL_X0,y},(sf_ivec2_t){PNL_X1,y+78});
-      sf_ui_add_text_input(&sf_ctx,(sf_ivec2_t){LX,y+22},(sf_ivec2_t){IX1,y+38},
-          sff_path,SF_MAX_TEXT_INPUT_LEN,NULL,NULL);
-      icon_btn(ICN_SAVE,"  Save",(sf_ivec2_t){LX,y+42},(sf_ivec2_t){IX1,y+60},
-          cb_sfgen_save_install,NULL); }
+    /* File panel */
+    lay_panel_s("File", PNL_X0, y, PNL_W);
+    sf_ui_lay_row(&sf_ctx, 18);
+    sf_ui_lay_text_input(&sf_ctx, sff_path, SF_MAX_TEXT_INPUT_LEN, NULL, NULL);
+    sf_ui_lay_row(&sf_ctx, 18);
+    sf_ui_lay_button(&sf_ctx, "Save", cb_sfgen_save_install, NULL);
+    sf_ui_lay_end_panel(&sf_ctx);
 
 #undef SFGEN_DF
     build_browser_panel();
@@ -3398,16 +3034,15 @@ static sel_kind_t _outl_kind_of_frame(sf_frame_t *f, void **out_ptr) {
   return SEL_NONE;
 }
 
-static void _outl_walk(sf_frame_t *f, int depth) {
-  if (!f || g_outl_count >= OUTL_MAX) return;
-  if (f == sf_ctx.main_camera.frame) return; /* internal frame; not user-editable */
+static bool _outl_walk_cb(sf_frame_t *f, int depth, void *ud) {
+  (void)ud;
+  if (!f || g_outl_count >= OUTL_MAX) return false;
+  if (f == sf_ctx.main_camera.frame) return true; /* skip internal frame but continue */
   void *p = NULL;
   sel_kind_t k = _outl_kind_of_frame(f, &p);
   /* include orphan frames (SEL_NONE) so the user can select and delete them */
   g_outl_items[g_outl_count++] = (outl_item_t){ k, p, f, depth };
-  for (sf_frame_t *c = f->first_child; c; c = c->next_sibling) {
-    _outl_walk(c, depth + 1);
-  }
+  return true;
 }
 
 static void rebuild_outliner_items(void) {
@@ -3424,7 +3059,9 @@ static void rebuild_outliner_items(void) {
     root = f;
   }
   if (root) {
-    for (sf_frame_t *c = root->first_child; c; c = c->next_sibling) _outl_walk(c, 0);
+    /* Walk children of root (skip root itself which is the scene root) */
+    for (sf_frame_t *c = root->first_child; c; c = c->next_sibling)
+      sf_frame_walk(&sf_ctx, c, _outl_walk_cb, NULL);
   }
   else {
     /* Fallback: list items in order even if no root found */
@@ -3474,13 +3111,9 @@ static void build_browser_panel(void) {
   int by0 = 30, by1 = g_h - 10;
   const char *title = (g_picker_open == PICK_MODEL) ? "Browse Models" :
                       (g_picker_open == PICK_SPRITE) ? "Browse Sprites" : "Browse Textures";
-  sf_ui_add_panel(&sf_ctx, title, (sf_ivec2_t){bx0, by0}, (sf_ivec2_t){bx1, by1});
-  /* Close button: detach from panel so it fires even when panel is collapsed */
-  { sf_ui_lmn_t *xbtn = sf_ui_add_button(&sf_ctx, "X",
-        (sf_ivec2_t){bx0, by0+1}, (sf_ivec2_t){bx0+16, by0+15},
-        cb_picker_close, NULL);
-    if (xbtn) xbtn->parent_panel = NULL; }
-  sf_ui_add_button(&sf_ctx, "R", (sf_ivec2_t){bx1-20, by0+1}, (sf_ivec2_t){bx1-2, by0+15},
+  g_picker_panel = sf_ui_add_panel(&sf_ctx, title, (sf_ivec2_t){bx0, by0}, (sf_ivec2_t){bx1, by1});
+  if (g_picker_panel) g_picker_panel->panel.flags = SF_UI_PANEL_CLOSABLE;
+  sf_ui_add_button(&sf_ctx, "R", (sf_ivec2_t){bx1-36, by0+1}, (sf_ivec2_t){bx1-18, by0+15},
                    cb_picker_refresh, NULL);
   int content_y0 = by0 + 24;
   int content_y1 = by1 - 26;
@@ -3624,10 +3257,12 @@ static void build_outliner_panel(int rx0, int rx1, int top, int bottom) {
 }
 
 static void build_debug_panel(int rx0, int rx1, int r) {
-  sf_ui_add_panel(&sf_ctx, "Overlay", (sf_ivec2_t){rx0, r}, (sf_ivec2_t){rx1, r + 94});
-  sf_ui_add_checkbox(&sf_ctx, "frames",     (sf_ivec2_t){rx0 + 10, r + 22}, (sf_ivec2_t){rx1 - 10, r + 40},  g_dbg_frames, cb_dbg_frames, NULL);
-  sf_ui_add_checkbox(&sf_ctx, "lights",     (sf_ivec2_t){rx0 + 10, r + 44}, (sf_ivec2_t){rx1 - 10, r + 62},  g_dbg_lights, cb_dbg_lights, NULL);
-  sf_ui_add_checkbox(&sf_ctx, "cameras",    (sf_ivec2_t){rx0 + 10, r + 66}, (sf_ivec2_t){rx1 - 10, r + 84},  g_dbg_cams,   cb_dbg_cams,   NULL);
+  sf_ui_lay_begin_panel(&sf_ctx, "Overlay", rx0, r, rx1 - rx0, 0);
+  sf_ui_lay_row(&sf_ctx, 18);
+  sf_ui_lay_checkbox(&sf_ctx, "frames",  g_dbg_frames, cb_dbg_frames, NULL);
+  sf_ui_lay_checkbox(&sf_ctx, "lights",  g_dbg_lights, cb_dbg_lights, NULL);
+  sf_ui_lay_checkbox(&sf_ctx, "cameras", g_dbg_cams,   cb_dbg_cams,   NULL);
+  sf_ui_lay_end_panel(&sf_ctx);
 }
 
 static const char *k_light_items[2] = { "point", "dir" };
@@ -3640,268 +3275,108 @@ static void cb_light_type(sf_ctx_t *ctx, void *ud) {
   }
 }
 
-/* Create: icon-button row. Two rows of up to 5 buttons each. Returns y past last row. */
-static int build_spawn_buttons(int y) {
-  const int BTN = 34, GAP = 2;
-  int cols = 5;
-  int y0 = y;
-  for (int i = 0; i < 9; i++) {
-    int row = i / cols;
-    int col = i % cols;
-    int x0 = 22 + col * (BTN + GAP);
-    int yy = y0 + row * (BTN + GAP);
+/* Create: icon-button grid via layout. Called within a layout panel. */
+static void build_spawn_buttons(void) {
+  sf_ui_lay_row(&sf_ctx, 34);
+  sf_ui_lay_col(&sf_ctx, 5, NULL);
+  for (int i = 0; i < 5; i++) {
     const char *label = g_spawn_icon_tex[i] ? "" : k_spawn_labels[i];
-    g_spawn_btn_el[i] = sf_ui_add_button(&sf_ctx, label, (sf_ivec2_t){x0, yy}, (sf_ivec2_t){x0 + BTN, yy + BTN}, cb_spawn_kind, (void*)(intptr_t)i);
-    if (g_spawn_icon_tex[i])
+    g_spawn_btn_el[i] = sf_ui_lay_button(&sf_ctx, label, cb_spawn_kind, (void*)(intptr_t)i);
+    if (g_spawn_icon_tex[i] && g_spawn_btn_el[i])
       sf_ui_add_image(&sf_ctx, g_spawn_icon_tex[i],
-                      (sf_ivec2_t){x0+1, yy+1}, (sf_ivec2_t){x0+BTN-1, yy+BTN-1}, true);
+                      (sf_ivec2_t){g_spawn_btn_el[i]->v0.x+1, g_spawn_btn_el[i]->v0.y+1},
+                      (sf_ivec2_t){g_spawn_btn_el[i]->v1.x-1, g_spawn_btn_el[i]->v1.y-1}, true);
   }
-  return y0 + 2 * (BTN + GAP);
+  sf_ui_lay_row(&sf_ctx, 34);
+  sf_ui_lay_col(&sf_ctx, 5, NULL);
+  for (int i = 5; i < 9; i++) {
+    const char *label = g_spawn_icon_tex[i] ? "" : k_spawn_labels[i];
+    g_spawn_btn_el[i] = sf_ui_lay_button(&sf_ctx, label, cb_spawn_kind, (void*)(intptr_t)i);
+    if (g_spawn_icon_tex[i] && g_spawn_btn_el[i])
+      sf_ui_add_image(&sf_ctx, g_spawn_icon_tex[i],
+                      (sf_ivec2_t){g_spawn_btn_el[i]->v0.x+1, g_spawn_btn_el[i]->v0.y+1},
+                      (sf_ivec2_t){g_spawn_btn_el[i]->v1.x-1, g_spawn_btn_el[i]->v1.y-1}, true);
+  }
+  /* fill remaining cols in the second row */
+  sf_ui_lay_label(&sf_ctx, "", 0);
 }
 
 
 /* scale-blit an arbitrary sf_pkd_clr_t buffer (src w*h) into main cam at dest rect */
-static void blit_buf_scaled(sf_pkd_clr_t *src, int sw, int sh, int dx, int dy, int dw, int dh) {
-  if (!src || dw <= 0 || dh <= 0 || sw <= 0 || sh <= 0) return;
-  sf_cam_t *cam = &sf_ctx.main_camera;
-  for (int y = 0; y < dh; y++) {
-    int py = dy + y; if (py < 0 || py >= cam->h) continue;
-    int sy = (y * sh) / dh;
-    for (int x = 0; x < dw; x++) {
-      int px_ = dx + x; if (px_ < 0 || px_ >= cam->w) continue;
-      int sx = (x * sw) / dw;
-      cam->buffer[py * cam->w + px_] = src[sy * sw + sx];
-    }
-  }
-}
-
 static void draw_cam_pip_overlay(void) {
   if (!g_cam_pip_visible || g_sel_kind != SEL_CAM || !g_sel_cam || !g_sel_cam->buffer) return;
-  blit_buf_scaled(g_sel_cam->buffer, g_sel_cam->w, g_sel_cam->h,
-                  g_cam_pip_pos.x, g_cam_pip_pos.y, g_cam_pip_size.x, g_cam_pip_size.y);
+  sf_draw_cam_pip_scaled(&sf_ctx, &sf_ctx.main_camera, g_sel_cam, g_cam_pip_pos,
+                         g_cam_pip_size.x, g_cam_pip_size.y);
 }
 
 /* --- translate gizmo --- */
 
-static float _gz_world_len(void) {
-  /* scale gizmo length with camera distance so it stays ~constant on screen */
-  sf_frame_t *f = sel_frame();
-  if (!f) return 1.0f;
-  sf_cam_t *cam = &sf_ctx.main_camera;
-  sf_fvec3_t w = { f->global_M.m[3][0], f->global_M.m[3][1], f->global_M.m[3][2] };
-  sf_fvec3_t v = sf_fmat4_mul_vec3(cam->V, w);
-  float dist = -v.z; if (dist < 0.5f) dist = 0.5f;
-  return dist * 0.12f;
-}
-
-static bool _gz_project(sf_fvec3_t w, sf_ivec2_t *out) {
-  sf_cam_t *cam = &sf_ctx.main_camera;
-  sf_fvec3_t v = sf_fmat4_mul_vec3(cam->V, w);
-  if (v.z > -cam->near_plane) return false;
-  sf_fvec3_t s = _sf_project_vertex(&sf_ctx, cam, v, cam->P);
-  out->x = (int)s.x;
-  out->y = (int)s.y;
-  return true;
-}
-
 static void update_gizmo_geometry(void) {
-  g_gz_active = false;
-  sf_frame_t *f = sel_frame();
-  if (!f) return;
-  sf_fvec3_t origin_w = { f->global_M.m[3][0], f->global_M.m[3][1], f->global_M.m[3][2] };
-  float L = _gz_world_len();
-  sf_fvec3_t tips_w[3] = {
-    { origin_w.x + L, origin_w.y,     origin_w.z     },
-    { origin_w.x,     origin_w.y + L, origin_w.z     },
-    { origin_w.x,     origin_w.y,     origin_w.z + L },
-  };
-  sf_ivec2_t so;
-  if (!_gz_project(origin_w, &so)) return;
-  g_gz_screen_origin = so;
-  for (int i = 0; i < 3; i++) {
-    if (!_gz_project(tips_w[i], &g_gz_screen_tip[i])) return;
-    float dx = (float)(g_gz_screen_tip[i].x - so.x);
-    float dy = (float)(g_gz_screen_tip[i].y - so.y);
-    float len = sqrtf(dx*dx + dy*dy);
-    g_gz_pixel_per_unit[i] = len / L;
-  }
-  g_gz_active = true;
-}
-
-/* distance from point p to segment a..b (squared), plus parametric t */
-static float _seg_dist2(sf_ivec2_t a, sf_ivec2_t b, int px, int py, float *out_t) {
-  float ax = (float)a.x, ay = (float)a.y;
-  float bx = (float)b.x, by = (float)b.y;
-  float dx = bx - ax, dy = by - ay;
-  float len2 = dx*dx + dy*dy;
-  float t = len2 > 0.0f ? (((float)px - ax) * dx + ((float)py - ay) * dy) / len2 : 0.0f;
-  if (t < 0.0f) t = 0.0f; else if (t > 1.0f) t = 1.0f;
-  float cx = ax + dx * t, cy = ay + dy * t;
-  float ex = (float)px - cx, ey = (float)py - cy;
-  if (out_t) *out_t = t;
-  return ex*ex + ey*ey;
-}
-
-static gz_axis_t gizmo_hit(int mx, int my) {
-  if (!g_gz_active) return GZ_AX_NONE;
-  const float R2 = 8.0f * 8.0f;
-  float best = R2;
-  gz_axis_t hit = GZ_AX_NONE;
-  for (int i = 0; i < 3; i++) {
-    float d2 = _seg_dist2(g_gz_screen_origin, g_gz_screen_tip[i], mx, my, NULL);
-    if (d2 < best) { best = d2; hit = (gz_axis_t)i; }
-  }
-  return hit;
+  sf_gizmo_update(&sf_ctx, &sf_ctx.main_camera, &g_gizmo, sel_frame());
+  g_gizmo.hover_axis = sf_gizmo_hit(&g_gizmo, g_mouse_x, g_mouse_y);
 }
 
 static void draw_gizmo(void) {
-  if (!g_gz_active) return;
-  sf_pkd_clr_t base[3]  = { 0xFFFF4040, 0xFF40FF40, 0xFF4080FF };
-  sf_pkd_clr_t hi[3]    = { 0xFFFFFF80, 0xFFFFFF80, 0xFFFFFF80 };
-  const char  *lbl[3]   = { "X", "Y", "Z" };
-  sf_cam_t *cam = &sf_ctx.main_camera;
-  for (int i = 0; i < 3; i++) {
-    bool active = (g_gz_drag == (gz_axis_t)i) || (g_gz_drag == GZ_AX_NONE && g_gz_hover == (gz_axis_t)i);
-    sf_pkd_clr_t c = active ? hi[i] : base[i];
-    sf_line(&sf_ctx, cam, c, g_gz_screen_origin, g_gz_screen_tip[i]);
-    /* arrowhead box */
-    sf_ivec2_t t = g_gz_screen_tip[i];
-    sf_rect(&sf_ctx, cam, c, (sf_ivec2_t){t.x - 3, t.y - 3}, (sf_ivec2_t){t.x + 3, t.y + 3});
-    sf_put_text(&sf_ctx, cam, lbl[i], (sf_ivec2_t){t.x + 5, t.y - 4}, c, 1);
-  }
-}
-
-/* axis unit vector in world */
-static sf_fvec3_t _gz_axis_w(gz_axis_t a) {
-  if (a == GZ_AX_X) return (sf_fvec3_t){1.0f, 0.0f, 0.0f};
-  if (a == GZ_AX_Y) return (sf_fvec3_t){0.0f, 1.0f, 0.0f};
-  return (sf_fvec3_t){0.0f, 0.0f, 1.0f};
+  sf_gizmo_render(&sf_ctx, &sf_ctx.main_camera, &g_gizmo);
 }
 
 static bool gizmo_begin_drag(int mx, int my) {
-  gz_axis_t a = gizmo_hit(mx, my);
-  if (a == GZ_AX_NONE) return false;
-  sf_frame_t *f = sel_frame();
-  if (!f) return false;
-  g_gz_drag = a;
-  g_gz_drag_start_pos = f->pos;
-  g_gz_drag_start_mx = mx;
-  g_gz_drag_start_my = my;
+  sf_gz_axis_t a = sf_gizmo_hit(&g_gizmo, mx, my);
+  if (a == SF_GZ_AX_NONE) return false;
+  sf_gizmo_begin_drag(&g_gizmo, a, mx, my);
   return true;
 }
 
 static void gizmo_drag_update(int mx, int my) {
-  if (g_gz_drag == GZ_AX_NONE || !g_gz_active) return;
-  sf_frame_t *f = sel_frame();
-  if (!f) { g_gz_drag = GZ_AX_NONE; return; }
-  int axis = (int)g_gz_drag;
-  float dx = (float)(g_gz_screen_tip[axis].x - g_gz_screen_origin.x);
-  float dy = (float)(g_gz_screen_tip[axis].y - g_gz_screen_origin.y);
-  float len = sqrtf(dx*dx + dy*dy);
-  if (len < 1.0f) return;
-  float ux = dx / len, uy = dy / len;
-  float mdx = (float)(mx - g_gz_drag_start_mx);
-  float mdy = (float)(my - g_gz_drag_start_my);
-  float projected_px = mdx * ux + mdy * uy;
-  float ppu = g_gz_pixel_per_unit[axis];
-  if (ppu < 0.001f) return;
-  float world_delta = projected_px / ppu;
-  sf_fvec3_t ax = _gz_axis_w(g_gz_drag);
-  /* if the frame has a parent, pos is local — convert world-axis delta to parent-local */
-  if (f->parent && !f->is_root) {
-    /* inverse of parent's rotation would be ideal, but for simplicity we drag in world;
-       set pos from start_pos + world axis — works when parent has identity rotation.
-       For rotated parents, this is approximate. */
-  }
-  f->pos.x = g_gz_drag_start_pos.x + ax.x * world_delta;
-  f->pos.y = g_gz_drag_start_pos.y + ax.y * world_delta;
-  f->pos.z = g_gz_drag_start_pos.z + ax.z * world_delta;
-  f->is_dirty = true;
-  g_ui_dirty = true;  /* rebuild inspector drag_float display */
+  if (g_gizmo.drag_axis == SF_GZ_AX_NONE) return;
+  sf_gizmo_drag(&g_gizmo, mx, my);
+  g_ui_dirty = true;
 }
 
 static void gizmo_end_drag(void) {
-  g_gz_drag = GZ_AX_NONE;
+  sf_gizmo_end_drag(&g_gizmo);
 }
 
 /* draw icons over the spawn buttons (called after sf_render_ui) */
 
-/* adds texture picker + scale for the selected entity at y. returns y past last row. */
-static int build_texture_section(int y) {
-  int yy = y;
+/* adds texture picker + scale for the selected entity. Called within a layout panel. */
+static void build_texture_section(void) {
   const char *cur_name = (g_sel_kind == SEL_ENTI && g_sel && g_sel->tex && g_sel->tex->name)
                          ? g_sel->tex->name : "(none)";
-  sf_ui_add_label(&sf_ctx, cur_name, (sf_ivec2_t){20, yy}, 0xFFAAAAAA); yy += 14;
-  icon_btn(ICN_OPEN, "   Browse", (sf_ivec2_t){20, yy}, (sf_ivec2_t){112, yy + 20},
-           cb_browse_tex, NULL);
-  icon_btn(ICN_CLEAR, "   Clear", (sf_ivec2_t){116, yy}, (sf_ivec2_t){210, yy + 20},
-           cb_clear_tex, NULL);
-  yy += 26;
+  sf_ui_lay_label(&sf_ctx, cur_name, 0xFFAAAAAA);
+  sf_ui_lay_row(&sf_ctx, 20);
+  sf_ui_lay_col(&sf_ctx, 2, NULL);
+  sf_ui_lay_button(&sf_ctx, "Browse", cb_browse_tex, NULL);
+  sf_ui_lay_button(&sf_ctx, "Clear", cb_clear_tex, NULL);
   if (g_sel_kind == SEL_ENTI && g_sel) {
-    sf_ui_add_label(&sf_ctx, "scale u v", (sf_ivec2_t){20, yy}, SF_CLR_WHITE); yy += 14;
-    sf_ui_add_drag_float(&sf_ctx, (sf_ivec2_t){20,  yy}, (sf_ivec2_t){112, yy + 14}, &g_sel->tex_scale.x, 0.05f, NULL, NULL);
-    sf_ui_add_drag_float(&sf_ctx, (sf_ivec2_t){116, yy}, (sf_ivec2_t){210, yy + 14}, &g_sel->tex_scale.y, 0.05f, NULL, NULL);
-    yy += 20;
+    sf_ui_lay_label(&sf_ctx, "scale u v", SF_CLR_WHITE);
+    sf_ui_lay_col(&sf_ctx, 2, NULL);
+    sf_ui_lay_drag_float(&sf_ctx, &g_sel->tex_scale.x, 0.05f, NULL, NULL);
+    sf_ui_lay_drag_float(&sf_ctx, &g_sel->tex_scale.y, 0.05f, NULL, NULL);
   }
-  return yy;
-}
-
-/* returns pixel height of Selection panel content given current selection state */
-static int sel_content_height(void) {
-  sf_frame_t *sf2 = sel_frame();
-  if (!sf2) return 14; /* "(no selection)" label */
-  /* common: name_lbl(14)+input+btn(26)+pos_lbl(14)+pos_drags(20)+rot_lbl(14)+rot_drags(20) */
-  int h = 108;
-  if (g_sel_kind == SEL_ENTI) {
-    h += 34; /* scale lbl(14)+drags(20) */
-    prim_meta_t *m = sel_meta();
-    if (m) switch (m->kind) {
-      case PM_PLANE:   h += 54;  break; /* lbl(14)+2drags(20)+res_inline(20) */
-      case PM_BOX:     h += 34;  break; /* lbl(14)+3drags(20) */
-      case PM_SPHERE:  h += 40;  break; /* radius_inline(20)+segs_inline(20) */
-      case PM_CYL:     h += 54;  break; /* lbl(14)+2drags(20)+segs_inline(20) */
-      case PM_TERRAIN: h += 128; break; /* 14+20+20+14+20+20+20 */
-      case PM_MODEL:   h += 54;  break; /* lbl(14)+mname(14)+browse(26) */
-      default: break;
-    }
-  } else if (g_sel_kind == SEL_LIGHT && g_sel_light) {
-    h += 108; /* type_lbl(14)+dd(26)+color_lbl(14)+3drags(20)+int_lbl(14)+drag(20) */
-  } else if (g_sel_kind == SEL_EMITR && g_sel_emitr) {
-    h += 162; /* type(40)+rate/life(34)+speed/spread(34)+spr_lbl(14)+name(14)+browse(26) */
-  } else if (g_sel_kind == SEL_CAM && g_sel_cam) {
-    int pw = 190;
-    int ph = (g_sel_cam->h > 0 && g_sel_cam->w > 0) ? (pw * g_sel_cam->h) / g_sel_cam->w : 120;
-    h += 54 + ph; /* fov_lbl(14)+3drags(20)+preview_lbl(14)+pip(ph)+gap(6) */
-  }
-  return h;
 }
 
 static int build_inspector(int y_start) {
   static char s_parentline[80];
   g_cam_pip_visible = false;
-  const int X0 = 10, X1 = 220;
+  const int X0 = 10, PNL_W = 210;
 
   /* ---- Create panel ---- */
   int y = y_start;
-  const int CREATE_H = 122; /* 20 + 72 spawn + 6 gap + 20 del + 4 btm */
-  add_panel_s("Create", (sf_ivec2_t){X0, y}, (sf_ivec2_t){X1, y+CREATE_H});
-  { int cy = y + 20;
-    cy = build_spawn_buttons(cy);
-    cy += 6;
-    icon_btn(ICN_DELETE, "   Delete Selection",
-             (sf_ivec2_t){20, cy}, (sf_ivec2_t){210, cy+20}, cb_delete, NULL); }
-  y += panel_h("Create", CREATE_H);
+  lay_panel_s("Create", X0, y, PNL_W);
+  build_spawn_buttons();
+  sf_ui_lay_spacing(&sf_ctx, 6);
+  sf_ui_lay_row(&sf_ctx, 20);
+  sf_ui_lay_button(&sf_ctx, "Delete Selection", cb_delete, NULL);
+  y = sf_ui_lay_end_panel(&sf_ctx);
 
   /* ---- Selection panel ---- */
-  int sel_h = 20 + sel_content_height() + 4;
-  add_panel_s("Selection", (sf_ivec2_t){X0, y}, (sf_ivec2_t){X1, y+sel_h});
+  lay_panel_s("Selection", X0, y, PNL_W);
 
   sf_frame_t *sf = sel_frame();
-  int iy = y + 20;
-  y += panel_h("Selection", sel_h);
-
   if (!sf) {
-    sf_ui_add_label(&sf_ctx, "(no selection)", (sf_ivec2_t){20, iy}, 0xFFAAAAAA);
+    sf_ui_lay_label(&sf_ctx, "(no selection)", 0xFFAAAAAA);
+    y = sf_ui_lay_end_panel(&sf_ctx);
     return y;
   }
 
@@ -3916,92 +3391,94 @@ static int build_inspector(int y_start) {
     g_rename_buf[sizeof(g_rename_buf) - 1] = '\0';
     g_rename_last = sel_ptr;
   }
-  sf_ui_add_label(&sf_ctx, "name", (sf_ivec2_t){20, iy}, SF_CLR_WHITE); iy += 14;
-  sf_ui_add_text_input(&sf_ctx, (sf_ivec2_t){20, iy}, (sf_ivec2_t){140, iy+20}, g_rename_buf, sizeof(g_rename_buf), NULL, NULL);
-  sf_ui_add_button(&sf_ctx, "Rename", (sf_ivec2_t){144, iy}, (sf_ivec2_t){210, iy+20}, cb_apply_rename, NULL);
-  iy += 26;
+  sf_ui_lay_label(&sf_ctx, "name", SF_CLR_WHITE);
+  sf_ui_lay_row(&sf_ctx, 20);
+  sf_ui_lay_col(&sf_ctx, 2, (float[]){0.65f, 0.35f});
+  sf_ui_lay_text_input(&sf_ctx, g_rename_buf, sizeof(g_rename_buf), NULL, NULL);
+  sf_ui_lay_button(&sf_ctx, "Rename", cb_apply_rename, NULL);
 
-  sf_ui_add_label(&sf_ctx, "pos x y z", (sf_ivec2_t){20, iy}, SF_CLR_WHITE); iy += 14;
-  sf_ui_add_drag_float(&sf_ctx, (sf_ivec2_t){20,  iy}, (sf_ivec2_t){82,  iy+14}, &sf->pos.x, 0.05f, cb_mark_dirty, NULL);
-  sf_ui_add_drag_float(&sf_ctx, (sf_ivec2_t){84,  iy}, (sf_ivec2_t){146, iy+14}, &sf->pos.y, 0.05f, cb_mark_dirty, NULL);
-  sf_ui_add_drag_float(&sf_ctx, (sf_ivec2_t){148, iy}, (sf_ivec2_t){210, iy+14}, &sf->pos.z, 0.05f, cb_mark_dirty, NULL);
-  iy += 20;
-  sf_ui_add_label(&sf_ctx, "rot x y z", (sf_ivec2_t){20, iy}, SF_CLR_WHITE); iy += 14;
-  sf_ui_add_drag_float(&sf_ctx, (sf_ivec2_t){20,  iy}, (sf_ivec2_t){82,  iy+14}, &sf->rot.x, 0.01f, cb_mark_dirty, NULL);
-  sf_ui_add_drag_float(&sf_ctx, (sf_ivec2_t){84,  iy}, (sf_ivec2_t){146, iy+14}, &sf->rot.y, 0.01f, cb_mark_dirty, NULL);
-  sf_ui_add_drag_float(&sf_ctx, (sf_ivec2_t){148, iy}, (sf_ivec2_t){210, iy+14}, &sf->rot.z, 0.01f, cb_mark_dirty, NULL);
-  iy += 20;
+  sf_ui_lay_label(&sf_ctx, "pos x y z", SF_CLR_WHITE);
+  sf_ui_lay_col(&sf_ctx, 3, NULL);
+  sf_ui_lay_drag_float(&sf_ctx, &sf->pos.x, 0.05f, cb_mark_dirty, NULL);
+  sf_ui_lay_drag_float(&sf_ctx, &sf->pos.y, 0.05f, cb_mark_dirty, NULL);
+  sf_ui_lay_drag_float(&sf_ctx, &sf->pos.z, 0.05f, cb_mark_dirty, NULL);
+
+  sf_ui_lay_label(&sf_ctx, "rot x y z", SF_CLR_WHITE);
+  sf_ui_lay_col(&sf_ctx, 3, NULL);
+  sf_ui_lay_drag_float(&sf_ctx, &sf->rot.x, 0.01f, cb_mark_dirty, NULL);
+  sf_ui_lay_drag_float(&sf_ctx, &sf->rot.y, 0.01f, cb_mark_dirty, NULL);
+  sf_ui_lay_drag_float(&sf_ctx, &sf->rot.z, 0.01f, cb_mark_dirty, NULL);
 
   if (g_sel_kind == SEL_ENTI) {
-    sf_ui_add_label(&sf_ctx, "scale x y z", (sf_ivec2_t){20, iy}, SF_CLR_WHITE);
-    sf_ui_add_checkbox(&sf_ctx, "lock", (sf_ivec2_t){140, iy-2}, (sf_ivec2_t){210, iy+14}, g_scale_lock, cb_scale_lock_tog, NULL);
-    iy += 14;
-    sf_ui_add_drag_float(&sf_ctx, (sf_ivec2_t){20,  iy}, (sf_ivec2_t){82,  iy+14}, &sf->scale.x, 0.01f, cb_scale_x, NULL);
-    sf_ui_add_drag_float(&sf_ctx, (sf_ivec2_t){84,  iy}, (sf_ivec2_t){146, iy+14}, &sf->scale.y, 0.01f, cb_scale_y, NULL);
-    sf_ui_add_drag_float(&sf_ctx, (sf_ivec2_t){148, iy}, (sf_ivec2_t){210, iy+14}, &sf->scale.z, 0.01f, cb_scale_z, NULL);
-    iy += 20;
+    sf_ui_lay_col(&sf_ctx, 2, (float[]){0.6f, 0.4f});
+    sf_ui_lay_label(&sf_ctx, "scale x y z", SF_CLR_WHITE);
+    sf_ui_lay_checkbox(&sf_ctx, "lock", g_scale_lock, cb_scale_lock_tog, NULL);
+    sf_ui_lay_col(&sf_ctx, 3, NULL);
+    sf_ui_lay_drag_float(&sf_ctx, &sf->scale.x, 0.01f, cb_scale_x, NULL);
+    sf_ui_lay_drag_float(&sf_ctx, &sf->scale.y, 0.01f, cb_scale_y, NULL);
+    sf_ui_lay_drag_float(&sf_ctx, &sf->scale.z, 0.01f, cb_scale_z, NULL);
     prim_meta_t *m = sel_meta();
     if (m && m->kind != PM_NONE) {
       switch (m->kind) {
         case PM_PLANE:
-          sf_ui_add_label(&sf_ctx, "plane sx sz", (sf_ivec2_t){20, iy}, SF_CLR_WHITE); iy += 14;
-          sf_ui_add_drag_float(&sf_ctx, (sf_ivec2_t){20,  iy}, (sf_ivec2_t){112, iy+14}, &m->p[0], 0.05f, cb_regen_sel, NULL);
-          sf_ui_add_drag_float(&sf_ctx, (sf_ivec2_t){116, iy}, (sf_ivec2_t){210, iy+14}, &m->p[1], 0.05f, cb_regen_sel, NULL);
-          iy += 20;
-          sf_ui_add_label(&sf_ctx, "res", (sf_ivec2_t){20, iy}, SF_CLR_WHITE);
-          sf_ui_add_drag_float(&sf_ctx, (sf_ivec2_t){60, iy}, (sf_ivec2_t){210, iy+14}, &m->p[2], 1.0f, cb_regen_sel, NULL);
-          iy += 20;
+          sf_ui_lay_label(&sf_ctx, "plane sx sz", SF_CLR_WHITE);
+          sf_ui_lay_col(&sf_ctx, 2, NULL);
+          sf_ui_lay_drag_float(&sf_ctx, &m->p[0], 0.05f, cb_regen_sel, NULL);
+          sf_ui_lay_drag_float(&sf_ctx, &m->p[1], 0.05f, cb_regen_sel, NULL);
+          sf_ui_lay_col(&sf_ctx, 2, (float[]){0.2f, 0.8f});
+          sf_ui_lay_label(&sf_ctx, "res", SF_CLR_WHITE);
+          sf_ui_lay_drag_float(&sf_ctx, &m->p[2], 1.0f, cb_regen_sel, NULL);
           break;
         case PM_BOX:
-          sf_ui_add_label(&sf_ctx, "box sx sy sz", (sf_ivec2_t){20, iy}, SF_CLR_WHITE); iy += 14;
-          sf_ui_add_drag_float(&sf_ctx, (sf_ivec2_t){20,  iy}, (sf_ivec2_t){82,  iy+14}, &m->p[0], 0.05f, cb_regen_sel, NULL);
-          sf_ui_add_drag_float(&sf_ctx, (sf_ivec2_t){84,  iy}, (sf_ivec2_t){146, iy+14}, &m->p[1], 0.05f, cb_regen_sel, NULL);
-          sf_ui_add_drag_float(&sf_ctx, (sf_ivec2_t){148, iy}, (sf_ivec2_t){210, iy+14}, &m->p[2], 0.05f, cb_regen_sel, NULL);
-          iy += 20;
+          sf_ui_lay_label(&sf_ctx, "box sx sy sz", SF_CLR_WHITE);
+          sf_ui_lay_col(&sf_ctx, 3, NULL);
+          sf_ui_lay_drag_float(&sf_ctx, &m->p[0], 0.05f, cb_regen_sel, NULL);
+          sf_ui_lay_drag_float(&sf_ctx, &m->p[1], 0.05f, cb_regen_sel, NULL);
+          sf_ui_lay_drag_float(&sf_ctx, &m->p[2], 0.05f, cb_regen_sel, NULL);
           break;
         case PM_SPHERE:
-          sf_ui_add_label(&sf_ctx, "radius", (sf_ivec2_t){20, iy}, SF_CLR_WHITE);
-          sf_ui_add_drag_float(&sf_ctx, (sf_ivec2_t){80, iy}, (sf_ivec2_t){210, iy+14}, &m->p[0], 0.05f, cb_regen_sel, NULL);
-          iy += 20;
-          sf_ui_add_label(&sf_ctx, "segs", (sf_ivec2_t){20, iy}, SF_CLR_WHITE);
-          sf_ui_add_drag_float(&sf_ctx, (sf_ivec2_t){80, iy}, (sf_ivec2_t){210, iy+14}, &m->p[1], 1.0f, cb_regen_sel, NULL);
-          iy += 20;
+          sf_ui_lay_col(&sf_ctx, 2, (float[]){0.3f, 0.7f});
+          sf_ui_lay_label(&sf_ctx, "radius", SF_CLR_WHITE);
+          sf_ui_lay_drag_float(&sf_ctx, &m->p[0], 0.05f, cb_regen_sel, NULL);
+          sf_ui_lay_col(&sf_ctx, 2, (float[]){0.3f, 0.7f});
+          sf_ui_lay_label(&sf_ctx, "segs", SF_CLR_WHITE);
+          sf_ui_lay_drag_float(&sf_ctx, &m->p[1], 1.0f, cb_regen_sel, NULL);
           break;
         case PM_CYL:
-          sf_ui_add_label(&sf_ctx, "cyl r / h", (sf_ivec2_t){20, iy}, SF_CLR_WHITE); iy += 14;
-          sf_ui_add_drag_float(&sf_ctx, (sf_ivec2_t){20,  iy}, (sf_ivec2_t){112, iy+14}, &m->p[0], 0.05f, cb_regen_sel, NULL);
-          sf_ui_add_drag_float(&sf_ctx, (sf_ivec2_t){116, iy}, (sf_ivec2_t){210, iy+14}, &m->p[1], 0.05f, cb_regen_sel, NULL);
-          iy += 20;
-          sf_ui_add_label(&sf_ctx, "segs", (sf_ivec2_t){20, iy}, SF_CLR_WHITE);
-          sf_ui_add_drag_float(&sf_ctx, (sf_ivec2_t){80, iy}, (sf_ivec2_t){210, iy+14}, &m->p[2], 1.0f, cb_regen_sel, NULL);
-          iy += 20;
+          sf_ui_lay_label(&sf_ctx, "cyl r / h", SF_CLR_WHITE);
+          sf_ui_lay_col(&sf_ctx, 2, NULL);
+          sf_ui_lay_drag_float(&sf_ctx, &m->p[0], 0.05f, cb_regen_sel, NULL);
+          sf_ui_lay_drag_float(&sf_ctx, &m->p[1], 0.05f, cb_regen_sel, NULL);
+          sf_ui_lay_col(&sf_ctx, 2, (float[]){0.3f, 0.7f});
+          sf_ui_lay_label(&sf_ctx, "segs", SF_CLR_WHITE);
+          sf_ui_lay_drag_float(&sf_ctx, &m->p[2], 1.0f, cb_regen_sel, NULL);
           break;
         case PM_TERRAIN:
-          sf_ui_add_label(&sf_ctx, "terrain sx sz", (sf_ivec2_t){20, iy}, SF_CLR_WHITE); iy += 14;
-          sf_ui_add_drag_float(&sf_ctx, (sf_ivec2_t){20,  iy}, (sf_ivec2_t){112, iy+14}, &m->p[0], 0.5f,  cb_regen_sel, NULL);
-          sf_ui_add_drag_float(&sf_ctx, (sf_ivec2_t){116, iy}, (sf_ivec2_t){210, iy+14}, &m->p[1], 0.5f,  cb_regen_sel, NULL);
-          iy += 20;
-          sf_ui_add_label(&sf_ctx, "res", (sf_ivec2_t){20, iy}, SF_CLR_WHITE);
-          sf_ui_add_drag_float(&sf_ctx, (sf_ivec2_t){60, iy}, (sf_ivec2_t){210, iy+14}, &m->p[2], 1.0f,  cb_regen_sel, NULL);
-          iy += 20;
-          sf_ui_add_label(&sf_ctx, "amp / freq", (sf_ivec2_t){20, iy}, SF_CLR_WHITE); iy += 14;
-          sf_ui_add_drag_float(&sf_ctx, (sf_ivec2_t){20,  iy}, (sf_ivec2_t){112, iy+14}, &m->p[3], 0.05f,  cb_regen_sel, NULL);
-          sf_ui_add_drag_float(&sf_ctx, (sf_ivec2_t){116, iy}, (sf_ivec2_t){210, iy+14}, &m->p[4], 0.005f, cb_regen_sel, NULL);
-          iy += 20;
-          sf_ui_add_label(&sf_ctx, "oct", (sf_ivec2_t){20, iy}, SF_CLR_WHITE);
-          sf_ui_add_drag_float(&sf_ctx, (sf_ivec2_t){60, iy}, (sf_ivec2_t){210, iy+14}, &m->p[5], 1.0f,  cb_regen_sel, NULL);
-          iy += 20;
-          sf_ui_add_label(&sf_ctx, "seed", (sf_ivec2_t){20, iy}, SF_CLR_WHITE);
-          sf_ui_add_drag_float(&sf_ctx, (sf_ivec2_t){60, iy}, (sf_ivec2_t){210, iy+14}, &m->p[6], 1.0f,  cb_regen_sel, NULL);
-          iy += 20;
+          sf_ui_lay_label(&sf_ctx, "terrain sx sz", SF_CLR_WHITE);
+          sf_ui_lay_col(&sf_ctx, 2, NULL);
+          sf_ui_lay_drag_float(&sf_ctx, &m->p[0], 0.5f, cb_regen_sel, NULL);
+          sf_ui_lay_drag_float(&sf_ctx, &m->p[1], 0.5f, cb_regen_sel, NULL);
+          sf_ui_lay_col(&sf_ctx, 2, (float[]){0.2f, 0.8f});
+          sf_ui_lay_label(&sf_ctx, "res", SF_CLR_WHITE);
+          sf_ui_lay_drag_float(&sf_ctx, &m->p[2], 1.0f, cb_regen_sel, NULL);
+          sf_ui_lay_label(&sf_ctx, "amp / freq", SF_CLR_WHITE);
+          sf_ui_lay_col(&sf_ctx, 2, NULL);
+          sf_ui_lay_drag_float(&sf_ctx, &m->p[3], 0.05f, cb_regen_sel, NULL);
+          sf_ui_lay_drag_float(&sf_ctx, &m->p[4], 0.005f, cb_regen_sel, NULL);
+          sf_ui_lay_col(&sf_ctx, 2, (float[]){0.2f, 0.8f});
+          sf_ui_lay_label(&sf_ctx, "oct", SF_CLR_WHITE);
+          sf_ui_lay_drag_float(&sf_ctx, &m->p[5], 1.0f, cb_regen_sel, NULL);
+          sf_ui_lay_col(&sf_ctx, 2, (float[]){0.2f, 0.8f});
+          sf_ui_lay_label(&sf_ctx, "seed", SF_CLR_WHITE);
+          sf_ui_lay_drag_float(&sf_ctx, &m->p[6], 1.0f, cb_regen_sel, NULL);
           break;
         case PM_MODEL: {
-          sf_ui_add_label(&sf_ctx, "model", (sf_ivec2_t){20, iy}, SF_CLR_WHITE); iy += 14;
+          sf_ui_lay_label(&sf_ctx, "model", SF_CLR_WHITE);
           const char *mname = (m->model_idx >= 0 && m->model_idx < g_model_count)
                               ? g_model_items[m->model_idx] : "(none)";
-          sf_ui_add_label(&sf_ctx, mname, (sf_ivec2_t){20, iy}, 0xFFAAAAAA); iy += 14;
-          icon_btn(ICN_OPEN, "   Browse", (sf_ivec2_t){20, iy}, (sf_ivec2_t){210, iy+20}, cb_browse_model, NULL);
-          iy += 26;
+          sf_ui_lay_label(&sf_ctx, mname, 0xFFAAAAAA);
+          sf_ui_lay_row(&sf_ctx, 20);
+          sf_ui_lay_button(&sf_ctx, "Browse", cb_browse_model, NULL);
           break;
         }
         default: break;
@@ -4009,94 +3486,95 @@ static int build_inspector(int y_start) {
     }
   } else if (g_sel_kind == SEL_LIGHT && g_sel_light) {
     g_light_type_sel = (g_sel_light->type == SF_LIGHT_DIR) ? 1 : 0;
-    sf_ui_add_label(&sf_ctx, "type", (sf_ivec2_t){20, iy}, SF_CLR_WHITE); iy += 14;
-    sf_ui_add_dropdown(&sf_ctx, (sf_ivec2_t){20, iy}, (sf_ivec2_t){210, iy+20}, k_light_items, 2, &g_light_type_sel, cb_light_type, NULL);
-    iy += 26;
-    sf_ui_add_label(&sf_ctx, "color r g b", (sf_ivec2_t){20, iy}, SF_CLR_WHITE); iy += 14;
-    sf_ui_add_drag_float(&sf_ctx, (sf_ivec2_t){20,  iy}, (sf_ivec2_t){82,  iy+14}, &g_sel_light->color.x, 0.01f, NULL, NULL);
-    sf_ui_add_drag_float(&sf_ctx, (sf_ivec2_t){84,  iy}, (sf_ivec2_t){146, iy+14}, &g_sel_light->color.y, 0.01f, NULL, NULL);
-    sf_ui_add_drag_float(&sf_ctx, (sf_ivec2_t){148, iy}, (sf_ivec2_t){210, iy+14}, &g_sel_light->color.z, 0.01f, NULL, NULL);
-    iy += 20;
-    sf_ui_add_label(&sf_ctx, "intensity", (sf_ivec2_t){20, iy}, SF_CLR_WHITE); iy += 14;
-    sf_ui_add_drag_float(&sf_ctx, (sf_ivec2_t){20, iy}, (sf_ivec2_t){210, iy+14}, &g_sel_light->intensity, 0.05f, NULL, NULL);
-    iy += 20;
+    sf_ui_lay_label(&sf_ctx, "type", SF_CLR_WHITE);
+    sf_ui_lay_row(&sf_ctx, 20);
+    sf_ui_lay_dropdown(&sf_ctx, k_light_items, 2, &g_light_type_sel, cb_light_type, NULL);
+    sf_ui_lay_label(&sf_ctx, "color r g b", SF_CLR_WHITE);
+    sf_ui_lay_col(&sf_ctx, 3, NULL);
+    sf_ui_lay_drag_float(&sf_ctx, &g_sel_light->color.x, 0.01f, NULL, NULL);
+    sf_ui_lay_drag_float(&sf_ctx, &g_sel_light->color.y, 0.01f, NULL, NULL);
+    sf_ui_lay_drag_float(&sf_ctx, &g_sel_light->color.z, 0.01f, NULL, NULL);
+    sf_ui_lay_label(&sf_ctx, "intensity", SF_CLR_WHITE);
+    sf_ui_lay_drag_float(&sf_ctx, &g_sel_light->intensity, 0.05f, NULL, NULL);
   } else if (g_sel_kind == SEL_EMITR && g_sel_emitr) {
     int ts = (g_sel_emitr->type == SF_EMITR_DIR) ? 0 : (g_sel_emitr->type == SF_EMITR_VOLUME) ? 2 : 1;
     static int _es;
     _es = ts;
-    sf_ui_add_label(&sf_ctx, "type", (sf_ivec2_t){20, iy}, SF_CLR_WHITE); iy += 14;
-    sf_ui_add_dropdown(&sf_ctx, (sf_ivec2_t){20, iy}, (sf_ivec2_t){210, iy+20}, k_emitr_items, 3, &_es, NULL, NULL);
+    sf_ui_lay_label(&sf_ctx, "type", SF_CLR_WHITE);
+    sf_ui_lay_row(&sf_ctx, 20);
+    sf_ui_lay_dropdown(&sf_ctx, k_emitr_items, 3, &_es, NULL, NULL);
     g_sel_emitr->type = (_es == 0) ? SF_EMITR_DIR : (_es == 2) ? SF_EMITR_VOLUME : SF_EMITR_OMNI;
-    iy += 26;
-    sf_ui_add_label(&sf_ctx, "rate / life", (sf_ivec2_t){20, iy}, SF_CLR_WHITE); iy += 14;
-    sf_ui_add_drag_float(&sf_ctx, (sf_ivec2_t){20,  iy}, (sf_ivec2_t){112, iy+14}, &g_sel_emitr->spawn_rate,    0.5f,  NULL, NULL);
-    sf_ui_add_drag_float(&sf_ctx, (sf_ivec2_t){116, iy}, (sf_ivec2_t){210, iy+14}, &g_sel_emitr->particle_life, 0.05f, NULL, NULL);
-    iy += 20;
-    sf_ui_add_label(&sf_ctx, "speed / spread", (sf_ivec2_t){20, iy}, SF_CLR_WHITE); iy += 14;
-    sf_ui_add_drag_float(&sf_ctx, (sf_ivec2_t){20,  iy}, (sf_ivec2_t){112, iy+14}, &g_sel_emitr->speed,  0.05f, NULL, NULL);
-    sf_ui_add_drag_float(&sf_ctx, (sf_ivec2_t){116, iy}, (sf_ivec2_t){210, iy+14}, &g_sel_emitr->spread, 0.01f, NULL, NULL);
-    iy += 20;
-    sf_ui_add_label(&sf_ctx, "sprite", (sf_ivec2_t){20, iy}, SF_CLR_WHITE); iy += 14;
-    sf_ui_add_label(&sf_ctx, (g_sel_emitr->sprite && g_sel_emitr->sprite->name) ? g_sel_emitr->sprite->name : "(none)",
-                 (sf_ivec2_t){20, iy}, 0xFFAAAAAA); iy += 14;
-    icon_btn(ICN_OPEN, "   Browse", (sf_ivec2_t){20, iy}, (sf_ivec2_t){210, iy+20}, cb_browse_sprite, NULL);
-    iy += 26;
+    sf_ui_lay_label(&sf_ctx, "rate / life", SF_CLR_WHITE);
+    sf_ui_lay_col(&sf_ctx, 2, NULL);
+    sf_ui_lay_drag_float(&sf_ctx, &g_sel_emitr->spawn_rate, 0.5f, NULL, NULL);
+    sf_ui_lay_drag_float(&sf_ctx, &g_sel_emitr->particle_life, 0.05f, NULL, NULL);
+    sf_ui_lay_label(&sf_ctx, "speed / spread", SF_CLR_WHITE);
+    sf_ui_lay_col(&sf_ctx, 2, NULL);
+    sf_ui_lay_drag_float(&sf_ctx, &g_sel_emitr->speed, 0.05f, NULL, NULL);
+    sf_ui_lay_drag_float(&sf_ctx, &g_sel_emitr->spread, 0.01f, NULL, NULL);
+    sf_ui_lay_label(&sf_ctx, "sprite", SF_CLR_WHITE);
+    sf_ui_lay_label(&sf_ctx, (g_sel_emitr->sprite && g_sel_emitr->sprite->name) ? g_sel_emitr->sprite->name : "(none)", 0xFFAAAAAA);
+    sf_ui_lay_row(&sf_ctx, 20);
+    sf_ui_lay_button(&sf_ctx, "Browse", cb_browse_sprite, NULL);
   } else if (g_sel_kind == SEL_CAM && g_sel_cam) {
-    sf_ui_add_label(&sf_ctx, "fov / near / far", (sf_ivec2_t){20, iy}, SF_CLR_WHITE); iy += 14;
-    sf_ui_add_drag_float(&sf_ctx, (sf_ivec2_t){20,  iy}, (sf_ivec2_t){82,  iy+14}, &g_sel_cam->fov,        0.5f,  cb_cam_proj_dirty, NULL);
-    sf_ui_add_drag_float(&sf_ctx, (sf_ivec2_t){84,  iy}, (sf_ivec2_t){146, iy+14}, &g_sel_cam->near_plane, 0.01f, cb_cam_proj_dirty, NULL);
-    sf_ui_add_drag_float(&sf_ctx, (sf_ivec2_t){148, iy}, (sf_ivec2_t){210, iy+14}, &g_sel_cam->far_plane,  1.0f,  cb_cam_proj_dirty, NULL);
-    iy += 20;
-    sf_ui_add_label(&sf_ctx, "preview", (sf_ivec2_t){20, iy}, SF_CLR_WHITE); iy += 14;
-    int pip_w = 190;
+    sf_ui_lay_label(&sf_ctx, "fov / near / far", SF_CLR_WHITE);
+    sf_ui_lay_col(&sf_ctx, 3, NULL);
+    sf_ui_lay_drag_float(&sf_ctx, &g_sel_cam->fov, 0.5f, cb_cam_proj_dirty, NULL);
+    sf_ui_lay_drag_float(&sf_ctx, &g_sel_cam->near_plane, 0.01f, cb_cam_proj_dirty, NULL);
+    sf_ui_lay_drag_float(&sf_ctx, &g_sel_cam->far_plane, 1.0f, cb_cam_proj_dirty, NULL);
+    sf_ui_lay_label(&sf_ctx, "preview", SF_CLR_WHITE);
+    /* Camera PIP: reserve space and record position for blit overlay */
+    int pip_w = PNL_W - 8;
     int pip_h = (g_sel_cam->h > 0 && g_sel_cam->w > 0) ? (pip_w * g_sel_cam->h) / g_sel_cam->w : 120;
-    g_cam_pip_pos  = (sf_ivec2_t){20, iy};
-    g_cam_pip_size = (sf_ivec2_t){pip_w, pip_h};
-    g_cam_pip_visible = true;
-    iy += pip_h + 6;
+    sf_ui_lay_row(&sf_ctx, pip_h);
+    /* Use a dummy label to consume the row and get its position */
+    sf_ui_lmn_t *pip_el = sf_ui_lay_label(&sf_ctx, "", 0);
+    if (pip_el) {
+      g_cam_pip_pos  = pip_el->v0;
+      g_cam_pip_size = (sf_ivec2_t){pip_w, pip_h};
+      g_cam_pip_visible = true;
+    }
   }
-  (void)iy;
+  y = sf_ui_lay_end_panel(&sf_ctx);
 
   /* ---- Texture panel (entity only) ---- */
-  const int TEX_H = 98, PARENT_H = 84;
   if (g_sel_kind == SEL_ENTI) {
-    add_panel_s("Texture", (sf_ivec2_t){X0, y}, (sf_ivec2_t){X1, y+TEX_H});
-    build_texture_section(y + 20);
-    y += panel_h("Texture", TEX_H);
+    lay_panel_s("Texture", X0, y, PNL_W);
+    build_texture_section();
+    y = sf_ui_lay_end_panel(&sf_ctx);
   }
 
   /* ---- Parenting panel ---- */
-  add_panel_s("Parenting", (sf_ivec2_t){X0, y}, (sf_ivec2_t){X1, y+PARENT_H});
-  int py = y + 20;
+  lay_panel_s("Parenting", X0, y, PNL_W);
   const char *pn = (sf->parent && sf->parent->name) ? sf->parent->name : "(none)";
   snprintf(s_parentline, sizeof(s_parentline), "parent: %s", pn);
-  sf_ui_add_label(&sf_ctx, s_parentline, (sf_ivec2_t){20, py}, SF_CLR_WHITE); py += 14;
-  sf_ui_add_dropdown(&sf_ctx, (sf_ivec2_t){20, py}, (sf_ivec2_t){210, py+20}, g_parent_items, g_parent_count, &g_parent_sel, NULL, NULL);
-  py += 26;
-  icon_btn(ICN_PARENT,  "   Parent",   (sf_ivec2_t){20,  py}, (sf_ivec2_t){112, py+20}, cb_set_parent, NULL);
-  icon_btn(ICN_UNGROUP, "   Unparent", (sf_ivec2_t){114, py}, (sf_ivec2_t){210, py+20}, cb_unparent,   NULL);
-  y += panel_h("Parenting", PARENT_H);
+  sf_ui_lay_label(&sf_ctx, s_parentline, SF_CLR_WHITE);
+  sf_ui_lay_row(&sf_ctx, 20);
+  sf_ui_lay_dropdown(&sf_ctx, g_parent_items, g_parent_count, &g_parent_sel, NULL, NULL);
+  sf_ui_lay_row(&sf_ctx, 20);
+  sf_ui_lay_col(&sf_ctx, 2, NULL);
+  sf_ui_lay_button(&sf_ctx, "Parent", cb_set_parent, NULL);
+  sf_ui_lay_button(&sf_ctx, "Unparent", cb_unparent, NULL);
+  y = sf_ui_lay_end_panel(&sf_ctx);
   return y;
 }
 
 static void build_sff_tab(void) {
-  const int TOP = 30;
+  const int TOP = 30, PNL_W = 210;
 
   /* Inspector fills left column; returns bottom y of last panel */
   int fy = build_inspector(TOP);
 
   /* File panel butts against inspector */
-  add_panel_s("File", (sf_ivec2_t){10, fy}, (sf_ivec2_t){220, fy + 120});
-  /* SFF file dropdown */
-  if (g_sff_count > 0)
-    sf_ui_add_dropdown(&sf_ctx, (sf_ivec2_t){20, fy + 22}, (sf_ivec2_t){210, fy + 40},
-      g_sff_items, g_sff_count, &g_sff_sel, cb_load_sff_from_list, NULL);
-  else
-    sf_ui_add_label(&sf_ctx, "No .sff files found", (sf_ivec2_t){20, fy + 28}, 0);
-  /* Manual path input */
-  sf_ui_add_text_input(&sf_ctx, (sf_ivec2_t){20, fy + 46}, (sf_ivec2_t){210, fy + 62}, g_save_path, sizeof(g_save_path), NULL, NULL);
-  icon_btn(ICN_SAVE,  "   Save",    (sf_ivec2_t){20,  fy + 66}, (sf_ivec2_t){112, fy + 84}, cb_save_install_sff,  NULL);
-  icon_btn(ICN_OPEN,  "   Load",    (sf_ivec2_t){114, fy + 66}, (sf_ivec2_t){210, fy + 84}, cb_load_sff,          NULL);
+  lay_panel_s("File", 10, fy, PNL_W);
+  sf_ui_lay_row(&sf_ctx, 18);
+  sf_ui_lay_row(&sf_ctx, 18);
+  sf_ui_lay_text_input(&sf_ctx, g_save_path, sizeof(g_save_path), NULL, NULL);
+  sf_ui_lay_row(&sf_ctx, 18);
+  sf_ui_lay_col(&sf_ctx, 2, NULL);
+  sf_ui_lay_button(&sf_ctx, "Save", cb_save_install_sff, NULL);
+  sf_ui_lay_button(&sf_ctx, "Load", cb_load_sff, NULL);
+  sf_ui_lay_end_panel(&sf_ctx);
 
   int rx0 = g_w - 230, rx1 = g_w - 10;
   build_debug_panel(rx0, rx1, TOP);
@@ -4138,53 +3616,54 @@ static const char* _design_sel_text(sf_ui_lmn_t *el) {
 }
 
 static void build_sfui_tab(void) {
-  const int TOP = 30;
+  const int TOP = 30, PNL_W = 210;
   int y = TOP;
 
   /* Left: palette */
-  sf_ui_add_panel(&sf_ctx, "Palette", (sf_ivec2_t){10, TOP}, (sf_ivec2_t){220, TOP + 252});
-  y = TOP + 22;
+  sf_ui_lay_begin_panel(&sf_ctx, "Palette", 10, TOP, PNL_W, 0);
   const char *lbls[8] = { "Button", "Label", "Panel", "Checkbox", "Slider", "DragFloat", "TextInput", "Dropdown" };
   int kinds[8] = { SF_UI_BUTTON, SF_UI_LABEL, SF_UI_PANEL, SF_UI_CHECKBOX, SF_UI_SLIDER, SF_UI_DRAG_FLOAT, SF_UI_TEXT_INPUT, SF_UI_DROPDOWN };
-  for (int i = 0; i < 8; i++) {
-    sf_ui_add_button(&sf_ctx, lbls[i], (sf_ivec2_t){20, y}, (sf_ivec2_t){210, y + 20}, cb_design_add, (void*)(intptr_t)kinds[i]);
-    y += 24;
-  }
-  y += 6;
-  icon_btn(ICN_DELETE, "   Delete Selected", (sf_ivec2_t){20, y}, (sf_ivec2_t){210, y + 20}, cb_design_del, NULL);
-  y += 28;
+  sf_ui_lay_row(&sf_ctx, 20);
+  for (int i = 0; i < 8; i++)
+    sf_ui_lay_button(&sf_ctx, lbls[i], cb_design_add, (void*)(intptr_t)kinds[i]);
+  sf_ui_lay_spacing(&sf_ctx, 6);
+  sf_ui_lay_row(&sf_ctx, 20);
+  sf_ui_lay_button(&sf_ctx, "Delete Selected", cb_design_del, NULL);
+  y = sf_ui_lay_end_panel(&sf_ctx);
 
   /* Left: canvas */
-  sf_ui_add_panel(&sf_ctx, "Canvas", (sf_ivec2_t){10, y}, (sf_ivec2_t){220, y + 70});
-  y += 26;
-  sf_ui_add_label(&sf_ctx, "size w h", (sf_ivec2_t){20, y}, SF_CLR_WHITE); y += 14;
-  sf_ui_add_drag_float(&sf_ctx, (sf_ivec2_t){20, y},  (sf_ivec2_t){112, y + 20}, &g_design_canvas_w, 4.0f, cb_canvas_resized, NULL);
-  sf_ui_add_drag_float(&sf_ctx, (sf_ivec2_t){116, y}, (sf_ivec2_t){210, y + 20}, &g_design_canvas_h, 4.0f, cb_canvas_resized, NULL);
-  y += 28;
+  sf_ui_lay_begin_panel(&sf_ctx, "Canvas", 10, y, PNL_W, 0);
+  sf_ui_lay_label(&sf_ctx, "size w h", SF_CLR_WHITE);
+  sf_ui_lay_row(&sf_ctx, 20);
+  sf_ui_lay_col(&sf_ctx, 2, NULL);
+  sf_ui_lay_drag_float(&sf_ctx, &g_design_canvas_w, 4.0f, cb_canvas_resized, NULL);
+  sf_ui_lay_drag_float(&sf_ctx, &g_design_canvas_h, 4.0f, cb_canvas_resized, NULL);
+  y = sf_ui_lay_end_panel(&sf_ctx);
 
   /* Left: file */
-  sf_ui_add_panel(&sf_ctx, "File", (sf_ivec2_t){10, y}, (sf_ivec2_t){220, y + 80});
-  y += 26;
-  sf_ui_add_text_input(&sf_ctx, (sf_ivec2_t){20, y}, (sf_ivec2_t){210, y + 20}, g_sfui_path, sizeof(g_sfui_path), NULL, NULL);
-  y += 24;
-  icon_btn(ICN_SAVE, "   Save", (sf_ivec2_t){20,  y}, (sf_ivec2_t){112, y + 20}, cb_design_save, NULL);
-  icon_btn(ICN_OPEN, "   Load", (sf_ivec2_t){116, y}, (sf_ivec2_t){210, y + 20}, cb_design_load, NULL);
+  sf_ui_lay_begin_panel(&sf_ctx, "File", 10, y, PNL_W, 0);
+  sf_ui_lay_row(&sf_ctx, 20);
+  sf_ui_lay_text_input(&sf_ctx, g_sfui_path, sizeof(g_sfui_path), NULL, NULL);
+  sf_ui_lay_row(&sf_ctx, 20);
+  sf_ui_lay_col(&sf_ctx, 2, NULL);
+  sf_ui_lay_button(&sf_ctx, "Save", cb_design_save, NULL);
+  sf_ui_lay_button(&sf_ctx, "Load", cb_design_load, NULL);
+  sf_ui_lay_end_panel(&sf_ctx);
 
   /* Right: inspector */
-  int rx0 = g_w - 230, rx1 = g_w - 10;
-  int r = TOP;
-  sf_ui_add_panel(&sf_ctx, "Properties", (sf_ivec2_t){rx0, r}, (sf_ivec2_t){rx1, r + 360});
-  int ry = r + 22;
+  int rx0 = g_w - 230, rpw = 220;
+  sf_ui_lay_begin_panel(&sf_ctx, "Properties", rx0, TOP, rpw, 0);
   if (!g_design_sel) {
-    sf_ui_add_label(&sf_ctx, "(no selection)", (sf_ivec2_t){rx0 + 10, ry}, 0xFFAAAAAA);
+    sf_ui_lay_label(&sf_ctx, "(no selection)", 0xFFAAAAAA);
   } else {
     static char s_type[40];
     snprintf(s_type, sizeof(s_type), "type: %s", _design_type_str(g_design_sel->type));
-    sf_ui_add_label(&sf_ctx, s_type, (sf_ivec2_t){rx0 + 10, ry}, SF_CLR_WHITE); ry += 16;
-    sf_ui_add_label(&sf_ctx, "name", (sf_ivec2_t){rx0 + 10, ry}, SF_CLR_WHITE); ry += 14;
-    sf_ui_add_text_input(&sf_ctx, (sf_ivec2_t){rx0 + 10, ry}, (sf_ivec2_t){rx1 - 60, ry + 20}, g_design_name_buf, sizeof(g_design_name_buf), NULL, NULL);
-    sf_ui_add_button(&sf_ctx, "Set", (sf_ivec2_t){rx1 - 56, ry}, (sf_ivec2_t){rx1 - 10, ry + 20}, cb_design_apply_name, NULL);
-    ry += 26;
+    sf_ui_lay_label(&sf_ctx, s_type, SF_CLR_WHITE);
+    sf_ui_lay_label(&sf_ctx, "name", SF_CLR_WHITE);
+    sf_ui_lay_row(&sf_ctx, 20);
+    sf_ui_lay_col(&sf_ctx, 2, (float[]){0.7f, 0.3f});
+    sf_ui_lay_text_input(&sf_ctx, g_design_name_buf, sizeof(g_design_name_buf), NULL, NULL);
+    sf_ui_lay_button(&sf_ctx, "Set", cb_design_apply_name, NULL);
 
     sf_ivec2_t org = canvas_origin();
     float cz = g_design_zoom;
@@ -4210,64 +3689,62 @@ static void build_sfui_tab(void) {
       }
       g_design_text_last = (void*)g_design_sel;
     }
-    sf_ui_add_label(&sf_ctx, "v0 x y (canvas)", (sf_ivec2_t){rx0 + 10, ry}, SF_CLR_WHITE); ry += 14;
-    sf_ui_add_drag_float(&sf_ctx, (sf_ivec2_t){rx0 + 10, ry}, (sf_ivec2_t){rx0 + 105, ry + 20}, &g_design_v0x, 1.0f, cb_design_apply_bounds, NULL);
-    sf_ui_add_drag_float(&sf_ctx, (sf_ivec2_t){rx0 + 110, ry}, (sf_ivec2_t){rx1 - 10, ry + 20}, &g_design_v0y, 1.0f, cb_design_apply_bounds, NULL);
-    ry += 26;
-    sf_ui_add_label(&sf_ctx, "v1 x y (canvas)", (sf_ivec2_t){rx0 + 10, ry}, SF_CLR_WHITE); ry += 14;
-    sf_ui_add_drag_float(&sf_ctx, (sf_ivec2_t){rx0 + 10, ry}, (sf_ivec2_t){rx0 + 105, ry + 20}, &g_design_v1x, 1.0f, cb_design_apply_bounds, NULL);
-    sf_ui_add_drag_float(&sf_ctx, (sf_ivec2_t){rx0 + 110, ry}, (sf_ivec2_t){rx1 - 10, ry + 20}, &g_design_v1y, 1.0f, cb_design_apply_bounds, NULL);
-    ry += 26;
+    sf_ui_lay_label(&sf_ctx, "v0 x y (canvas)", SF_CLR_WHITE);
+    sf_ui_lay_col(&sf_ctx, 2, NULL);
+    sf_ui_lay_drag_float(&sf_ctx, &g_design_v0x, 1.0f, cb_design_apply_bounds, NULL);
+    sf_ui_lay_drag_float(&sf_ctx, &g_design_v0y, 1.0f, cb_design_apply_bounds, NULL);
+    sf_ui_lay_label(&sf_ctx, "v1 x y (canvas)", SF_CLR_WHITE);
+    sf_ui_lay_col(&sf_ctx, 2, NULL);
+    sf_ui_lay_drag_float(&sf_ctx, &g_design_v1x, 1.0f, cb_design_apply_bounds, NULL);
+    sf_ui_lay_drag_float(&sf_ctx, &g_design_v1y, 1.0f, cb_design_apply_bounds, NULL);
     int t = g_design_sel->type;
     if (t == SF_UI_BUTTON || t == SF_UI_LABEL || t == SF_UI_CHECKBOX || t == SF_UI_PANEL) {
-      sf_ui_add_label(&sf_ctx, "text", (sf_ivec2_t){rx0 + 10, ry}, SF_CLR_WHITE); ry += 14;
-      sf_ui_add_text_input(&sf_ctx, (sf_ivec2_t){rx0 + 10, ry}, (sf_ivec2_t){rx1 - 60, ry + 20}, g_design_text_buf, sizeof(g_design_text_buf), NULL, NULL);
-      sf_ui_add_button(&sf_ctx, "Set", (sf_ivec2_t){rx1 - 56, ry}, (sf_ivec2_t){rx1 - 10, ry + 20}, cb_design_apply_text, NULL);
-      ry += 26;
+      sf_ui_lay_label(&sf_ctx, "text", SF_CLR_WHITE);
+      sf_ui_lay_row(&sf_ctx, 20);
+      sf_ui_lay_col(&sf_ctx, 2, (float[]){0.7f, 0.3f});
+      sf_ui_lay_text_input(&sf_ctx, g_design_text_buf, sizeof(g_design_text_buf), NULL, NULL);
+      sf_ui_lay_button(&sf_ctx, "Set", cb_design_apply_text, NULL);
     }
     if (t == SF_UI_SLIDER) {
-      sf_ui_add_label(&sf_ctx, "min / max", (sf_ivec2_t){rx0 + 10, ry}, SF_CLR_WHITE); ry += 14;
-      sf_ui_add_drag_float(&sf_ctx, (sf_ivec2_t){rx0 + 10, ry},  (sf_ivec2_t){rx0 + 105, ry + 20}, &g_design_slider_min, 0.05f, cb_design_apply_slider, NULL);
-      sf_ui_add_drag_float(&sf_ctx, (sf_ivec2_t){rx0 + 110, ry}, (sf_ivec2_t){rx1 - 10, ry + 20},  &g_design_slider_max, 0.05f, cb_design_apply_slider, NULL);
-      ry += 26;
-      sf_ui_add_label(&sf_ctx, "value", (sf_ivec2_t){rx0 + 10, ry}, SF_CLR_WHITE); ry += 14;
-      sf_ui_add_drag_float(&sf_ctx, (sf_ivec2_t){rx0 + 10, ry}, (sf_ivec2_t){rx1 - 10, ry + 20}, &g_design_slider_val, 0.01f, cb_design_apply_slider, NULL);
-      ry += 26;
+      sf_ui_lay_label(&sf_ctx, "min / max", SF_CLR_WHITE);
+      sf_ui_lay_col(&sf_ctx, 2, NULL);
+      sf_ui_lay_drag_float(&sf_ctx, &g_design_slider_min, 0.05f, cb_design_apply_slider, NULL);
+      sf_ui_lay_drag_float(&sf_ctx, &g_design_slider_max, 0.05f, cb_design_apply_slider, NULL);
+      sf_ui_lay_label(&sf_ctx, "value", SF_CLR_WHITE);
+      sf_ui_lay_drag_float(&sf_ctx, &g_design_slider_val, 0.01f, cb_design_apply_slider, NULL);
     }
     if (t == SF_UI_DRAG_FLOAT) {
-      sf_ui_add_label(&sf_ctx, "step", (sf_ivec2_t){rx0 + 10, ry}, SF_CLR_WHITE); ry += 14;
-      sf_ui_add_drag_float(&sf_ctx, (sf_ivec2_t){rx0 + 10, ry}, (sf_ivec2_t){rx1 - 10, ry + 20}, &g_design_df_step, 0.005f, cb_design_apply_df, NULL);
-      ry += 26;
+      sf_ui_lay_label(&sf_ctx, "step", SF_CLR_WHITE);
+      sf_ui_lay_drag_float(&sf_ctx, &g_design_df_step, 0.005f, cb_design_apply_df, NULL);
     }
     if (t == SF_UI_CHECKBOX) {
-      sf_ui_add_checkbox(&sf_ctx, "initial checked", (sf_ivec2_t){rx0 + 10, ry}, (sf_ivec2_t){rx1 - 10, ry + 20}, g_design_checked, cb_design_apply_checked, NULL);
-      ry += 26;
+      sf_ui_lay_row(&sf_ctx, 20);
+      sf_ui_lay_checkbox(&sf_ctx, "initial checked", g_design_checked, cb_design_apply_checked, NULL);
     }
     if (t == SF_UI_PANEL) {
-      sf_ui_add_checkbox(&sf_ctx, "collapsed", (sf_ivec2_t){rx0 + 10, ry}, (sf_ivec2_t){rx1 - 10, ry + 20}, g_design_panel_collapsed, cb_design_apply_panel, NULL);
-      ry += 26;
+      sf_ui_lay_row(&sf_ctx, 20);
+      sf_ui_lay_checkbox(&sf_ctx, "collapsed", g_design_panel_collapsed, cb_design_apply_panel, NULL);
     }
     if (t == SF_UI_DROPDOWN) {
       static char s_dd[80];
       int n = g_design_sel->dropdown.n_items;
       snprintf(s_dd, sizeof(s_dd), "items: %d", n);
-      sf_ui_add_label(&sf_ctx, s_dd, (sf_ivec2_t){rx0 + 10, ry}, SF_CLR_WHITE); ry += 14;
-      for (int k = 0; k < n && k < 6; k++) {
-        sf_ui_add_label(&sf_ctx, g_design_sel->dropdown.items[k] ? g_design_sel->dropdown.items[k] : "?", (sf_ivec2_t){rx0 + 16, ry}, 0xFFAAAAAA);
-        ry += 14;
-      }
-      sf_ui_add_text_input(&sf_ctx, (sf_ivec2_t){rx0 + 10, ry}, (sf_ivec2_t){rx1 - 70, ry + 20}, g_design_dd_item_buf, sizeof(g_design_dd_item_buf), NULL, NULL);
-      sf_ui_add_button(&sf_ctx, "+", (sf_ivec2_t){rx1 - 66, ry}, (sf_ivec2_t){rx1 - 38, ry + 20}, cb_design_dd_add, NULL);
-      sf_ui_add_button(&sf_ctx, "-", (sf_ivec2_t){rx1 - 34, ry}, (sf_ivec2_t){rx1 - 10, ry + 20}, cb_design_dd_pop, NULL);
-      ry += 26;
-      sf_ui_add_label(&sf_ctx, "initial sel", (sf_ivec2_t){rx0 + 10, ry}, SF_CLR_WHITE); ry += 14;
+      sf_ui_lay_label(&sf_ctx, s_dd, SF_CLR_WHITE);
+      for (int k = 0; k < n && k < 6; k++)
+        sf_ui_lay_label(&sf_ctx, g_design_sel->dropdown.items[k] ? g_design_sel->dropdown.items[k] : "?", 0xFFAAAAAA);
+      sf_ui_lay_row(&sf_ctx, 20);
+      sf_ui_lay_col(&sf_ctx, 3, (float[]){0.6f, 0.2f, 0.2f});
+      sf_ui_lay_text_input(&sf_ctx, g_design_dd_item_buf, sizeof(g_design_dd_item_buf), NULL, NULL);
+      sf_ui_lay_button(&sf_ctx, "+", cb_design_dd_add, NULL);
+      sf_ui_lay_button(&sf_ctx, "-", cb_design_dd_pop, NULL);
+      sf_ui_lay_label(&sf_ctx, "initial sel", SF_CLR_WHITE);
       static float s_dd_sel;
       s_dd_sel = (float)g_design_dd_selected;
-      sf_ui_add_drag_float(&sf_ctx, (sf_ivec2_t){rx0 + 10, ry}, (sf_ivec2_t){rx1 - 10, ry + 20}, &s_dd_sel, 1.0f, cb_design_apply_dd_sel, NULL);
+      sf_ui_lay_drag_float(&sf_ctx, &s_dd_sel, 1.0f, cb_design_apply_dd_sel, NULL);
       g_design_dd_selected = (int)s_dd_sel;
-      ry += 26;
     }
   }
+  sf_ui_lay_end_panel(&sf_ctx);
 }
 
 /* --- INPUT --- */
@@ -4379,29 +3856,24 @@ static void update_camera(void) {
   if (!ctx->ui || ctx->ui->focused == NULL) {
     float move = 8.0f * dt;
     if (sf_key_down(ctx, SF_KEY_LSHIFT)) move *= 3.0f;
-    sf_fvec3_t fwd = sf_fvec3_sub(g_orbit_target, cam->frame->pos);
+    sf_fvec3_t fwd = sf_fvec3_sub(g_orbit.target, cam->frame->pos);
     fwd.y = 0.0f;
     fwd = sf_fvec3_norm(fwd);
-    sf_fvec3_t up  = {0.0f, 1.0f, 0.0f};
-    sf_fvec3_t right = sf_fvec3_norm(sf_fvec3_cross(fwd, up));
-    if (sf_key_down(ctx, SF_KEY_W)) g_orbit_target = sf_fvec3_add(g_orbit_target, (sf_fvec3_t){fwd.x*move, 0.0f, fwd.z*move});
-    if (sf_key_down(ctx, SF_KEY_S)) g_orbit_target = sf_fvec3_add(g_orbit_target, (sf_fvec3_t){-fwd.x*move, 0.0f, -fwd.z*move});
-    if (sf_key_down(ctx, SF_KEY_A)) g_orbit_target = sf_fvec3_add(g_orbit_target, (sf_fvec3_t){-right.x*move, 0.0f, -right.z*move});
-    if (sf_key_down(ctx, SF_KEY_D)) g_orbit_target = sf_fvec3_add(g_orbit_target, (sf_fvec3_t){ right.x*move, 0.0f,  right.z*move});
-    if (sf_key_down(ctx, SF_KEY_Q)) g_orbit_target.y -= move;
-    if (sf_key_down(ctx, SF_KEY_E)) g_orbit_target.y += move;
+    sf_fvec3_t right = sf_fvec3_norm(sf_fvec3_cross(fwd, (sf_fvec3_t){0,1,0}));
+    if (sf_key_down(ctx, SF_KEY_W)) g_orbit.target = sf_fvec3_add(g_orbit.target, (sf_fvec3_t){fwd.x*move, 0.0f, fwd.z*move});
+    if (sf_key_down(ctx, SF_KEY_S)) g_orbit.target = sf_fvec3_add(g_orbit.target, (sf_fvec3_t){-fwd.x*move, 0.0f, -fwd.z*move});
+    if (sf_key_down(ctx, SF_KEY_A)) g_orbit.target = sf_fvec3_add(g_orbit.target, (sf_fvec3_t){-right.x*move, 0.0f, -right.z*move});
+    if (sf_key_down(ctx, SF_KEY_D)) g_orbit.target = sf_fvec3_add(g_orbit.target, (sf_fvec3_t){ right.x*move, 0.0f,  right.z*move});
+    if (sf_key_down(ctx, SF_KEY_Q)) g_orbit.target.y -= move;
+    if (sf_key_down(ctx, SF_KEY_E)) g_orbit.target.y += move;
   }
 
-  if (ctx->input.mouse_btns[SF_MOUSE_RIGHT]) {
-    g_orbit_yaw   += ctx->input.mouse_dx * 0.005f;
-    g_orbit_pitch += ctx->input.mouse_dy * 0.005f;
-    if (g_orbit_pitch >  1.5f) g_orbit_pitch =  1.5f;
-    if (g_orbit_pitch < -1.5f) g_orbit_pitch = -1.5f;
-  }
+  if (ctx->input.mouse_btns[SF_MOUSE_RIGHT])
+    sf_orbit_cam_rotate(&g_orbit, ctx->input.mouse_dx * 0.005f, ctx->input.mouse_dy * 0.005f);
   if (ctx->input.wheel_dy != 0 && !mouse_over_ui(ctx->input.mouse_x, ctx->input.mouse_y)) {
-    g_orbit_dist *= (ctx->input.wheel_dy > 0) ? 0.9f : 1.1f;
-    if (g_orbit_dist < 1.0f)   g_orbit_dist = 1.0f;
-    if (g_orbit_dist > 200.0f) g_orbit_dist = 200.0f;
+    float factor = (ctx->input.wheel_dy > 0) ? -g_orbit.dist * 0.1f : g_orbit.dist * 0.1f;
+    sf_orbit_cam_zoom(&g_orbit, factor);
+    if (g_orbit.dist > 200.0f) g_orbit.dist = 200.0f;
   }
   orbit_apply(cam);
 
@@ -4435,53 +3907,20 @@ static void update_camera(void) {
 
 static void try_pick(int mx, int my) {
   sf_ray_t ray = sf_ray_from_screen(&sf_ctx, &sf_ctx.main_camera, mx, my);
-  float best_t = 1e30f;
-  sel_kind_t best_kind = SEL_NONE;
-  void *best_ptr = NULL;
-
-  float t = 0.0f;
-  sf_enti_t *he = sf_raycast_entities(&sf_ctx, ray, &t);
-  if (he) { best_t = t; best_kind = SEL_ENTI; best_ptr = he; }
-
-  const float light_r = 0.3f;
-  for (int i = 0; i < sf_ctx.light_count; i++) {
-    sf_light_t *l = &sf_ctx.lights[i];
-    if (!l->frame) continue;
-    sf_fvec3_t p = { l->frame->global_M.m[3][0], l->frame->global_M.m[3][1], l->frame->global_M.m[3][2] };
-    sf_fvec3_t mn = { p.x - light_r, p.y - light_r, p.z - light_r };
-    sf_fvec3_t mx3 = { p.x + light_r, p.y + light_r, p.z + light_r };
-    float tt;
-    if (sf_ray_aabb(ray, mn, mx3, &tt) && tt < best_t) { best_t = tt; best_kind = SEL_LIGHT; best_ptr = l; }
-  }
-
-  const float em_r = 0.4f;
-  for (int i = 0; i < sf_ctx.emitr_count; i++) {
-    sf_emitr_t *em = &sf_ctx.emitrs[i];
-    if (!em->frame) continue;
-    sf_fvec3_t p = { em->frame->global_M.m[3][0], em->frame->global_M.m[3][1], em->frame->global_M.m[3][2] };
-    sf_fvec3_t mn = { p.x - em_r, p.y - em_r, p.z - em_r };
-    sf_fvec3_t mx3 = { p.x + em_r, p.y + em_r, p.z + em_r };
-    float tt;
-    if (sf_ray_aabb(ray, mn, mx3, &tt) && tt < best_t) { best_t = tt; best_kind = SEL_EMITR; best_ptr = em; }
-  }
-
-  const float cam_r = 0.5f;
-  for (int i = 0; i < sf_ctx.cam_count; i++) {
-    sf_cam_t *c = &sf_ctx.cameras[i];
-    if (!c->frame || c == &sf_ctx.main_camera) continue;
-    sf_fvec3_t p = { c->frame->global_M.m[3][0], c->frame->global_M.m[3][1], c->frame->global_M.m[3][2] };
-    sf_fvec3_t mn = { p.x - cam_r, p.y - cam_r, p.z - cam_r };
-    sf_fvec3_t mx3 = { p.x + cam_r, p.y + cam_r, p.z + cam_r };
-    float tt;
-    if (sf_ray_aabb(ray, mn, mx3, &tt) && tt < best_t) { best_t = tt; best_kind = SEL_CAM; best_ptr = c; }
-  }
+  sf_hit_t hits[SF_MAX_HITS];
+  int n = sf_raycast_all(&sf_ctx, ray, hits, SF_MAX_HITS);
 
   sel_clear();
-  g_sel_kind = best_kind;
-  if      (best_kind == SEL_ENTI)  g_sel       = (sf_enti_t*) best_ptr;
-  else if (best_kind == SEL_LIGHT) g_sel_light = (sf_light_t*)best_ptr;
-  else if (best_kind == SEL_CAM)   g_sel_cam   = (sf_cam_t*)  best_ptr;
-  else if (best_kind == SEL_EMITR) g_sel_emitr = (sf_emitr_t*)best_ptr;
+  if (n > 0) {
+    sf_hit_t *h = &hits[0];
+    switch (h->kind) {
+      case SF_HIT_ENTI:  g_sel_kind = SEL_ENTI;  g_sel       = (sf_enti_t*)  h->ptr; break;
+      case SF_HIT_LIGHT: g_sel_kind = SEL_LIGHT; g_sel_light = (sf_light_t*) h->ptr; break;
+      case SF_HIT_CAM:   g_sel_kind = SEL_CAM;   g_sel_cam   = (sf_cam_t*)   h->ptr; break;
+      case SF_HIT_EMITR: g_sel_kind = SEL_EMITR; g_sel_emitr = (sf_emitr_t*) h->ptr; break;
+      default: break;
+    }
+  }
   g_ui_dirty = true;
 }
 
@@ -4546,12 +3985,12 @@ int main(int argc, char *argv[]) {
         else if (g_tab == TAB_SFGEN && g_sfgen_drag) {
           float dx = (float)(event.motion.x - g_sfgen_lmx) * 0.007f;
           float dy = (float)(event.motion.y - g_sfgen_lmy) * 0.007f;
-          g_sfgen_yaw -= dx; g_sfgen_pitch += dy;
-          if (g_sfgen_pitch > 1.4f) g_sfgen_pitch = 1.4f;
-          if (g_sfgen_pitch < -0.1f) g_sfgen_pitch = -0.1f;
+          g_sfgen_orbit.yaw -= dx; g_sfgen_orbit.pitch += dy;
+          if (g_sfgen_orbit.pitch > 1.4f) g_sfgen_orbit.pitch = 1.4f;
+          if (g_sfgen_orbit.pitch < -0.1f) g_sfgen_orbit.pitch = -0.1f;
           g_sfgen_lmx = event.motion.x; g_sfgen_lmy = event.motion.y;
         }
-        else if (g_gz_drag != GZ_AX_NONE) gizmo_drag_update(event.motion.x, event.motion.y);
+        else if (g_gizmo.drag_axis != SF_GZ_AX_NONE) gizmo_drag_update(event.motion.x, event.motion.y);
       }
       if (event.type == SDL_MOUSEBUTTONUP && event.button.button == SDL_BUTTON_LEFT) {
         if (g_tab == TAB_SFUI) design_on_mouse_up();
@@ -4561,9 +4000,9 @@ int main(int argc, char *argv[]) {
       if (event.type == SDL_MOUSEWHEEL) {
         if (g_tab == TAB_SFUI) design_on_wheel(event.wheel.y);
         else if (g_tab == TAB_SFGEN) {
-          g_sfgen_dist -= event.wheel.y * 0.5f;
-          if (g_sfgen_dist < 1.f) g_sfgen_dist = 1.f;
-          if (g_sfgen_dist > 60.f) g_sfgen_dist = 60.f;
+          g_sfgen_orbit.dist -= event.wheel.y * 0.5f;
+          if (g_sfgen_orbit.dist < 1.f) g_sfgen_orbit.dist = 1.f;
+          if (g_sfgen_orbit.dist > 60.f) g_sfgen_orbit.dist = 60.f;
         }
       }
       sf_sdl_process_event(&sf_ctx, &event);
@@ -4576,24 +4015,9 @@ int main(int argc, char *argv[]) {
     if (g_ui_dirty) { rebuild_ui(); g_ui_dirty = false; }
 
     sf_ui_update(&sf_ctx, sf_ctx.ui);
-    /* persist panel collapse state; trigger rebuild if any panel toggled */
-    if (sf_ctx.ui) {
-      for (int _i = 0; _i < sf_ctx.ui->count; _i++) {
-        sf_ui_lmn_t *_e = &sf_ctx.ui->elements[_i];
-        if (_e->type != SF_UI_PANEL || !_e->panel.title) continue;
-        bool _was = panel_collapsed(_e->panel.title);
-        if (_was != _e->panel.collapsed) {
-          bool _found = false;
-          for (int _j = 0; _j < g_pnl_state_n; _j++) {
-            if (g_pnl_states[_j].name && strcmp(g_pnl_states[_j].name, _e->panel.title) == 0) {
-              g_pnl_states[_j].collapsed = _e->panel.collapsed; _found = true; break;
-            }
-          }
-          if (!_found && g_pnl_state_n < 32)
-            g_pnl_states[g_pnl_state_n++] = (pnl_state_t){_e->panel.title, _e->panel.collapsed};
-          g_ui_dirty = true;
-        }
-      }
+    /* detect closable panel close */
+    if (g_picker_panel && !g_picker_panel->is_visible && g_picker_open != PICK_NONE) {
+      g_picker_open = PICK_NONE; g_picker_panel = NULL; g_ui_dirty = true;
     }
     if (g_tab == TAB_SFF) update_camera();
 
@@ -4658,7 +4082,7 @@ int main(int argc, char *argv[]) {
       if (g_dbg_lights) sf_draw_debug_lights(&sf_ctx, &sf_ctx.main_camera, 0.3f);
       if (g_dbg_cams)   sf_draw_debug_cams  (&sf_ctx, &sf_ctx.main_camera, 2.0f);
       update_gizmo_geometry();
-      if (g_gz_drag == GZ_AX_NONE) g_gz_hover = gizmo_hit(g_mouse_x, g_mouse_y);
+      /* hover is now computed inside update_gizmo_geometry */
       draw_gizmo();
     } else if (g_tab == TAB_SFGEN && g_sfgen_ready) {
       /* Hide inactive types during render */
