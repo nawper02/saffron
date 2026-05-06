@@ -49,8 +49,10 @@ install(FILES "saffron.h"
 install(DIRECTORY "sf_extras/" 
         DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
         FILES_MATCHING PATTERN "*.h")
-install(DIRECTORY "sf_assets/" 
-        DESTINATION ${CMAKE_INSTALL_DATADIR}/saffron/sf_assets)
+install(DIRECTORY "sf_assets/"
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/saffron/sf_assets
+        PATTERN "*.png"       EXCLUDE
+        PATTERN "sf_generated" EXCLUDE)
 install(DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/sf_assets/"
         DESTINATION ${CMAKE_INSTALL_DATADIR}/saffron/sf_assets)
 

@@ -25,6 +25,8 @@ static sf_frame_t  *g_sel_frame     = NULL; /* selected orphan frame (SEL_NONE) 
 static int          g_new_prim      = 0;
 static sf_orbit_cam_t g_orbit       = {{0.0f, 0.0f, 0.0f}, 0.8f, 0.5f, 12.0f};
 static bool         g_ui_dirty      = true;
+static char         g_user_asset_dir[512] = "";
+static char         g_user_sff_dir[512]   = "";
 #define LOG_LINES 64
 #define LOG_LINE_LEN 80
 #define LOG_VIS_LINES 6
@@ -353,10 +355,10 @@ static void sel_clear(void) {
 static void scan_models(void) {
   static char paths[STUDIO_MAX_MODELS][512];
   g_model_count = 0;
-  const char *obj_dirs[] = { SF_ASSET_PATH "/sf_objs", SF_SRC_ASSET_PATH "/sf_objs" };
-  g_model_count = sf_scan_assets(obj_dirs, 2, ".obj", g_model_files, paths, STUDIO_MAX_MODELS);
-  const char *sff_dirs[] = { SF_ASSET_PATH "/sf_sff", SF_SRC_ASSET_PATH "/sf_sff" };
-  int n = sf_scan_assets(sff_dirs, 2, ".sff", g_model_files + g_model_count, paths + g_model_count, STUDIO_MAX_MODELS - g_model_count);
+  const char *obj_dirs[] = { SF_ASSET_PATH "/sf_objs", SF_SRC_ASSET_PATH "/sf_objs", SF_BUILD_ASSET_PATH "/sf_objs" };
+  g_model_count = sf_scan_assets(obj_dirs, 3, ".obj", g_model_files, paths, STUDIO_MAX_MODELS);
+  const char *sff_dirs[] = { SF_ASSET_PATH "/sf_sff", SF_SRC_ASSET_PATH "/sf_sff", g_user_sff_dir };
+  int n = sf_scan_assets(sff_dirs, 3, ".sff", g_model_files + g_model_count, paths + g_model_count, STUDIO_MAX_MODELS - g_model_count);
   g_model_count += n;
   for (int i = 0; i < g_model_count; i++) g_model_items[i] = g_model_files[i];
 }
@@ -406,23 +408,23 @@ static bool _scan_dir_once(const char *path, char visited[][512], int *nv, int c
 
 static void scan_textures(void) {
   g_tex_count = 0;
-  char visited[4][512]; int nv = 0;
-  const char *dirs[] = { SF_ASSET_PATH "/sf_textures", SF_SRC_ASSET_PATH "/sf_textures", NULL };
+  char visited[8][512]; int nv = 0;
+  const char *dirs[] = { SF_BUILD_ASSET_PATH "/sf_textures", SF_ASSET_PATH "/sf_textures", SF_SRC_ASSET_PATH "/sf_textures", NULL };
   for (int i = 0; dirs[i]; i++)
-    if (_scan_dir_once(dirs[i], visited, &nv, 4)) scan_textures_dir(dirs[i]);
+    if (_scan_dir_once(dirs[i], visited, &nv, 8)) scan_textures_dir(dirs[i]);
 }
 
 static void scan_sffs(void) {
   static char paths[STUDIO_MAX_SFFS][512];
-  const char *dirs[] = { SF_ASSET_PATH "/sf_sff", SF_SRC_ASSET_PATH "/sf_sff" };
-  g_sff_count = sf_scan_assets(dirs, 2, ".sff", g_sff_files, paths, STUDIO_MAX_SFFS);
+  const char *dirs[] = { SF_ASSET_PATH "/sf_sff", SF_SRC_ASSET_PATH "/sf_sff", g_user_sff_dir };
+  g_sff_count = sf_scan_assets(dirs, 3, ".sff", g_sff_files, paths, STUDIO_MAX_SFFS);
   for (int i = 0; i < g_sff_count; i++) g_sff_items[i] = g_sff_files[i];
 }
 
 static void scan_skyboxes(void) {
   static char paths[STUDIO_MAX_SKYBOXES][512];
-  const char *dirs[] = { SF_ASSET_PATH "/sf_skyboxes", SF_SRC_ASSET_PATH "/sf_skyboxes" };
-  g_sky_count = sf_scan_assets(dirs, 2, ".bmp", g_sky_files, paths, STUDIO_MAX_SKYBOXES);
+  const char *dirs[] = { SF_BUILD_ASSET_PATH "/sf_skyboxes", SF_ASSET_PATH "/sf_skyboxes", SF_SRC_ASSET_PATH "/sf_skyboxes" };
+  g_sky_count = sf_scan_assets(dirs, 3, ".bmp", g_sky_files, paths, STUDIO_MAX_SKYBOXES);
   g_sky_items[0] = "(none)";
   for (int i = 0; i < g_sky_count; i++) g_sky_items[i + 1] = g_sky_files[i];
   /* Find current selection */
@@ -485,18 +487,9 @@ static sf_obj_t* build_obj_from_meta(const char *name, prim_meta_t *m) {
       const char *fname = g_model_files[m->model_idx];
       const char *dot = strrchr(fname, '.');
       if (dot && strcmp(dot, ".sff") == 0) {
-        const char *sff_dirs[3] = { SF_ASSET_PATH "/sf_sff", SF_SRC_ASSET_PATH "/sf_sff", "./sf_assets/sf_sff" };
-        for (int p = 0; p < 3; p++) {
-          char r_path[512];
-          snprintf(r_path, sizeof(r_path), "%s/%s", sff_dirs[p], fname);
-          FILE *f = fopen(r_path, "r");
-          if (!f) continue;
-          fclose(f);
-          sel_clear();
-          sf_load_sff(&sf_ctx, r_path, "Loaded World");
-          g_ui_dirty = true;
-          return NULL;
-        }
+        sel_clear();
+        sf_load_sff(&sf_ctx, fname, "Loaded World");
+        g_ui_dirty = true;
         return NULL;
       }
       char r_path[512];
@@ -570,32 +563,23 @@ static void spawn_primitive(int kind) {
         const char *fname = g_model_files[g_model_sel];
         const char *dot = strrchr(fname, '.');
         if (dot && strcmp(dot, ".sff") == 0) {
-          const char *sff_dirs[3] = { SF_ASSET_PATH "/sf_sff", SF_SRC_ASSET_PATH "/sf_sff", "./sf_assets/sf_sff" };
-          for (int p = 0; p < 3; p++) {
-            char path[512];
-            snprintf(path, sizeof(path), "%s/%s", sff_dirs[p], fname);
-            FILE *f = fopen(path, "r");
-            if (!f) continue;
-            fclose(f);
-            sel_clear();
-            int enti_before = sf_ctx.enti_count;
-            int bb_before   = sf_ctx.sprite_3d_count;
-            sf_load_sff(&sf_ctx, path, "Loaded World");
-            /* Fix billboard frame refs: entity dedup renames duplicates (e.g. tree_0 -> tree_0_1),
-               so newly added billboards may still point to the original entity's frame instead of
-               the freshly created one. Redirect them to the newly added entity's frame. */
-            if (sf_ctx.enti_count > enti_before) {
-              sf_frame_t *new_frame = sf_ctx.entities[enti_before].frame;
-              for (int i = bb_before; i < sf_ctx.sprite_3d_count; i++) {
-                sf_sprite_3_t *b = &sf_ctx.sprite_3ds[i];
-                if (b->frame && b->frame != new_frame)
-                  b->frame = new_frame;
-              }
+          sel_clear();
+          int enti_before = sf_ctx.enti_count;
+          int bb_before   = sf_ctx.sprite_3d_count;
+          sf_load_sff(&sf_ctx, fname, "Loaded World");
+          /* Fix billboard frame refs: entity dedup renames duplicates (e.g. tree_0 -> tree_0_1),
+             so newly added billboards may still point to the original entity's frame instead of
+             the freshly created one. Redirect them to the newly added entity's frame. */
+          if (sf_ctx.enti_count > enti_before) {
+            sf_frame_t *new_frame = sf_ctx.entities[enti_before].frame;
+            for (int i = bb_before; i < sf_ctx.sprite_3d_count; i++) {
+              sf_sprite_3_t *b = &sf_ctx.sprite_3ds[i];
+              if (b->frame && b->frame != new_frame)
+                b->frame = new_frame;
             }
-            g_ui_dirty = true;
-            return;
           }
-          return; /* couldn't find the file */
+          g_ui_dirty = true;
+          return;
         }
       }
       pk = PM_MODEL;
@@ -833,7 +817,7 @@ static void cb_save_sff(sf_ctx_t *ctx, void *ud) {
   const char *sl = strrchr(g_save_path, '/');
   const char *fname = sl ? sl + 1 : g_save_path;
   char dst[512];
-  snprintf(dst, sizeof(dst), SF_SRC_ASSET_PATH "/sf_sff/%s", fname);
+  snprintf(dst, sizeof(dst), "%s/%s", *g_user_sff_dir ? g_user_sff_dir : SF_SRC_ASSET_PATH "/sf_sff", fname);
   if (sf_save_sff(&sf_ctx, dst)) {
     SF_LOG(&sf_ctx, SF_LOG_INFO, "Saved to %s\n", dst);
     scan_sffs();
@@ -848,7 +832,7 @@ static void cb_load_sff(sf_ctx_t *ctx, void *ud) {
   const char *sl = strrchr(g_save_path, '/');
   const char *fname = sl ? sl + 1 : g_save_path;
   char src[512];
-  snprintf(src, sizeof(src), SF_SRC_ASSET_PATH "/sf_sff/%s", fname);
+  snprintf(src, sizeof(src), "%s/%s", *g_user_sff_dir ? g_user_sff_dir : SF_SRC_ASSET_PATH "/sf_sff", fname);
   g_sel = NULL; g_sel_light = NULL; g_sel_cam = NULL; g_sel_emitr = NULL;
   g_sel_kind = SEL_NONE;
   sf_load_sff(&sf_ctx, src, "Loaded World");
@@ -2383,7 +2367,9 @@ static void sfgen_generate_building(void) {
    SFGEN — texture scanners
    ============================================================ */
 static void sfgen_scan_bark(void) {
-    const char *dirs[]={SF_ASSET_PATH"/sf_textures/128x128/Wood",
+    const char *dirs[]={SF_BUILD_ASSET_PATH"/sf_textures/128x128/Wood",
+                        SF_BUILD_ASSET_PATH"/sf_textures/128x128/Misc",
+                        SF_ASSET_PATH"/sf_textures/128x128/Wood",
                         SF_ASSET_PATH"/sf_textures/128x128/Misc",NULL};
     g_ct_tnc=0;
     for (int d=0;dirs[d]&&g_ct_tnc<SFGEN_MAX_TEX;d++){
@@ -2414,7 +2400,9 @@ static void sfgen_apply_bark(void) {
 }
 
 static void sfgen_scan_stone(void) {
-    const char *dirs[]={SF_ASSET_PATH"/sf_textures/128x128/Stone",
+    const char *dirs[]={SF_BUILD_ASSET_PATH"/sf_textures/128x128/Stone",
+                        SF_BUILD_ASSET_PATH"/sf_textures/128x128/Misc",
+                        SF_ASSET_PATH"/sf_textures/128x128/Stone",
                         SF_ASSET_PATH"/sf_textures/128x128/Misc",NULL};
     g_cr_tnc=0;
     for (int d=0;dirs[d]&&g_cr_tnc<SFGEN_MAX_TEX;d++){
@@ -2455,22 +2443,24 @@ static void sfgen_apply_bldg_tex(void) {
 }
 
 static void sfgen_load_sprites(void) {
-    const char *dir_path=SF_ASSET_PATH"/sf_sprites";
-    DIR *dir=opendir(dir_path); if(!dir) return;
-    struct dirent *e;
-    while ((e=readdir(dir))&&g_ct_snc<SFGEN_MAX_SPR){
-        if (e->d_name[0]=='.') continue;
-        const char *dot=strrchr(e->d_name,'.');
-        if (!dot||strcmp(dot,".bmp")!=0) continue;
-        int nlen=(int)(dot-e->d_name);
-        snprintf(g_ct_sname[g_ct_snc],64,"%.*s",nlen,e->d_name);
-        g_ct_sitem[g_ct_snc]=g_ct_sname[g_ct_snc];
-        sf_tex_t *t=sf_load_texture_bmp(&g_sfgen_ctx,e->d_name,g_ct_sname[g_ct_snc]);
-        char sprname[80]; snprintf(sprname,sizeof(sprname),"spr_%s",g_ct_sname[g_ct_snc]);
-        g_ct_sprites[g_ct_snc]=t?sf_load_sprite(&g_sfgen_ctx,sprname,1.f,0.7f,1,g_ct_sname[g_ct_snc]):NULL;
-        g_ct_snc++;
+    const char *sprite_dirs[]={SF_BUILD_ASSET_PATH"/sf_sprites",SF_ASSET_PATH"/sf_sprites",NULL};
+    for (int d=0;sprite_dirs[d]&&g_ct_snc<SFGEN_MAX_SPR;d++) {
+        DIR *dir=opendir(sprite_dirs[d]); if(!dir) continue;
+        struct dirent *e;
+        while ((e=readdir(dir))&&g_ct_snc<SFGEN_MAX_SPR){
+            if (e->d_name[0]=='.') continue;
+            const char *dot=strrchr(e->d_name,'.');
+            if (!dot||strcmp(dot,".bmp")!=0) continue;
+            int nlen=(int)(dot-e->d_name);
+            snprintf(g_ct_sname[g_ct_snc],64,"%.*s",nlen,e->d_name);
+            g_ct_sitem[g_ct_snc]=g_ct_sname[g_ct_snc];
+            sf_tex_t *t=sf_load_texture_bmp(&g_sfgen_ctx,e->d_name,g_ct_sname[g_ct_snc]);
+            char sprname[80]; snprintf(sprname,sizeof(sprname),"spr_%s",g_ct_sname[g_ct_snc]);
+            g_ct_sprites[g_ct_snc]=t?sf_load_sprite(&g_sfgen_ctx,sprname,1.f,0.7f,1,g_ct_sname[g_ct_snc]):NULL;
+            g_ct_snc++;
+        }
+        closedir(dir);
     }
-    closedir(dir);
     if (g_ct_snc>0&&g_ct_sprites[0]) g_sfgen_leaf=g_ct_sprites[0];
 }
 
@@ -2487,7 +2477,7 @@ static void sfgen_save_tree(void) {
     sf_gen_save_obj(&g_sfgen_ctx, g_ct_obj, gen_id);
     const char *sl=strrchr(g_sfgen_tree_sff,'/');
     const char *fname=sl?sl+1:g_sfgen_tree_sff;
-    char dst[512]; snprintf(dst,sizeof(dst),SF_SRC_ASSET_PATH "/sf_sff/%s",fname);
+    char dst[512]; snprintf(dst,sizeof(dst),"%s/%s",*g_user_sff_dir?g_user_sff_dir:SF_SRC_ASSET_PATH"/sf_sff",fname);
     FILE *f=fopen(dst,"w");
     if (!f) return;
     fprintf(f,"# Saffron Tree Model\n\nmesh %s \"%s_%s.obj\"\n\n",g_ct_obj->name,g_ct_obj->name,gen_id);
@@ -2529,7 +2519,7 @@ static void sfgen_save_rock(void) {
     sf_gen_save_obj(&g_sfgen_ctx, g_cr_obj, gen_id);
     const char *sl=strrchr(g_sfgen_rock_sff,'/');
     const char *fname=sl?sl+1:g_sfgen_rock_sff;
-    char dst[512]; snprintf(dst,sizeof(dst),SF_SRC_ASSET_PATH "/sf_sff/%s",fname);
+    char dst[512]; snprintf(dst,sizeof(dst),"%s/%s",*g_user_sff_dir?g_user_sff_dir:SF_SRC_ASSET_PATH"/sf_sff",fname);
     FILE *f=fopen(dst,"w");
     if (!f) return;
     fprintf(f,"# Saffron Rock Model\n\nmesh %s \"%s_%s.obj\"\n\n",g_cr_obj->name,g_cr_obj->name,gen_id);
@@ -2588,7 +2578,7 @@ static void sfgen_save_building(void) {
 
     const char *sl=strrchr(g_sfgen_bldg_sff,'/');
     const char *fname=sl?sl+1:g_sfgen_bldg_sff;
-    char dst[512]; snprintf(dst,sizeof(dst),SF_SRC_ASSET_PATH "/sf_sff/%s",fname);
+    char dst[512]; snprintf(dst,sizeof(dst),"%s/%s",*g_user_sff_dir?g_user_sff_dir:SF_SRC_ASSET_PATH"/sf_sff",fname);
     FILE *f=fopen(dst,"w");
     if (!f) return;
     fprintf(f,"# Saffron Building Model\n\n");
@@ -4048,6 +4038,19 @@ int main(int argc, char *argv[]) {
 
   sf_init(&sf_ctx, g_w, g_h);
   sf_set_logger(&sf_ctx, studio_logger, NULL);
+  {
+    const char *home = getenv("HOME");
+    if (home) {
+      char tmp[512];
+      snprintf(tmp, sizeof(tmp), "%s/.local",               home); mkdir(tmp, 0755);
+      snprintf(tmp, sizeof(tmp), "%s/.local/share",         home); mkdir(tmp, 0755);
+      snprintf(tmp, sizeof(tmp), "%s/.local/share/saffron", home); mkdir(tmp, 0755);
+      snprintf(g_user_asset_dir, sizeof(g_user_asset_dir),
+               "%s/.local/share/saffron/sf_assets", home); mkdir(g_user_asset_dir, 0755);
+      snprintf(g_user_sff_dir,   sizeof(g_user_sff_dir),
+               "%s/.local/share/saffron/sf_sff",   home); mkdir(g_user_sff_dir,   0755);
+    }
+  }
   sfgen_init();
   scan_models();
   scan_textures();

@@ -52,7 +52,11 @@ extern "C" {
 #define SF_LOG_INDENT                 "            "
 #define SF_PI                         3.14159265359f
 #define SF_NANOS_PER_SEC              1000000000ULL
-#define SF_ASSET_PATH                 "/usr/local/share/saffron/sf_assets"
+#ifdef SAFFRON_ASSET_DIR
+#  define SF_ASSET_PATH               SAFFRON_ASSET_DIR
+#else
+#  define SF_ASSET_PATH               "/usr/local/share/saffron/sf_assets"
+#endif
 
 #define SF_LOG(ctx, level, fmt, ...)  sf_log_(ctx, level, __func__, fmt, ##__VA_ARGS__)
 #define SF_ALIGN_SIZE(size)           (((size) + 7) & ~7)
@@ -2963,11 +2967,14 @@ bool sf_gen_save_obj(sf_ctx_t *ctx, sf_obj_t *obj, const char *gen_id) {
   if (!ctx || !obj || !gen_id || !obj->name) return false;
   char dir[512], path[512];
   const char *base =
-#ifdef SF_SRC_ASSET_PATH
+#ifdef SF_BUILD_ASSET_PATH
+    SF_BUILD_ASSET_PATH;
+#elif defined(SF_SRC_ASSET_PATH)
     SF_SRC_ASSET_PATH;
 #else
     SF_ASSET_PATH;
 #endif
+  mkdir(base, 0755);
   snprintf(dir, sizeof(dir), "%s/sf_generated", base);
   mkdir(dir, 0755);
   snprintf(dir, sizeof(dir), "%s/sf_generated/%s", base, gen_id);
@@ -5981,12 +5988,15 @@ bool _sf_resolve_asset(const char* filename, char* out_path, size_t max_len) {
   char dir_stack[32][512];
   int stack_head = 0;
   snprintf(dir_stack[stack_head++], 512, "%s", SF_ASSET_PATH);
-#ifdef SF_SRC_ASSET_PATH
-  if (stack_head < 32) snprintf(dir_stack[stack_head++], 512, "%s", SF_SRC_ASSET_PATH);
-#endif
 #ifdef SF_BUILD_ASSET_PATH
   if (stack_head < 32) snprintf(dir_stack[stack_head++], 512, "%s", SF_BUILD_ASSET_PATH);
 #endif
+#ifdef SF_SRC_ASSET_PATH
+  if (stack_head < 32) snprintf(dir_stack[stack_head++], 512, "%s", SF_SRC_ASSET_PATH);
+#endif
+  const char *_sf_home = getenv("HOME");
+  if (_sf_home && stack_head < 32)
+    snprintf(dir_stack[stack_head++], 512, "%s/.local/share/saffron/sf_assets", _sf_home);
   while (stack_head > 0) {
     char current_dir[512];
     snprintf(current_dir, sizeof(current_dir), "%s", dir_stack[--stack_head]);
