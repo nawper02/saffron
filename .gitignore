@@ -5,9 +5,3 @@ sf_docs/__pycache__
 CMakeFiles
 saffron.h.bak
 
-# Procedurally generated assets (written to build dir instead)
-sf_assets/sf_generated/
-
-# User world files (sf_studio saves these to ~/.local/share/saffron/sf_sff/)
-sf_assets/sf_sff/*.sff
-!sf_assets/sf_sff/example.sff

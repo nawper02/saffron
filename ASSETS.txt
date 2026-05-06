@@ -1,0 +1,123 @@
+Saffron Asset Management
+=========================
+
+Overview
+--------
+Assets are split into three distinct buckets with different ownership, git
+treatment, and install behaviour. Understanding which bucket an asset belongs
+to determines where it lives, whether it is tracked in git, and where it ends
+up after `make install`.
+
+
+Bucket 1 — Engine source assets  (git tracked)
+-----------------------------------------------
+Location:  sf_assets/
+           sf_assets/sf_objs/        hand-authored .obj models
+           sf_assets/sf_textures/    texture sources (.png only)
+           sf_assets/sf_skyboxes/    skybox images
+           sf_assets/sf_sprites/     sprite sources
+           sf_assets/sf_icons/       UI icon sources (.png)
+           sf_assets/sf_sff/         engine example scenes
+           sf_assets/sf_sfui/        UI layout files
+
+These are the canonical, hand-authored assets that ship with the engine.
+PNGs are the source format; the build system compiles them to BMP (see below).
+The sf_generated/ subdirectory is excluded from git and must never be committed.
+
+Tracked in git:  yes (except *.sff other than example.sff — see below)
+Installed to:    /usr/local/share/saffron/sf_assets/
+                 PNGs and sf_generated/ are excluded from the install step
+                 because only compiled BMPs and runtime data are needed there.
+
+
+Bucket 2 — Build-derived assets  (never in git)
+------------------------------------------------
+Location:  build/sf_assets/          (CMAKE_CURRENT_BINARY_DIR/sf_assets)
+
+Everything that is produced by the build system lands here:
+
+  build/sf_assets/sf_textures/       BMPs compiled from source PNGs
+  build/sf_assets/sf_icons/          BMPs compiled from icon PNGs
+  build/sf_assets/sf_sprites/        BMPs compiled from sprite PNGs
+  build/sf_assets/sf_skyboxes/       BMPs compiled from skybox PNGs
+  build/sf_assets/sf_generated/      OBJ files produced by sf_studio generators
+
+The PNG -> BMP conversion runs automatically as part of the build via the
+`generate_assets` target (sf_png2bmp tool). Procedurally generated OBJs
+written by sf_gen_save_obj() also land here, not in the source tree, so they
+never appear in `git status`.
+
+Tracked in git:  no  (build/ is in .gitignore)
+Installed to:    /usr/local/share/saffron/sf_assets/
+                 `make install` copies the entire build/sf_assets/ tree,
+                 so generated OBJs and compiled BMPs are both installed.
+
+
+Bucket 3 — User content  (your project files)
+----------------------------------------------
+Location:  ~/.local/share/saffron/
+           ~/.local/share/saffron/sf_assets/
+           ~/.local/share/saffron/sf_sff/      world files saved from sf_studio
+
+sf_studio creates these directories on first launch. When you save a world
+(.sff) or generate a tree/rock/building asset from the generator panel,
+the output goes here. This keeps project work completely separate from the
+engine source tree.
+
+Tracked in git:  not applicable — this is outside the repo
+Installed:       not applicable — this is per-user runtime data
+
+To deliberately track a world file, copy it into sf_assets/sf_sff/ and
+`git add` it explicitly. The .gitignore allows sf_assets/sf_sff/example.sff
+as a permanent exception showing the expected file format.
+
+
+Asset path resolution  (_sf_resolve_asset)
+------------------------------------------
+When the engine looks up an asset by filename it searches in this order,
+stopping at the first match:
+
+  1. ~/.local/share/saffron/sf_assets/   user content  (highest priority)
+  2. sf_assets/                           source tree
+  3. build/sf_assets/                     build-derived assets
+  4. /usr/local/share/saffron/sf_assets/  installed     (lowest priority)
+
+During development the source tree and build directory shadow the installed
+copy, so editing an asset takes effect immediately without reinstalling.
+After a clean install (no source or build directories present) only path 4
+is relevant.
+
+The search is recursive — assets can live in any subdirectory and will be
+found by filename alone.
+
+
+Compile-time definitions
+------------------------
+The following macros are baked in at build time by CMakeLists.txt:
+
+  SAFFRON_ASSET_DIR    installed asset path (tracks CMAKE_INSTALL_PREFIX)
+  SF_SRC_ASSET_PATH    absolute path to sf_assets/ in the source tree
+  SF_BUILD_ASSET_PATH  absolute path to build/sf_assets/
+
+Code should use _sf_resolve_asset() rather than constructing paths from
+these macros directly. The macros exist for scan functions that need to
+enumerate a specific subdirectory.
+
+
+.gitignore rules for assets
+----------------------------
+  sf_assets/sf_generated/      all procedurally generated OBJs ignored
+
+  sf_assets/sf_sff/ is not ignored. Since sf_studio writes world files to
+  ~/.local/share/saffron/sf_sff/, anything in sf_assets/sf_sff/ was placed
+  there deliberately and will be tracked.
+
+
+Adding a new asset type
+-----------------------
+1. Put source files in the appropriate sf_assets/ subdirectory.
+2. If the type has a compiled form (e.g. PNG -> BMP), add the conversion
+   to CMakeLists.txt following the existing generate_assets pattern.
+3. Add a scan function in sf_studio.c that checks SF_BUILD_ASSET_PATH first,
+   then SF_ASSET_PATH (installed), then SF_SRC_ASSET_PATH.
+4. Asset loading itself can use _sf_resolve_asset() and needs no changes.
