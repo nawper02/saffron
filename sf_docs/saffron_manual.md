@@ -16,9 +16,9 @@
 - [UI](#ui)
 - [Mesh Authoring](#mesh-authoring)
 - [Picking / Raycasting](#picking--raycasting)
-- [SF_GIZMO_FUNCTIONS](#sfgizmofunctions)
-- [SF_ORBIT_CAM_FUNCTIONS](#sforbitcamfunctions)
-- [SF_THUMBNAIL_FUNCTIONS](#sfthumbnailfunctions)
+- [Gizmo](#gizmo)
+- [Orbit Camera](#orbit-camera)
+- [Thumbnail Rendering](#thumbnail-rendering)
 - [Logging](#logging)
 - [Math](#math)
 
@@ -215,19 +215,19 @@
 | `sf_ray_triangle` | Picking / Raycasting |
 | `sf_ray_plane_y` | Picking / Raycasting |
 | `sf_ray_aabb` | Picking / Raycasting |
-| `sf_gizmo_update` | SF_GIZMO_FUNCTIONS |
-| `sf_gizmo_hit` | SF_GIZMO_FUNCTIONS |
-| `sf_gizmo_begin_drag` | SF_GIZMO_FUNCTIONS |
-| `sf_gizmo_drag` | SF_GIZMO_FUNCTIONS |
-| `sf_gizmo_end_drag` | SF_GIZMO_FUNCTIONS |
-| `sf_gizmo_render` | SF_GIZMO_FUNCTIONS |
-| `sf_orbit_cam_apply` | SF_ORBIT_CAM_FUNCTIONS |
-| `sf_orbit_cam_rotate` | SF_ORBIT_CAM_FUNCTIONS |
-| `sf_orbit_cam_zoom` | SF_ORBIT_CAM_FUNCTIONS |
-| `sf_orbit_cam_pan` | SF_ORBIT_CAM_FUNCTIONS |
-| `sf_orbit_cam_focus` | SF_ORBIT_CAM_FUNCTIONS |
-| `sf_render_thumb_enti` | SF_THUMBNAIL_FUNCTIONS |
-| `sf_render_thumb_sff` | SF_THUMBNAIL_FUNCTIONS |
+| `sf_gizmo_update` | Gizmo |
+| `sf_gizmo_hit` | Gizmo |
+| `sf_gizmo_begin_drag` | Gizmo |
+| `sf_gizmo_drag` | Gizmo |
+| `sf_gizmo_end_drag` | Gizmo |
+| `sf_gizmo_render` | Gizmo |
+| `sf_orbit_cam_apply` | Orbit Camera |
+| `sf_orbit_cam_rotate` | Orbit Camera |
+| `sf_orbit_cam_zoom` | Orbit Camera |
+| `sf_orbit_cam_pan` | Orbit Camera |
+| `sf_orbit_cam_focus` | Orbit Camera |
+| `sf_render_thumb_enti` | Thumbnail Rendering |
+| `sf_render_thumb_sff` | Thumbnail Rendering |
 | `sf_log_` | Logging |
 | `sf_set_logger` | Logging |
 | `sf_logger_console` | Logging |
@@ -1683,7 +1683,7 @@ bool sf_ray_aabb (sf_ray_t r, sf_fvec3_t bmin, sf_fvec3_t bmax, float *out_t);
 ```
 
 
-## SF_GIZMO_FUNCTIONS
+## Gizmo
 
 ### `sf_gizmo_update`
 
@@ -1728,7 +1728,7 @@ void sf_gizmo_render (sf_ctx_t *ctx, sf_cam_t *cam, sf_gizmo_t *gz);
 ```
 
 
-## SF_ORBIT_CAM_FUNCTIONS
+## Orbit Camera
 
 ### `sf_orbit_cam_apply`
 
@@ -1765,7 +1765,7 @@ void sf_orbit_cam_focus (sf_orbit_cam_t *orbit, sf_fvec3_t pos);
 ```
 
 
-## SF_THUMBNAIL_FUNCTIONS
+## Thumbnail Rendering
 
 ### `sf_render_thumb_enti`
 

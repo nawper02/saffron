@@ -2285,6 +2285,7 @@ void sf_set_fog(sf_ctx_t *ctx, sf_fvec3_t color, float start, float end) {
 void sf_set_active_skybox(sf_ctx_t *ctx, sf_skybox_t *skybox) {
   /* Set or clear the active skybox rendered behind all scene geometry. Pass NULL to disable. */
   ctx->active_skybox = skybox;
+  ctx->skybox_enabled = (skybox != NULL);
 }
 
 void sf_enti_set_pos(sf_ctx_t *ctx, sf_enti_t *enti, float x, float y, float z) {
@@ -2565,6 +2566,30 @@ bool sf_save_sff(sf_ctx_t *ctx, const char *filepath) {
     fprintf(f, "}\n\n");
   }
 
+  for (int i = 0; i < ctx->emitr_count; i++) {
+    sf_emitr_t *em = &ctx->emitrs[i];
+    if (!em->name || !em->frame) continue;
+    fprintf(f, "emitter %s {\n", em->name);
+    const char *tstr = (em->type == SF_EMITR_DIR) ? "dir" : (em->type == SF_EMITR_VOLUME) ? "vol" : "omni";
+    fprintf(f, "    type       = %s\n", tstr);
+    sf_fvec3_t p = em->frame->pos;
+    fprintf(f, "    pos        = (%.3f, %.3f, %.3f)\n", p.x, p.y, p.z);
+    fprintf(f, "    rate       = %.2f\n", em->spawn_rate);
+    fprintf(f, "    life       = %.2f\n", em->particle_life);
+    fprintf(f, "    speed      = %.2f\n", em->speed);
+    if (em->sprite && em->sprite->name)
+      fprintf(f, "    sprite     = %s\n", em->sprite->name);
+    if (em->type == SF_EMITR_DIR || em->spread > 0.0f) {
+      fprintf(f, "    dir        = (%.3f, %.3f, %.3f)\n", em->dir.x, em->dir.y, em->dir.z);
+      fprintf(f, "    spread     = %.3f\n", em->spread);
+    }
+    if (em->type == SF_EMITR_VOLUME)
+      fprintf(f, "    volume     = (%.3f, %.3f, %.3f)\n", em->volume_size.x, em->volume_size.y, em->volume_size.z);
+    fprintf(f, "    max        = %d\n", em->max_particles);
+    _sf_write_frame_ref(f, em->frame, ctx);
+    fprintf(f, "}\n\n");
+  }
+
   for (int i = 0; i < ctx->sprite_3d_count; i++) {
     sf_sprite_3_t *b = &ctx->sprite_3ds[i];
     if (!b->sprite || !b->sprite->name) continue;
@@ -2640,8 +2665,8 @@ int _sf_sff_prse_list(const char *s, char out[][64], int max) {
 }
 
 sf_frame_t* _sf_sff_get_frame_(sf_ctx_t *ctx, const char *name) {
-  /* Find a frame by name during .sff loading; use the sf_get_frame() macro at runtime. */
-  for (int i = 0; i < ctx->frames_count; i++) {
+  /* Find a frame by name during .sff loading; searches backwards to prefer most recent. */
+  for (int i = ctx->frames_count - 1; i >= 0; i--) {
     sf_frame_t *f = &ctx->frames[i];
     if (!f->parent && !f->is_root) continue; /* skip freed frames */
     if (f->name && strcmp(f->name, name) == 0)
@@ -3870,7 +3895,7 @@ sf_ui_t* sf_ui_create (sf_ctx_t *ctx) {
   ui->default_style.color_active = (sf_pkd_clr_t)0xFF707070;
   ui->default_style.color_text   = (sf_pkd_clr_t)0xFFEEEEEE;
   ui->default_style.draw_outline = false;
-  SF_LOG(ctx, SF_LOG_INFO,
+  SF_LOG(ctx, SF_LOG_DEBUG,
               SF_LOG_INDENT "capct  : %d\n",
               SF_MAX_UI_ELEMENTS);
   return ui;
@@ -4025,7 +4050,7 @@ sf_ui_lmn_t* sf_ui_add_button(sf_ctx_t *ctx, const char *text, sf_ivec2_t v0, sf
   el->button.callback = cb;
   el->button.userdata = userdata;
 
-  SF_LOG(ctx, SF_LOG_INFO,
+  SF_LOG(ctx, SF_LOG_DEBUG,
               SF_LOG_INDENT "text   : %s\n"
               SF_LOG_INDENT "pos    : (%d,%d)-(%d,%d)\n"
               SF_LOG_INDENT "used   : %d/%d\n",
@@ -4052,7 +4077,7 @@ sf_ui_lmn_t* sf_ui_add_slider(sf_ctx_t *ctx, sf_ivec2_t v0, sf_ivec2_t v1, float
   el->slider.callback = cb;
   el->slider.userdata = userdata;
 
-  SF_LOG(ctx, SF_LOG_INFO,
+  SF_LOG(ctx, SF_LOG_DEBUG,
               SF_LOG_INDENT "pos    : (%d,%d)-(%d,%d)\n"
               SF_LOG_INDENT "range  : %.2f-%.2f\n"
               SF_LOG_INDENT "init   : %.2f\n"
@@ -4079,7 +4104,7 @@ sf_ui_lmn_t* sf_ui_add_checkbox(sf_ctx_t *ctx, const char *text, sf_ivec2_t v0, 
   el->checkbox.callback   = cb;
   el->checkbox.userdata   = userdata;
 
-  SF_LOG(ctx, SF_LOG_INFO,
+  SF_LOG(ctx, SF_LOG_DEBUG,
               SF_LOG_INDENT "text   : %s\n"
               SF_LOG_INDENT "pos    : (%d,%d)-(%d,%d)\n"
               SF_LOG_INDENT "init   : %s\n"

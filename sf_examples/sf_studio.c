@@ -24,6 +24,13 @@ static sf_frame_t  *g_sel_frame     = NULL; /* selected orphan frame (SEL_NONE) 
 static int          g_new_prim      = 0;
 static sf_orbit_cam_t g_orbit       = {{0.0f, 0.0f, 0.0f}, 0.8f, 0.5f, 12.0f};
 static bool         g_ui_dirty      = true;
+#define LOG_LINES 64
+#define LOG_LINE_LEN 80
+#define LOG_VIS_LINES 6
+static char         g_log_buf[LOG_LINES][LOG_LINE_LEN];
+static int          g_log_head      = 0;
+static int          g_log_count     = 0;
+static int          g_log_scroll    = 0;
 static bool         g_dbg_axes      = true;
 static bool         g_dbg_frames    = true;
 static bool         g_dbg_lights    = true;
@@ -192,6 +199,12 @@ static char         g_sff_files[STUDIO_MAX_SFFS][256];
 static const char  *g_sff_items[STUDIO_MAX_SFFS];
 static int          g_sff_count     = 0;
 
+#define STUDIO_MAX_SKYBOXES 16
+static char         g_sky_files[STUDIO_MAX_SKYBOXES][256];
+static const char  *g_sky_items[STUDIO_MAX_SKYBOXES + 1];
+static int          g_sky_count     = 0;
+static int          g_sky_sel       = 0;
+
 static const char *k_emitr_items[3] = { "dir", "omni", "vol" };
 
 static const char *k_spawn_labels[9]    = { "Pln", "Box", "Sph", "Cyl", "Ter", "Lt", "Cam", "Em", "Mdl" };
@@ -277,6 +290,28 @@ typedef struct {
   int         model_idx;
 } prim_meta_t;
 static prim_meta_t g_enti_meta[SF_MAX_ENTITIES];
+
+static void studio_logger(const char *msg, void *ud) {
+  (void)ud;
+  /* Split multi-line messages into separate log lines */
+  const char *p = msg;
+  while (*p) {
+    char *dst = g_log_buf[g_log_head];
+    int k = 0;
+    while (*p && *p != '\n' && k < LOG_LINE_LEN - 1) dst[k++] = *p++;
+    dst[k] = '\0';
+    if (*p == '\n') p++;
+    if (k == 0) continue;
+    g_log_head = (g_log_head + 1) % LOG_LINES;
+    if (g_log_count < LOG_LINES) g_log_count++;
+    /* Keep scroll at bottom */
+    int ms = g_log_count - LOG_VIS_LINES;
+    g_log_scroll = ms > 0 ? ms : 0;
+  }
+  /* Also print to stdout */
+  fprintf(stdout, "%s", msg);
+  fflush(stdout);
+}
 
 static prim_meta_t* sel_meta(void) {
   if (g_sel_kind != SEL_ENTI || !g_sel) return NULL;
@@ -383,7 +418,23 @@ static void scan_sffs(void) {
   for (int i = 0; i < g_sff_count; i++) g_sff_items[i] = g_sff_files[i];
 }
 
-/* _studio_copy_file replaced by sf_copy_file in saffron.h */
+static void scan_skyboxes(void) {
+  static char paths[STUDIO_MAX_SKYBOXES][512];
+  const char *dirs[] = { SF_ASSET_PATH "/sf_skyboxes", SF_SRC_ASSET_PATH "/sf_skyboxes" };
+  g_sky_count = sf_scan_assets(dirs, 2, ".bmp", g_sky_files, paths, STUDIO_MAX_SKYBOXES);
+  g_sky_items[0] = "(none)";
+  for (int i = 0; i < g_sky_count; i++) g_sky_items[i + 1] = g_sky_files[i];
+  /* Find current selection */
+  g_sky_sel = 0;
+  if (sf_ctx.active_skybox && sf_ctx.active_skybox->name) {
+    for (int i = 0; i < g_sky_count; i++) {
+      char nm[64]; const char *dot = strrchr(g_sky_files[i], '.');
+      int len = dot ? (int)(dot - g_sky_files[i]) : (int)strlen(g_sky_files[i]);
+      snprintf(nm, sizeof(nm), "%.*s", len, g_sky_files[i]);
+      if (strcmp(nm, sf_ctx.active_skybox->name) == 0) { g_sky_sel = i + 1; break; }
+    }
+  }
+}
 
 static void orbit_apply(sf_cam_t *cam) {
   sf_orbit_cam_apply(&sf_ctx, cam, &g_orbit);
@@ -620,6 +671,62 @@ static void spawn_camera(void) {
   g_sel_kind = SEL_CAM;
   g_sel_cam = c;
   g_ui_dirty = true;
+}
+
+static void cb_duplicate(sf_ctx_t *ctx, void *ud) {
+  (void)ctx; (void)ud;
+  sf_fvec3_t offset = {0.5f, 0.0f, 0.5f};
+  if (g_sel_kind == SEL_ENTI && g_sel) {
+    char name[64]; snprintf(name, sizeof(name), "%s_dup%d", g_sel->name ? g_sel->name : "ent", sf_ctx.enti_count);
+    sf_enti_t *e = sf_add_enti(&sf_ctx, &g_sel->obj, name);
+    if (!e) return;
+    if (e->frame && g_sel->frame) {
+      e->frame->pos = sf_fvec3_add(g_sel->frame->pos, offset);
+      e->frame->rot = g_sel->frame->rot;
+      e->frame->scale = g_sel->frame->scale;
+      e->frame->is_dirty = true;
+    }
+    e->tex = g_sel->tex;
+    e->tex_scale = g_sel->tex_scale;
+    int src_idx = (int)(g_sel - sf_ctx.entities);
+    int dst_idx = (int)(e - sf_ctx.entities);
+    if (src_idx >= 0 && src_idx < SF_MAX_ENTITIES && dst_idx >= 0 && dst_idx < SF_MAX_ENTITIES)
+      g_enti_meta[dst_idx] = g_enti_meta[src_idx];
+    sel_clear(); g_sel_kind = SEL_ENTI; g_sel = e; g_ui_dirty = true;
+  } else if (g_sel_kind == SEL_LIGHT && g_sel_light) {
+    char name[64]; snprintf(name, sizeof(name), "%s_dup%d", g_sel_light->name ? g_sel_light->name : "lt", sf_ctx.light_count);
+    sf_light_t *l = sf_add_light(&sf_ctx, name, g_sel_light->type, g_sel_light->color, g_sel_light->intensity);
+    if (!l) return;
+    if (l->frame && g_sel_light->frame) {
+      l->frame->pos = sf_fvec3_add(g_sel_light->frame->pos, offset);
+      l->frame->is_dirty = true;
+    }
+    sel_clear(); g_sel_kind = SEL_LIGHT; g_sel_light = l; g_ui_dirty = true;
+  } else if (g_sel_kind == SEL_CAM && g_sel_cam) {
+    char name[64]; snprintf(name, sizeof(name), "%s_dup%d", g_sel_cam->name ? g_sel_cam->name : "cam", sf_ctx.cam_count);
+    sf_cam_t *c = sf_add_cam(&sf_ctx, name, g_sel_cam->w, g_sel_cam->h, g_sel_cam->fov);
+    if (!c) return;
+    if (c->frame && g_sel_cam->frame) {
+      c->frame->pos = sf_fvec3_add(g_sel_cam->frame->pos, offset);
+      c->frame->is_dirty = true;
+    }
+    sel_clear(); g_sel_kind = SEL_CAM; g_sel_cam = c; g_ui_dirty = true;
+  } else if (g_sel_kind == SEL_EMITR && g_sel_emitr) {
+    char name[64]; snprintf(name, sizeof(name), "%s_dup%d", g_sel_emitr->name ? g_sel_emitr->name : "em", sf_ctx.emitr_count);
+    sf_emitr_t *em = sf_add_emitr(&sf_ctx, name, g_sel_emitr->type, g_sel_emitr->sprite, g_sel_emitr->max_particles);
+    if (!em) return;
+    em->spawn_rate = g_sel_emitr->spawn_rate;
+    em->particle_life = g_sel_emitr->particle_life;
+    em->speed = g_sel_emitr->speed;
+    em->dir = g_sel_emitr->dir;
+    em->spread = g_sel_emitr->spread;
+    em->volume_size = g_sel_emitr->volume_size;
+    if (em->frame && g_sel_emitr->frame) {
+      em->frame->pos = sf_fvec3_add(g_sel_emitr->frame->pos, offset);
+      em->frame->is_dirty = true;
+    }
+    sel_clear(); g_sel_kind = SEL_EMITR; g_sel_emitr = em; g_ui_dirty = true;
+  }
 }
 
 /* --- CALLBACKS --- */
@@ -1100,6 +1207,7 @@ static void cb_clear_tex(sf_ctx_t *ctx, void *ud) {
 /* ============================================================
    Asset browser — callbacks and helpers
    ============================================================ */
+static void sfgen_generate_tree(void); /* forward decl */
 static int picker_item_count(void) {
   if (g_picker_open == PICK_TEX || g_picker_open == PICK_SPRITE) return g_tex_count;
   if (g_picker_open == PICK_MODEL) return g_model_count;
@@ -1325,7 +1433,7 @@ static void cb_picker_pick(sf_ctx_t *ctx, void *ud) {
       char sprname[80]; snprintf(sprname, sizeof(sprname), "spr_%s", nm);
       sf_sprite_2_t *spr = sf_get_sprite_(&g_sfgen_ctx, sprname, false);
       if (!spr) spr = sf_load_sprite(&g_sfgen_ctx, sprname, 1.0f, 0.7f, 1, nm);
-      if (spr) g_sfgen_leaf = spr;
+      if (spr) { g_sfgen_leaf = spr; sfgen_generate_tree(); }
     }
   } else if (g_picker_apply == PICK_APPLY_SFGEN_STONE ||
              g_picker_apply == PICK_APPLY_SFGEN_BWALL ||
@@ -2994,6 +3102,22 @@ static void build_sfgen_tab(void) {
 
 /* --- UI REBUILD --- */
 
+static void cb_apply_skybox(sf_ctx_t *c, void *ud) {
+  (void)c; (void)ud;
+  if (g_sky_sel == 0) {
+    sf_ctx.active_skybox = NULL;
+    sf_ctx.skybox_enabled = false;
+  } else {
+    int idx = g_sky_sel - 1;
+    char nm[64]; const char *dot = strrchr(g_sky_files[idx], '.');
+    int len = dot ? (int)(dot - g_sky_files[idx]) : (int)strlen(g_sky_files[idx]);
+    snprintf(nm, sizeof(nm), "%.*s", len, g_sky_files[idx]);
+    sf_skybox_t *sb = sf_get_skybox_(&sf_ctx, nm, false);
+    if (!sb) sb = sf_load_skybox(&sf_ctx, g_sky_files[idx], nm);
+    if (sb) sf_set_active_skybox(&sf_ctx, sb);
+  }
+}
+
 static void cb_tab_sff(sf_ctx_t *c, void *ud)  { (void)c; (void)ud; g_tab = TAB_SFF;  g_ui_dirty = true; }
 static void cb_tab_sfui(sf_ctx_t *c, void *ud) { (void)c; (void)ud; g_tab = TAB_SFUI; g_picker_open = PICK_NONE; g_ui_dirty = true; }
 
@@ -3164,8 +3288,9 @@ static void build_browser_panel(void) {
 
       /* Filename label (truncated, no extension) */
       int si = idx < STUDIO_MAX_TEXS ? idx : STUDIO_MAX_TEXS - 1;
-      { int k = 0;
-        for (const char *p = lb; *p && *p != '.' && k < 5; p++) s_cell_name[si][k++] = *p;
+      { int max_ch = (BROWSER_CELL_W - 8) / 8; if (max_ch > 15) max_ch = 15;
+        int k = 0;
+        for (const char *p = lb; *p && *p != '.' && k < max_ch; p++) s_cell_name[si][k++] = *p;
         s_cell_name[si][k] = '\0'; }
       sf_ui_add_label(&sf_ctx, s_cell_name[si],
                       (sf_ivec2_t){tx, ty + BROWSER_THUMB_SZ + 2}, 0xFFCCCCCC);
@@ -3367,7 +3492,9 @@ static int build_inspector(int y_start) {
   build_spawn_buttons();
   sf_ui_lay_spacing(&sf_ctx, 6);
   sf_ui_lay_row(&sf_ctx, 20);
-  sf_ui_lay_button(&sf_ctx, "Delete Selection", cb_delete, NULL);
+  sf_ui_lay_col(&sf_ctx, 2, NULL);
+  sf_ui_lay_button(&sf_ctx, "Delete", cb_delete, NULL);
+  sf_ui_lay_button(&sf_ctx, "Duplicate", cb_duplicate, NULL);
   y = sf_ui_lay_end_panel(&sf_ctx);
 
   /* ---- Selection panel ---- */
@@ -3574,6 +3701,12 @@ static void build_sff_tab(void) {
   sf_ui_lay_col(&sf_ctx, 2, NULL);
   sf_ui_lay_button(&sf_ctx, "Save", cb_save_install_sff, NULL);
   sf_ui_lay_button(&sf_ctx, "Load", cb_load_sff, NULL);
+  fy = sf_ui_lay_end_panel(&sf_ctx);
+
+  /* Skybox panel */
+  lay_panel_s("Skybox", 10, fy, PNL_W);
+  sf_ui_lay_row(&sf_ctx, 18);
+  sf_ui_lay_dropdown(&sf_ctx, g_sky_items, g_sky_count + 1, &g_sky_sel, cb_apply_skybox, NULL);
   sf_ui_lay_end_panel(&sf_ctx);
 
   int rx0 = g_w - 230, rx1 = g_w - 10;
@@ -3878,6 +4011,7 @@ static void update_camera(void) {
   orbit_apply(cam);
 
   if (sf_key_pressed(ctx, SF_KEY_DEL)) cb_delete(ctx, NULL);
+  if (sf_key_pressed(ctx, SF_KEY_D) && sf_key_down(ctx, SF_KEY_LCTRL)) cb_duplicate(ctx, NULL);
 
   if (sf_key_pressed(ctx, SF_KEY_TAB) && (!ctx->ui || ctx->ui->focused == NULL)) {
     int dir = sf_key_down(ctx, SF_KEY_LSHIFT) ? -1 : 1;
@@ -3930,17 +4064,19 @@ int main(int argc, char *argv[]) {
   (void)argc; (void)argv;
 
   SDL_Init(SDL_INIT_VIDEO);
-  SDL_Window   *window   = SDL_CreateWindow("sf_studio", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, g_w, g_h, SDL_WINDOW_RESIZABLE);
+  SDL_Window   *window   = SDL_CreateWindow("sf_studio", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, g_w, g_h, SDL_WINDOW_FULLSCREEN_DESKTOP);
   SDL_Renderer *renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
   SDL_RenderSetLogicalSize(renderer, g_w, g_h);
   SDL_Texture  *texture  = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, g_w, g_h);
   SDL_StartTextInput();
 
   sf_init(&sf_ctx, g_w, g_h);
+  sf_set_logger(&sf_ctx, studio_logger, NULL);
   sfgen_init();
   scan_models();
   scan_textures();
   scan_sffs();
+  scan_skyboxes();
   for (int i = 0; i < 9; i++) {
     char nm[32];
     snprintf(nm, sizeof(nm), "icon_%d", i);
@@ -3998,14 +4134,26 @@ int main(int argc, char *argv[]) {
         else gizmo_end_drag();
       }
       if (event.type == SDL_MOUSEWHEEL) {
-        if (g_tab == TAB_SFUI) design_on_wheel(event.wheel.y);
-        else if (g_tab == TAB_SFGEN) {
-          g_sfgen_orbit.dist -= event.wheel.y * 0.5f;
-          if (g_sfgen_orbit.dist < 1.f) g_sfgen_orbit.dist = 1.f;
-          if (g_sfgen_orbit.dist > 60.f) g_sfgen_orbit.dist = 60.f;
+        /* Log panel scroll: if mouse is in bottom-center area, consume event */
+        int _lpw = 500, _lph = LOG_VIS_LINES * 10 + 8;
+        int _lpx = (g_w - _lpw) / 2, _lpy = g_h - _lph - 4;
+        if (g_mouse_x >= _lpx && g_mouse_x <= _lpx + _lpw && g_mouse_y >= _lpy && g_mouse_y <= _lpy + _lph) {
+          g_log_scroll -= event.wheel.y;
+          if (g_log_scroll < 0) g_log_scroll = 0;
+          if (g_log_scroll > g_log_count - LOG_VIS_LINES) g_log_scroll = g_log_count - LOG_VIS_LINES;
+          if (g_log_scroll < 0) g_log_scroll = 0;
+        } else {
+          if (g_tab == TAB_SFUI) design_on_wheel(event.wheel.y);
+          else if (g_tab == TAB_SFGEN) {
+            g_sfgen_orbit.dist -= event.wheel.y * 0.5f;
+            if (g_sfgen_orbit.dist < 1.f) g_sfgen_orbit.dist = 1.f;
+            if (g_sfgen_orbit.dist > 60.f) g_sfgen_orbit.dist = 60.f;
+          }
+          sf_sdl_process_event(&sf_ctx, &event);
         }
+      } else {
+        sf_sdl_process_event(&sf_ctx, &event);
       }
-      sf_sdl_process_event(&sf_ctx, &event);
     }
 
     if (sf_key_pressed(&sf_ctx, SF_KEY_ESC) && (!sf_ctx.ui || sf_ctx.ui->focused == NULL)) sf_stop(&sf_ctx);
@@ -4136,6 +4284,25 @@ int main(int argc, char *argv[]) {
     sf_ui_render(&sf_ctx, &sf_ctx.main_camera, sf_ctx.ui);
     sf_ui_render_popups(&sf_ctx, &sf_ctx.main_camera, sf_ctx.ui);
     draw_cam_pip_overlay();
+
+    /* Draw log panel — centered, short, scrollable */
+    { sf_cam_t *lc = &sf_ctx.main_camera;
+      int pw = 500, ph = LOG_VIS_LINES * 10 + 8;
+      int px = (lc->w - pw) / 2, py = lc->h - ph - 4;
+      sf_rect(&sf_ctx, lc, (sf_pkd_clr_t)0xCC1A1A22, (sf_ivec2_t){px, py}, (sf_ivec2_t){px + pw, py + ph});
+      /* auto-scroll to bottom if already at bottom */
+      int max_scroll = g_log_count - LOG_VIS_LINES;
+      if (max_scroll < 0) max_scroll = 0;
+      if (g_log_scroll >= max_scroll - 1) g_log_scroll = max_scroll;
+      int start = g_log_scroll;
+      if (start < 0) start = 0;
+      if (start > g_log_count - LOG_VIS_LINES) start = g_log_count - LOG_VIS_LINES;
+      if (start < 0) start = 0;
+      for (int i = 0; i < LOG_VIS_LINES && (start + i) < g_log_count; i++) {
+        int bidx = (g_log_head - g_log_count + start + i + LOG_LINES) % LOG_LINES;
+        sf_put_text(&sf_ctx, lc, g_log_buf[bidx], (sf_ivec2_t){px + 4, py + 4 + i * 10}, 0xFFAABBCC, 1);
+      }
+    }
 
     SDL_UpdateTexture(texture, NULL, sf_ctx.main_camera.buffer, sf_ctx.main_camera.w * sizeof(sf_pkd_clr_t));
     SDL_RenderCopy(renderer, texture, NULL, NULL);

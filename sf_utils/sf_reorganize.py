@@ -389,10 +389,13 @@ def main(argv: Optional[List[str]] = None) -> int:
         return 1 if changed else 0
 
     if args.in_place:
-        if args.backup:
-            args.path.with_suffix(args.path.suffix + ".bak").write_text(src, encoding=args.encoding, newline="")
-        args.path.write_text(dst, encoding=args.encoding, newline="")
-        print(f"rewrote {args.path}")
+        if src == dst:
+            print(f"already ordered {args.path}")
+        else:
+            if args.backup:
+                args.path.with_suffix(args.path.suffix + ".bak").write_text(src, encoding=args.encoding, newline="")
+            args.path.write_text(dst, encoding=args.encoding, newline="")
+            print(f"rewrote {args.path}")
     else:
         out = args.output or args.path.with_suffix(args.path.suffix + ".reordered")
         out.write_text(dst, encoding=args.encoding, newline="")
