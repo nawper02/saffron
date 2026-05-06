@@ -1,12 +1,8 @@
 Bugs
   buildings saved by sfgen all look the same
-  cant change tex scale in sfgen
   opening model browser then texture browser without closing model segfaults
   segfault when increasing res too high on terrain
-  some sun ui is hidden under parenting panel
-
-Annoying Bugs
-  Cant add multiple of the same sff /tree (at least the leaves dont show up)
+  when opening multiple trees the leaves show up on the first tree you add
   orphaned frame after deleting object, cant pick/select frames
 
 Features
