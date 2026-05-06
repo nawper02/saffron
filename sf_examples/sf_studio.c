@@ -10,6 +10,7 @@
 
 #include <SDL2/SDL.h>
 #include <dirent.h>
+#include <time.h>
 
 typedef enum { SEL_NONE = 0, SEL_ENTI, SEL_LIGHT, SEL_CAM, SEL_EMITR } sel_kind_t;
 typedef enum { TAB_SFF = 0, TAB_SFUI, TAB_SFGEN } tab_t;
@@ -829,35 +830,33 @@ static void cb_delete(sf_ctx_t *ctx, void *ud) {
 
 static void cb_save_sff(sf_ctx_t *ctx, void *ud) {
   (void)ctx; (void)ud;
-  if (sf_save_sff(&sf_ctx, g_save_path)) {
-    SF_LOG(&sf_ctx, SF_LOG_INFO, "Saved to %s\n", g_save_path);
+  const char *sl = strrchr(g_save_path, '/');
+  const char *fname = sl ? sl + 1 : g_save_path;
+  char dst[512];
+  snprintf(dst, sizeof(dst), SF_SRC_ASSET_PATH "/sf_sff/%s", fname);
+  if (sf_save_sff(&sf_ctx, dst)) {
+    SF_LOG(&sf_ctx, SF_LOG_INFO, "Saved to %s\n", dst);
+    scan_sffs();
+    g_ui_dirty = true;
   } else {
-    SF_LOG(&sf_ctx, SF_LOG_ERROR, "Save failed: %s\n", g_save_path);
+    SF_LOG(&sf_ctx, SF_LOG_ERROR, "Save failed: %s\n", dst);
   }
 }
 
 static void cb_load_sff(sf_ctx_t *ctx, void *ud) {
   (void)ctx; (void)ud;
+  const char *sl = strrchr(g_save_path, '/');
+  const char *fname = sl ? sl + 1 : g_save_path;
+  char src[512];
+  snprintf(src, sizeof(src), SF_SRC_ASSET_PATH "/sf_sff/%s", fname);
   g_sel = NULL; g_sel_light = NULL; g_sel_cam = NULL; g_sel_emitr = NULL;
   g_sel_kind = SEL_NONE;
-  sf_load_sff(&sf_ctx, g_save_path, "Loaded World");
+  sf_load_sff(&sf_ctx, src, "Loaded World");
   g_ui_dirty = true;
 }
 
 static void cb_install_sff(sf_ctx_t *ctx, void *ud) {
-  (void)ctx; (void)ud;
-  sf_save_sff(&sf_ctx, g_save_path);
-  const char *sl = strrchr(g_save_path, '/');
-  const char *fname = sl ? sl + 1 : g_save_path;
-  char dst[512];
-  snprintf(dst, sizeof(dst), SF_SRC_ASSET_PATH "/sf_sff/%s", fname);
-  if (sf_copy_file(g_save_path, dst)) {
-    SF_LOG(&sf_ctx, SF_LOG_INFO, "Installed %s\n", dst);
-    scan_sffs();
-    g_ui_dirty = true;
-  } else {
-    SF_LOG(&sf_ctx, SF_LOG_ERROR, "Install failed: %s\n", dst);
-  }
+  cb_save_sff(ctx, ud);
 }
 
 static void cb_save_install_sff(sf_ctx_t *ctx, void *ud) {
@@ -2483,15 +2482,15 @@ static void sfgen_load_sprites(void) {
    ============================================================ */
 static void sfgen_save_tree(void) {
     if (!g_ct_obj) return;
-    const char *sl=strrchr(g_sfgen_tree_sff,'/');
-    char base[256]; snprintf(base,sizeof(base),"%s",sl?sl+1:g_sfgen_tree_sff);
-    char *bdot=strrchr(base,'.'); if(bdot)*bdot='\0';
     char gen_id[64];
     sf_gen_asset_id(gen_id, sizeof(gen_id));
     sf_gen_save_obj(&g_sfgen_ctx, g_ct_obj, gen_id);
-    FILE *f=fopen(g_sfgen_tree_sff,"w");
+    const char *sl=strrchr(g_sfgen_tree_sff,'/');
+    const char *fname=sl?sl+1:g_sfgen_tree_sff;
+    char dst[512]; snprintf(dst,sizeof(dst),SF_SRC_ASSET_PATH "/sf_sff/%s",fname);
+    FILE *f=fopen(dst,"w");
     if (!f) return;
-    fprintf(f,"# Saffron Tree Model\n\nmesh %s \"%s.obj\"\n\n",g_ct_obj->name,g_ct_obj->name);
+    fprintf(f,"# Saffron Tree Model\n\nmesh %s \"%s_%s.obj\"\n\n",g_ct_obj->name,g_ct_obj->name,gen_id);
     if (g_ct_enti&&g_ct_enti->tex&&g_ct_enti->tex->name)
         fprintf(f,"texture %s \"%s.bmp\"\n",g_ct_enti->tex->name,g_ct_enti->tex->name);
     if (g_sfgen_leaf&&g_sfgen_leaf->frame_count>0&&g_sfgen_leaf->frames[0]&&g_sfgen_leaf->frames[0]->name)
@@ -2525,15 +2524,15 @@ static void sfgen_save_tree(void) {
 
 static void sfgen_save_rock(void) {
     if (!g_cr_obj) return;
-    const char *sl=strrchr(g_sfgen_rock_sff,'/');
-    char base[256]; snprintf(base,sizeof(base),"%s",sl?sl+1:g_sfgen_rock_sff);
-    char *bdot=strrchr(base,'.'); if(bdot)*bdot='\0';
     char gen_id[64];
     sf_gen_asset_id(gen_id, sizeof(gen_id));
     sf_gen_save_obj(&g_sfgen_ctx, g_cr_obj, gen_id);
-    FILE *f=fopen(g_sfgen_rock_sff,"w");
+    const char *sl=strrchr(g_sfgen_rock_sff,'/');
+    const char *fname=sl?sl+1:g_sfgen_rock_sff;
+    char dst[512]; snprintf(dst,sizeof(dst),SF_SRC_ASSET_PATH "/sf_sff/%s",fname);
+    FILE *f=fopen(dst,"w");
     if (!f) return;
-    fprintf(f,"# Saffron Rock Model\n\nmesh %s \"%s.obj\"\n\n",g_cr_obj->name,g_cr_obj->name);
+    fprintf(f,"# Saffron Rock Model\n\nmesh %s \"%s_%s.obj\"\n\n",g_cr_obj->name,g_cr_obj->name,gen_id);
     if (g_cr_enti&&g_cr_enti->tex&&g_cr_enti->tex->name)
         fprintf(f,"texture %s \"%s.bmp\"\n\n",g_cr_enti->tex->name,g_cr_enti->tex->name);
     if (g_cr_enti&&g_cr_enti->name){
@@ -2547,23 +2546,8 @@ static void sfgen_save_rock(void) {
     fclose(f);
 }
 
-static void sfgen_install_tree(void) {
-    sfgen_save_tree();
-    const char *sl=strrchr(g_sfgen_tree_sff,'/');
-    const char *fname = sl ? sl + 1 : g_sfgen_tree_sff;
-    char sff_dst[512];
-    snprintf(sff_dst, sizeof(sff_dst), SF_SRC_ASSET_PATH "/sf_sff/%s", fname);
-    sf_copy_file(g_sfgen_tree_sff, sff_dst);
-}
-
-static void sfgen_install_rock(void) {
-    sfgen_save_rock();
-    const char *sl=strrchr(g_sfgen_rock_sff,'/');
-    const char *fname = sl ? sl + 1 : g_sfgen_rock_sff;
-    char sff_dst[512];
-    snprintf(sff_dst, sizeof(sff_dst), SF_SRC_ASSET_PATH "/sf_sff/%s", fname);
-    sf_copy_file(g_sfgen_rock_sff, sff_dst);
-}
+static void sfgen_install_tree(void) { sfgen_save_tree(); }
+static void sfgen_install_rock(void) { sfgen_save_rock(); }
 
 /* Helper: write a texture declaration if this entity has a texture not yet written */
 static void bk_save_tex(FILE *f, sf_enti_t *e, const char *written[], int *n_written) {
@@ -2587,9 +2571,6 @@ static void bk_save_enti(FILE *f, sf_enti_t *e, sf_obj_t *o, const char *parent_
 
 static void sfgen_save_building(void) {
     if (!g_ck_obj) return;
-    const char *sl=strrchr(g_sfgen_bldg_sff,'/');
-    char base[256]; snprintf(base,sizeof(base),"%s",sl?sl+1:g_sfgen_bldg_sff);
-    char *bdot=strrchr(base,'.'); if(bdot)*bdot='\0';
     char gen_id[64];
     sf_gen_asset_id(gen_id, sizeof(gen_id));
 
@@ -2605,12 +2586,15 @@ static void sfgen_save_building(void) {
         sf_gen_save_obj(&g_sfgen_ctx, parts[i].o, gen_id);
     }
 
-    FILE *f=fopen(g_sfgen_bldg_sff,"w");
+    const char *sl=strrchr(g_sfgen_bldg_sff,'/');
+    const char *fname=sl?sl+1:g_sfgen_bldg_sff;
+    char dst[512]; snprintf(dst,sizeof(dst),SF_SRC_ASSET_PATH "/sf_sff/%s",fname);
+    FILE *f=fopen(dst,"w");
     if (!f) return;
     fprintf(f,"# Saffron Building Model\n\n");
     for (int i = 0; i < 4; i++) {
         if (!parts[i].o || parts[i].o->f_cnt == 0) continue;
-        fprintf(f,"mesh %s \"%s.obj\"\n", parts[i].o->name, parts[i].o->name);
+        fprintf(f,"mesh %s \"%s_%s.obj\"\n", parts[i].o->name, parts[i].o->name, gen_id);
     }
     fprintf(f,"\n");
 
@@ -2637,14 +2621,7 @@ static void sfgen_save_building(void) {
     bk_save_enti(f, g_ck_enti_roof,  g_ck_obj_roof,  parent);
     fclose(f);
 }
-static void sfgen_install_building(void) {
-    sfgen_save_building();
-    const char *sl=strrchr(g_sfgen_bldg_sff,'/');
-    const char *fname = sl ? sl + 1 : g_sfgen_bldg_sff;
-    char sff_dst[512];
-    snprintf(sff_dst, sizeof(sff_dst), SF_SRC_ASSET_PATH "/sf_sff/%s", fname);
-    sf_copy_file(g_sfgen_bldg_sff, sff_dst);
-}
+static void sfgen_install_building(void) { sfgen_save_building(); }
 
 /* ============================================================
    SFGEN — update craft camera
@@ -2806,6 +2783,7 @@ static void cb_sfgen_rand_bldg(sf_ctx_t *c, void *u) {
    SFGEN — init context (called once from main)
    ============================================================ */
 static void sfgen_init(void) {
+    srand((unsigned)time(NULL));
     sf_init(&g_sfgen_ctx, g_w, g_h);
     sf_camera_set_psp(&g_sfgen_ctx, &g_sfgen_ctx.main_camera, 60.f, 0.1f, 200.f);
 

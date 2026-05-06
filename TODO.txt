@@ -1,15 +1,22 @@
 Bugs
-  buildings saved by sfgen dont load
+  buildings saved by sfgen all look the same
+  cant change tex scale in sfgen
+  opening model browser then texture browser without closing model segfaults
+  segfault when increasing res too high on terrain
+  some sun ui is hidden under parenting panel
 
 Annoying Bugs
   Cant add multiple of the same sff /tree (at least the leaves dont show up)
   orphaned frame after deleting object, cant pick/select frames
 
 Features
-  .mtl parsing and rendering
+  sort out asset file management
+  terrain sculpting tools in sf_studio
   A way to sync one instance to another over the network . Render low res on the drone and high res on pc. 
   Optimize busy scenes - LoD?
-  Sound / synthesis -- full audio backend (sources, pedals, sink)
+
+Less important Features
+  .mtl parsing and rendering
 
 Things to make with the library
   OrbWeaver - Video core module that makes simulated contexts for EO and ar and subscribed to drone and gimbal pose

@@ -2523,7 +2523,7 @@ bool sf_save_sff(sf_ctx_t *ctx, const char *filepath) {
       char gen_id[64];
       sf_gen_asset_id(gen_id, sizeof(gen_id));
       sf_gen_save_obj(ctx, o, gen_id);
-      snprintf(gen_path, sizeof(gen_path), "sf_generated/%s/%s.obj", gen_id, o->name);
+      snprintf(gen_path, sizeof(gen_path), "sf_generated/%s/%s_%s.obj", gen_id, o->name, gen_id);
       size_t plen = strlen(gen_path) + 1;
       o->src_path = (const char*)sf_arena_alloc(ctx, &ctx->arena, plen);
       if (o->src_path) memcpy((void*)o->src_path, gen_path, plen);
@@ -2993,7 +2993,7 @@ bool sf_gen_save_obj(sf_ctx_t *ctx, sf_obj_t *obj, const char *gen_id) {
   mkdir(dir, 0755);
   snprintf(dir, sizeof(dir), "%s/sf_generated/%s", base, gen_id);
   mkdir(dir, 0755);
-  snprintf(path, sizeof(path), "%s/%s.obj", dir, obj->name);
+  snprintf(path, sizeof(path), "%s/%s_%s.obj", dir, obj->name, gen_id);
   bool ok = sf_obj_save_obj(ctx, obj, path);
   if (ok) {
     SF_LOG(ctx, SF_LOG_INFO,
@@ -6009,6 +6009,9 @@ bool _sf_resolve_asset(const char* filename, char* out_path, size_t max_len) {
   snprintf(dir_stack[stack_head++], 512, "%s", SF_ASSET_PATH);
 #ifdef SF_SRC_ASSET_PATH
   if (stack_head < 32) snprintf(dir_stack[stack_head++], 512, "%s", SF_SRC_ASSET_PATH);
+#endif
+#ifdef SF_BUILD_ASSET_PATH
+  if (stack_head < 32) snprintf(dir_stack[stack_head++], 512, "%s", SF_BUILD_ASSET_PATH);
 #endif
   while (stack_head > 0) {
     char current_dir[512];
