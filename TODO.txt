@@ -1,9 +1,6 @@
 Bugs
   buildings saved by sfgen all look the same
-  opening model browser then texture browser without closing model segfaults
-  segfault when increasing res too high on terrain
   when opening multiple trees the leaves show up on the first tree you add
-  orphaned frame after deleting object, cant pick/select frames
 
 Features
   sort out asset file management
