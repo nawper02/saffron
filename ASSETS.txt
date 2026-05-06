@@ -103,16 +103,6 @@ Code should use _sf_resolve_asset() rather than constructing paths from
 these macros directly. The macros exist for scan functions that need to
 enumerate a specific subdirectory.
 
-
-.gitignore rules for assets
-----------------------------
-  sf_assets/sf_generated/      all procedurally generated OBJs ignored
-
-  sf_assets/sf_sff/ is not ignored. Since sf_studio writes world files to
-  ~/.local/share/saffron/sf_sff/, anything in sf_assets/sf_sff/ was placed
-  there deliberately and will be tracked.
-
-
 Adding a new asset type
 -----------------------
 1. Put source files in the appropriate sf_assets/ subdirectory.

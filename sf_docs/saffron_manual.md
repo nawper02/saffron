@@ -291,7 +291,6 @@
 | `SF_PERF_HIST_SIZE` | `64` |
 | `SF_PI` | `3.14159265359f` |
 | `SF_NANOS_PER_SEC` | `1000000000ULL` |
-| `SF_ASSET_PATH` | `"/usr/local/share/saffron/sf_assets"` |
 
 ### Built-in Colors
 
@@ -424,7 +423,7 @@
 
 ### `sf_init`
 
-Parse a quoted string value from a key=value line.
+Initialize the engine context: allocate arena, all scene arrays, main camera pixel/z buffers, and default UI.
 
 ```c
 void sf_init (sf_ctx_t *ctx, int w, int h);
