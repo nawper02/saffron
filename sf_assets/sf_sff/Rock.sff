@@ -1,0 +1,13 @@
+# Saffron Rock Model
+
+mesh crock "crock.obj"
+
+texture Stone_09-128x128 "Stone_09-128x128.bmp"
+
+entity crock_enti {
+    mesh=crock
+    pos=(0.000,0.000,0.000)
+    rot=(0.000,0.000,0.000)
+    scale=(1.000,1.000,1.000)
+    texture=Stone_09-128x128
+}

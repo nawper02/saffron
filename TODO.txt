@@ -1,7 +1,9 @@
 Bugs
+  buildings saved by sfgen dont load
+
+Annoying Bugs
   Cant add multiple of the same sff /tree (at least the leaves dont show up)
   orphaned frame after deleting object, cant pick/select frames
-  not all functions have doc comments
 
 Features
   .mtl parsing and rendering

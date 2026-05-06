@@ -861,6 +861,27 @@ static const uint8_t                _sf_font_8x8[];
 
 /* SF_CORE_FUNCTIONS */
 void sf_init(sf_ctx_t *ctx, int w, int h) {
+  /* Parse a quoted string value from a key=value line. */
+  /* Write a quoted and escaped string to a file handle. */
+  /* Unpack a 32-bit packed color into separate RGBA components. */
+  /* Pack RGBA components into a single 32-bit packed color value. */
+  /* Return current monotonic time in nanoseconds. */
+  /* Return a pointer to the filename portion of a path string. */
+  /* Search asset directories recursively for a file by name; writes full path to out_path. */
+  /* Bilinear interpolation of 2D hashed lattice points for smooth value noise. */
+  /* Hash 2D integer coordinates to a float in [0,1) for noise generation. */
+  /* Project a view-space vertex to screen coordinates using a projection matrix. */
+  /* Clip a line segment against the near plane and return the intersection point. */
+  /* Linearly interpolate between two 3D vectors by parameter t. */
+  /* Linearly interpolate between two floats by parameter t. */
+  /* Swap two float 3D vectors in place. */
+  /* Swap two integer 2D vectors in place. */
+  /* Convert a 2D screen coordinate to a linear buffer index. */
+  /* Convert a log level enum to its display string. */
+  /* Parse a UI element type name string and return its enum value. */
+  /* Return the string name of a UI element type enum value. */
+  /* Update slider value based on horizontal mouse drag position. */
+  /* Toggle checkbox state on mouse-up while hovered and fire callback. */
   /* Initialize the engine context: allocate arena, all scene arrays, main camera pixel/z buffers, and default UI. */
   memset(ctx, 0, sizeof(sf_ctx_t));
   ctx->state                        = SF_RUN_STATE_RUNNING;
@@ -5675,6 +5696,7 @@ sf_tex_t* sf_render_thumb_sff(sf_ctx_t *ctx, const char *sff_path, int size) {
 
 /* SF_LOG_FUNCTIONS */
 void sf_log_(sf_ctx_t *ctx, sf_log_level_t level, const char* func, const char* fmt, ...) {
+  /* Format and dispatch a log message through the registered callback if level >= log_min. */
   if (!ctx->log_cb || level < ctx->log_min) return;
 
   char msg_buffer[512];

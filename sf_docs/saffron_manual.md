@@ -424,7 +424,7 @@
 
 ### `sf_init`
 
-Initialize the engine context: allocate arena, all scene arrays, main camera pixel/z buffers, and default UI.
+Parse a quoted string value from a key=value line.
 
 ```c
 void sf_init (sf_ctx_t *ctx, int w, int h);
@@ -1769,7 +1769,7 @@ void sf_orbit_cam_focus (sf_orbit_cam_t *orbit, sf_fvec3_t pos);
 
 ### `sf_render_thumb_enti`
 
-Render an entity to a newly allocated texture of size x size pixels.
+Format and dispatch a log message through the registered callback if level >= log_min.
 
 ```c
 sf_tex_t* sf_render_thumb_enti (sf_ctx_t *ctx, sf_enti_t *enti, int size);

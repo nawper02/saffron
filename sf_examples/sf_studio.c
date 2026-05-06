@@ -2573,13 +2573,11 @@ static void bk_save_tex(FILE *f, sf_enti_t *e, const char *written[], int *n_wri
     written[(*n_written)++] = e->tex->name;
 }
 /* Helper: write an entity block parented to the main building entity */
-static void bk_save_enti(FILE *f, sf_enti_t *e, sf_obj_t *o, const char *mesh_suffix,
-                          const char *base, const char *parent_name) {
+static void bk_save_enti(FILE *f, sf_enti_t *e, sf_obj_t *o, const char *parent_name) {
     if (!e || !e->name || !o || o->f_cnt == 0) return;
-    char mesh_name[256]; snprintf(mesh_name, sizeof(mesh_name), "%s%s", base, mesh_suffix);
     sf_fvec3_t p=e->frame->pos, r=e->frame->rot, s=e->frame->scale;
     fprintf(f,"entity %s {\n    mesh=%s\n    pos=(%.3f,%.3f,%.3f)\n    rot=(%.3f,%.3f,%.3f)\n    scale=(%.3f,%.3f,%.3f)\n",
-            e->name, mesh_name, p.x,p.y,p.z, r.x,r.y,r.z, s.x,s.y,s.z);
+            e->name, o->name, p.x,p.y,p.z, r.x,r.y,r.z, s.x,s.y,s.z);
     if (e->tex && e->tex->name)
         fprintf(f,"    texture=%s\n", e->tex->name);
     if (parent_name)
@@ -2629,14 +2627,14 @@ static void sfgen_save_building(void) {
         /* Main wall entity (no parent) */
         sf_fvec3_t p=g_ck_enti->frame->pos, r=g_ck_enti->frame->rot, s=g_ck_enti->frame->scale;
         fprintf(f,"entity %s {\n    mesh=%s\n    pos=(%.3f,%.3f,%.3f)\n    rot=(%.3f,%.3f,%.3f)\n    scale=(%.3f,%.3f,%.3f)\n",
-                g_ck_enti->name, base, p.x,p.y,p.z, r.x,r.y,r.z, s.x,s.y,s.z);
+                g_ck_enti->name, g_ck_obj->name, p.x,p.y,p.z, r.x,r.y,r.z, s.x,s.y,s.z);
         if (g_ck_enti->tex && g_ck_enti->tex->name)
             fprintf(f,"    texture=%s\n", g_ck_enti->tex->name);
         fprintf(f,"}\n");
     }
-    bk_save_enti(f, g_ck_enti_win,   g_ck_obj_win,   "_win",   base, parent);
-    bk_save_enti(f, g_ck_enti_ledge, g_ck_obj_ledge, "_ledge", base, parent);
-    bk_save_enti(f, g_ck_enti_roof,  g_ck_obj_roof,  "_roof",  base, parent);
+    bk_save_enti(f, g_ck_enti_win,   g_ck_obj_win,   parent);
+    bk_save_enti(f, g_ck_enti_ledge, g_ck_obj_ledge, parent);
+    bk_save_enti(f, g_ck_enti_roof,  g_ck_obj_roof,  parent);
     fclose(f);
 }
 static void sfgen_install_building(void) {
