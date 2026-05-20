@@ -7,19 +7,45 @@ include(GNUInstallDirs)
 find_package(SDL2 REQUIRED)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR} ${SDL2_INCLUDE_DIRS})
 
+# Optional: EGL + GLESv2 for the hardware-accelerated backend (sf_gles_demo).
+find_package(PkgConfig QUIET)
+set(SF_GLES_AVAILABLE FALSE)
+if(PKG_CONFIG_FOUND)
+    pkg_check_modules(EGL    egl)
+    pkg_check_modules(GLESV2 glesv2)
+    if(EGL_FOUND AND GLESV2_FOUND)
+        set(SF_GLES_AVAILABLE TRUE)
+    endif()
+endif()
+
+# Targets that need GPU libs (we link these specially below, not with the SDL set).
+set(SF_GLES_TARGETS sf_gles_demo)
+
 # Build executables
 file(GLOB EXAMPLE_SOURCES "sf_examples/*.c")
 file(GLOB EXTRAS_SOURCES  "sf_extras/*.c")
 foreach(EXAMPLE_SRC ${EXAMPLE_SOURCES} ${EXTRAS_SOURCES})
     get_filename_component(TARGET_NAME ${EXAMPLE_SRC} NAME_WE)
-    add_executable(${TARGET_NAME} ${EXAMPLE_SRC})
-    target_link_libraries(${TARGET_NAME} ${SDL2_LIBRARIES} m)
+
+    if(TARGET_NAME IN_LIST SF_GLES_TARGETS)
+        if(NOT SF_GLES_AVAILABLE)
+            message(STATUS "Skipping ${TARGET_NAME}: EGL/GLESv2 not found via pkg-config")
+            continue()
+        endif()
+        add_executable(${TARGET_NAME} ${EXAMPLE_SRC})
+        target_include_directories(${TARGET_NAME} PRIVATE ${EGL_INCLUDE_DIRS} ${GLESV2_INCLUDE_DIRS})
+        target_link_libraries(${TARGET_NAME} ${EGL_LIBRARIES} ${GLESV2_LIBRARIES} m)
+    else()
+        add_executable(${TARGET_NAME} ${EXAMPLE_SRC})
+        target_link_libraries(${TARGET_NAME} ${SDL2_LIBRARIES} m)
+    endif()
+
     target_compile_definitions(${TARGET_NAME} PRIVATE
         SAFFRON_ASSET_DIR="${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_DATADIR}/saffron/sf_assets/"
         SF_SRC_ASSET_PATH="${CMAKE_CURRENT_SOURCE_DIR}/sf_assets"
         SF_BUILD_ASSET_PATH="${CMAKE_CURRENT_BINARY_DIR}/sf_assets"
     )
-    install(TARGETS ${TARGET_NAME} 
+    install(TARGETS ${TARGET_NAME}
             DESTINATION ${CMAKE_INSTALL_BINDIR})
 endforeach()
 

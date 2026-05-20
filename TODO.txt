@@ -3,10 +3,11 @@ Bugs
   when opening multiple trees the leaves show up on the first tree you add
 
 Features
+  render on the rb5's gpu
+  A way to sync one instance to another over the network . Render low res on the drone and high res on pc. 
   load google maps 3d
   sort out asset file management
   terrain sculpting tools in sf_studio
-  A way to sync one instance to another over the network . Render low res on the drone and high res on pc. 
   Optimize busy scenes - LoD?
 
 Less important Features

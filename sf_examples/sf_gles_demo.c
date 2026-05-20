@@ -21,6 +21,13 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <time.h>
+
+static double now_ms(void) {
+  struct timespec ts;
+  clock_gettime(CLOCK_MONOTONIC, &ts);
+  return ts.tv_sec * 1000.0 + ts.tv_nsec / 1.0e6;
+}
 
 int main(int argc, char **argv) {
   const int W = 1280;
@@ -50,12 +57,24 @@ int main(int argc, char **argv) {
     return 1;
   }
 
-  /* 5. Render one frame. */
+  /* 5. Render one frame. First call also lazily uploads VBOs/textures, so
+     time both that and a clean "second frame" to separate setup from steady
+     state. sf_gles_render_ctx ends with glFinish(), so these timings include
+     the actual GPU work. */
+  double t0 = now_ms();
   sf_gles_render_ctx(&gl, &ctx, &ctx.main_camera);
+  double t1 = now_ms();
+  sf_gles_render_ctx(&gl, &ctx, &ctx.main_camera);
+  double t2 = now_ms();
+  printf("render: first=%.2f ms (incl. upload), second=%.2f ms (steady)\n",
+         t1 - t0, t2 - t1);
 
   /* 6. Read back and save. */
   uint8_t *rgba = (uint8_t*)malloc((size_t)W * H * 4);
+  double tr0 = now_ms();
   sf_gles_readback_rgba(&gl, W, H, rgba);
+  double tr1 = now_ms();
+  printf("readback (%dx%d RGBA): %.2f ms\n", W, H, tr1 - tr0);
   if (!stbi_write_png(out_path, W, H, 4, rgba, W * 4)) {
     fprintf(stderr, "stbi_write_png failed for %s\n", out_path);
     free(rgba);
